@@ -8,6 +8,8 @@ import * as partidos from "./views/partidos.js";
 import * as plantel from "./views/plantel.js";
 import * as alineacion from "./views/alineacion.js";
 import * as finanzas from "./views/cuentas.js";
+import { enrich } from "./live.js";
+import { mount, wireSheet } from "./cloudui.js";
 
 // Orden de la barra inferior. Finanzas va al final: lo primero es el juego.
 const VIEWS = {
@@ -20,6 +22,8 @@ const VIEWS = {
 const app = document.getElementById("app");
 const cache = {};
 let installEvt = null;
+let current = null;
+window.__reload = () => { Object.keys(cache).forEach((k) => delete cache[k]); return route(); };
 
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; const b = document.getElementById("install-go"); if (b) b.hidden = false; });
 
@@ -39,9 +43,12 @@ function installHint() {
 async function getCtx(clubId, teamId) {
   const k = clubId + "/" + teamId;
   if (!cache[k]) {
-    const [{ club, players }, team] = await Promise.all([loadClub(clubId), loadTeam(clubId, teamId)]);
+    const [base, team0] = await Promise.all([loadClub(clubId), loadTeam(clubId, teamId)]);
+    const { team, players, live } = await enrich(clubId, team0, base.players);
+    const club = base.club;
+    if (live && live.approved && live.member.player_id) store("app:" + k + ":mine", live.member.player_id);
     cache[k] = {
-      clubId, club, team, players,
+      clubId, club, team, players, live,
       ratings: computeRatings(team, players, club.rating),
       playersById: Object.fromEntries(players.map((p) => [p.id, p])),
       crest: assetURL(clubId, club.crest),
@@ -78,7 +85,10 @@ async function route() {
       ${view === "inicio" ? installHint() : ""}
       <div id="view" class="view">${V.render(ctx)}</div>
       <nav class="tabbar" style="--n:${tabs.length}" aria-label="Secciones">${tabs.map(([k, v]) => `<a href="#/${club}/${team}/${k}"${k === view ? ' aria-current="page"' : ""}>${icon[k]}<span>${v.label}</span></a>`).join("")}</nav>`;
+    current = ctx;
     V.bind(document.getElementById("view"), ctx);
+    mount(document.getElementById("view"), ctx, view);
+    wireSheet(() => current);
     const sel = app.querySelector(".team-sel");
     if (sel) sel.onchange = () => { location.hash = `#/${club}/${sel.value}/${view}`; };
     const ix = document.getElementById("install-x");

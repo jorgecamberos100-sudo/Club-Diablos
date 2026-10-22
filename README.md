@@ -37,3 +37,6 @@ Votos de compañeros, nunca del administrador ni de uno mismo:
 - `matches[].ratings`: calificación 1 a 10 por partido; `matches[].mvp`: voto al mejor del partido.
 - Media = 50% atributos + 40% forma (últimos 5 partidos) + 10% compromiso, escala 40 a 99. Pesos ajustables en `club.json` -> `rating.weights`.
 - Mínimo 3 votos; con 5 o más se quitan el más alto y el más bajo.
+
+## Cuentas y datos en vivo
+Ver `supabase/LEEME.md`. Con `app/config.js` vacío la app funciona sin cuentas. `app/cloud.js` tiene dos motores (Supabase y demo) con la misma interfaz; `app/live.js` mezcla resultados, votos y fotos con los archivos del equipo; `app/cloudui.js` tiene las pantallas.
