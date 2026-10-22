@@ -1,0 +1,3607 @@
+{
+ "id": "primera",
+ "name": "Primera",
+ "competition": "Ejemplo · fútbol 7 · datos ficticios",
+ "format": 7,
+ "roster": [
+  {
+   "player": "p1",
+   "number": "1"
+  },
+  {
+   "player": "p2",
+   "number": "4"
+  },
+  {
+   "player": "p3",
+   "number": "3"
+  },
+  {
+   "player": "p4",
+   "number": "8"
+  },
+  {
+   "player": "p5",
+   "number": "10"
+  },
+  {
+   "player": "p6",
+   "number": "7"
+  },
+  {
+   "player": "p7",
+   "number": "9"
+  },
+  {
+   "player": "p8",
+   "number": "5"
+  },
+  {
+   "player": "p9",
+   "number": "11"
+  },
+  {
+   "player": "p10",
+   "number": "2"
+  },
+  {
+   "player": "p11",
+   "number": "14"
+  },
+  {
+   "player": "p12",
+   "number": "12"
+  }
+ ],
+ "finance": {
+  "updated": "2026-10-21T18:00:00-07:00",
+  "cuota": 350,
+  "liga": [
+   {
+    "k": "inscripcion",
+    "label": "Inscripción",
+    "costo": 2500,
+    "pagado": 2500,
+    "desc": "Entrada al torneo."
+   },
+   {
+    "k": "credenciales",
+    "label": "Credenciales",
+    "costo": 1200,
+    "pagado": 600,
+    "desc": "12 credenciales a $100."
+   },
+   {
+    "k": "deposito",
+    "label": "Depósito",
+    "costo": 500,
+    "pagado": 0,
+    "desc": "Se regresa al final si no hay deudas."
+   }
+  ],
+  "gastos": [],
+  "orden": [
+   "inscripcion",
+   "credenciales",
+   "deposito"
+  ],
+  "cuotaNota": "Datos de ejemplo. La cuota cubre inscripción, credenciales y depósito.",
+  "cuentas": [
+   {
+    "player": "p1",
+    "aportado": 350,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p2",
+    "aportado": 350,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p3",
+    "aportado": 200,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p4",
+    "aportado": 0,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p5",
+    "aportado": 0,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p6",
+    "aportado": 350,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p7",
+    "aportado": 200,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p8",
+    "aportado": 350,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p9",
+    "aportado": 200,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p10",
+    "aportado": 350,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p11",
+    "aportado": 0,
+    "multa": false,
+    "why": ""
+   },
+   {
+    "player": "p12",
+    "aportado": 0,
+    "multa": false,
+    "why": ""
+   }
+  ],
+  "faq": [
+   {
+    "q": "¿Cuánto me toca pagar?",
+    "k": "cuanto toca pagar debo",
+    "a": [
+     "La cuota es de **{cuota}** por jugador. En «Mi cuenta» ves lo que te falta."
+    ]
+   }
+  ]
+ },
+ "matches": [
+  {
+   "id": "j1",
+   "jornada": "J1",
+   "date": "2026-10-04T20:00:00-07:00",
+   "rival": "Halcones",
+   "home": true,
+   "venue": "Cancha 2",
+   "score": {
+    "for": 3,
+    "against": 1
+   },
+   "played": [
+    "p1",
+    "p5",
+    "p3",
+    "p4",
+    "p6",
+    "p7",
+    "p10",
+    "p9",
+    "p8",
+    "p11"
+   ],
+   "ratings": [
+    {
+     "voter": "p1",
+     "target": "p5",
+     "score": 5
+    },
+    {
+     "voter": "p1",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p4",
+     "score": 4
+    },
+    {
+     "voter": "p1",
+     "target": "p6",
+     "score": 5
+    },
+    {
+     "voter": "p1",
+     "target": "p7",
+     "score": 4
+    },
+    {
+     "voter": "p1",
+     "target": "p10",
+     "score": 7
+    },
+    {
+     "voter": "p1",
+     "target": "p9",
+     "score": 7
+    },
+    {
+     "voter": "p1",
+     "target": "p8",
+     "score": 9
+    },
+    {
+     "voter": "p1",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p5",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p5",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p4",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p6",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p7",
+     "score": 5
+    },
+    {
+     "voter": "p5",
+     "target": "p10",
+     "score": 5
+    },
+    {
+     "voter": "p5",
+     "target": "p9",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p5",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p3",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p3",
+     "target": "p5",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p4",
+     "score": 5
+    },
+    {
+     "voter": "p3",
+     "target": "p6",
+     "score": 5
+    },
+    {
+     "voter": "p3",
+     "target": "p7",
+     "score": 5
+    },
+    {
+     "voter": "p3",
+     "target": "p10",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p9",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p3",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p4",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p4",
+     "target": "p5",
+     "score": 6
+    },
+    {
+     "voter": "p4",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p4",
+     "target": "p6",
+     "score": 5
+    },
+    {
+     "voter": "p4",
+     "target": "p7",
+     "score": 5
+    },
+    {
+     "voter": "p4",
+     "target": "p10",
+     "score": 5
+    },
+    {
+     "voter": "p4",
+     "target": "p9",
+     "score": 7
+    },
+    {
+     "voter": "p4",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p4",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p6",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p6",
+     "target": "p5",
+     "score": 5
+    },
+    {
+     "voter": "p6",
+     "target": "p3",
+     "score": 7
+    },
+    {
+     "voter": "p6",
+     "target": "p4",
+     "score": 4
+    },
+    {
+     "voter": "p6",
+     "target": "p7",
+     "score": 4
+    },
+    {
+     "voter": "p6",
+     "target": "p10",
+     "score": 5
+    },
+    {
+     "voter": "p6",
+     "target": "p9",
+     "score": 7
+    },
+    {
+     "voter": "p6",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p6",
+     "target": "p11",
+     "score": 9
+    },
+    {
+     "voter": "p7",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p7",
+     "target": "p5",
+     "score": 5
+    },
+    {
+     "voter": "p7",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p4",
+     "score": 5
+    },
+    {
+     "voter": "p7",
+     "target": "p6",
+     "score": 4
+    },
+    {
+     "voter": "p7",
+     "target": "p10",
+     "score": 5
+    },
+    {
+     "voter": "p7",
+     "target": "p9",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p7",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p10",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p10",
+     "target": "p5",
+     "score": 6
+    },
+    {
+     "voter": "p10",
+     "target": "p3",
+     "score": 7
+    },
+    {
+     "voter": "p10",
+     "target": "p4",
+     "score": 5
+    },
+    {
+     "voter": "p10",
+     "target": "p6",
+     "score": 4
+    },
+    {
+     "voter": "p10",
+     "target": "p7",
+     "score": 4
+    },
+    {
+     "voter": "p10",
+     "target": "p9",
+     "score": 6
+    },
+    {
+     "voter": "p10",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p10",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p9",
+     "target": "p5",
+     "score": 6
+    },
+    {
+     "voter": "p9",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p9",
+     "target": "p4",
+     "score": 4
+    },
+    {
+     "voter": "p9",
+     "target": "p6",
+     "score": 5
+    },
+    {
+     "voter": "p9",
+     "target": "p7",
+     "score": 5
+    },
+    {
+     "voter": "p9",
+     "target": "p10",
+     "score": 5
+    },
+    {
+     "voter": "p9",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p9",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p8",
+     "target": "p5",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p8",
+     "target": "p4",
+     "score": 5
+    },
+    {
+     "voter": "p8",
+     "target": "p6",
+     "score": 5
+    },
+    {
+     "voter": "p8",
+     "target": "p7",
+     "score": 4
+    },
+    {
+     "voter": "p8",
+     "target": "p10",
+     "score": 6
+    },
+    {
+     "voter": "p8",
+     "target": "p9",
+     "score": 5
+    },
+    {
+     "voter": "p8",
+     "target": "p11",
+     "score": 9
+    },
+    {
+     "voter": "p11",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p5",
+     "score": 5
+    },
+    {
+     "voter": "p11",
+     "target": "p3",
+     "score": 7
+    },
+    {
+     "voter": "p11",
+     "target": "p4",
+     "score": 4
+    },
+    {
+     "voter": "p11",
+     "target": "p6",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p7",
+     "score": 5
+    },
+    {
+     "voter": "p11",
+     "target": "p10",
+     "score": 5
+    },
+    {
+     "voter": "p11",
+     "target": "p9",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p8",
+     "score": 9
+    }
+   ],
+   "mvp": [
+    {
+     "voter": "p1",
+     "target": "p11"
+    },
+    {
+     "voter": "p5",
+     "target": "p11"
+    },
+    {
+     "voter": "p3",
+     "target": "p11"
+    },
+    {
+     "voter": "p4",
+     "target": "p11"
+    },
+    {
+     "voter": "p6",
+     "target": "p7"
+    },
+    {
+     "voter": "p7",
+     "target": "p10"
+    },
+    {
+     "voter": "p10",
+     "target": "p11"
+    },
+    {
+     "voter": "p9",
+     "target": "p11"
+    },
+    {
+     "voter": "p8",
+     "target": "p7"
+    }
+   ],
+   "stats": {
+    "p9": {
+     "g": 1,
+     "a": 0
+    },
+    "p11": {
+     "g": 1,
+     "a": 0
+    },
+    "p3": {
+     "g": 1,
+     "a": 0
+    }
+   }
+  },
+  {
+   "id": "j2",
+   "jornada": "J2",
+   "date": "2026-10-11T20:00:00-07:00",
+   "rival": "Real Norte",
+   "home": false,
+   "venue": "Cancha 2",
+   "score": {
+    "for": 2,
+    "against": 2
+   },
+   "played": [
+    "p1",
+    "p7",
+    "p3",
+    "p11",
+    "p2",
+    "p9",
+    "p12",
+    "p4",
+    "p10",
+    "p8"
+   ],
+   "ratings": [
+    {
+     "voter": "p1",
+     "target": "p7",
+     "score": 5
+    },
+    {
+     "voter": "p1",
+     "target": "p3",
+     "score": 4
+    },
+    {
+     "voter": "p1",
+     "target": "p11",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p2",
+     "score": 7
+    },
+    {
+     "voter": "p1",
+     "target": "p9",
+     "score": 5
+    },
+    {
+     "voter": "p1",
+     "target": "p12",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p4",
+     "score": 8
+    },
+    {
+     "voter": "p1",
+     "target": "p10",
+     "score": 8
+    },
+    {
+     "voter": "p1",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p1",
+     "score": 7
+    },
+    {
+     "voter": "p7",
+     "target": "p3",
+     "score": 4
+    },
+    {
+     "voter": "p7",
+     "target": "p11",
+     "score": 5
+    },
+    {
+     "voter": "p7",
+     "target": "p2",
+     "score": 8
+    },
+    {
+     "voter": "p7",
+     "target": "p9",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p12",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p4",
+     "score": 8
+    },
+    {
+     "voter": "p7",
+     "target": "p10",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p1",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p7",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p11",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p2",
+     "score": 8
+    },
+    {
+     "voter": "p3",
+     "target": "p9",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p4",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p10",
+     "score": 8
+    },
+    {
+     "voter": "p3",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p1",
+     "score": 8
+    },
+    {
+     "voter": "p11",
+     "target": "p7",
+     "score": 5
+    },
+    {
+     "voter": "p11",
+     "target": "p3",
+     "score": 3
+    },
+    {
+     "voter": "p11",
+     "target": "p2",
+     "score": 7
+    },
+    {
+     "voter": "p11",
+     "target": "p9",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p11",
+     "target": "p4",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p10",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p2",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p2",
+     "target": "p7",
+     "score": 6
+    },
+    {
+     "voter": "p2",
+     "target": "p3",
+     "score": 5
+    },
+    {
+     "voter": "p2",
+     "target": "p11",
+     "score": 6
+    },
+    {
+     "voter": "p2",
+     "target": "p9",
+     "score": 7
+    },
+    {
+     "voter": "p2",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p2",
+     "target": "p4",
+     "score": 7
+    },
+    {
+     "voter": "p2",
+     "target": "p10",
+     "score": 8
+    },
+    {
+     "voter": "p2",
+     "target": "p8",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p1",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p7",
+     "score": 6
+    },
+    {
+     "voter": "p9",
+     "target": "p3",
+     "score": 5
+    },
+    {
+     "voter": "p9",
+     "target": "p11",
+     "score": 6
+    },
+    {
+     "voter": "p9",
+     "target": "p2",
+     "score": 6
+    },
+    {
+     "voter": "p9",
+     "target": "p12",
+     "score": 6
+    },
+    {
+     "voter": "p9",
+     "target": "p4",
+     "score": 8
+    },
+    {
+     "voter": "p9",
+     "target": "p10",
+     "score": 8
+    },
+    {
+     "voter": "p9",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p1",
+     "score": 8
+    },
+    {
+     "voter": "p12",
+     "target": "p7",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p3",
+     "score": 4
+    },
+    {
+     "voter": "p12",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p12",
+     "target": "p2",
+     "score": 8
+    },
+    {
+     "voter": "p12",
+     "target": "p9",
+     "score": 5
+    },
+    {
+     "voter": "p12",
+     "target": "p4",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p10",
+     "score": 7
+    },
+    {
+     "voter": "p12",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p4",
+     "target": "p1",
+     "score": 8
+    },
+    {
+     "voter": "p4",
+     "target": "p7",
+     "score": 5
+    },
+    {
+     "voter": "p4",
+     "target": "p3",
+     "score": 3
+    },
+    {
+     "voter": "p4",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p4",
+     "target": "p2",
+     "score": 6
+    },
+    {
+     "voter": "p4",
+     "target": "p9",
+     "score": 5
+    },
+    {
+     "voter": "p4",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p4",
+     "target": "p10",
+     "score": 6
+    },
+    {
+     "voter": "p4",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p10",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p10",
+     "target": "p7",
+     "score": 4
+    },
+    {
+     "voter": "p10",
+     "target": "p3",
+     "score": 5
+    },
+    {
+     "voter": "p10",
+     "target": "p11",
+     "score": 6
+    },
+    {
+     "voter": "p10",
+     "target": "p2",
+     "score": 6
+    },
+    {
+     "voter": "p10",
+     "target": "p9",
+     "score": 5
+    },
+    {
+     "voter": "p10",
+     "target": "p12",
+     "score": 6
+    },
+    {
+     "voter": "p10",
+     "target": "p4",
+     "score": 7
+    },
+    {
+     "voter": "p10",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p8",
+     "target": "p1",
+     "score": 8
+    },
+    {
+     "voter": "p8",
+     "target": "p7",
+     "score": 5
+    },
+    {
+     "voter": "p8",
+     "target": "p3",
+     "score": 4
+    },
+    {
+     "voter": "p8",
+     "target": "p11",
+     "score": 6
+    },
+    {
+     "voter": "p8",
+     "target": "p2",
+     "score": 6
+    },
+    {
+     "voter": "p8",
+     "target": "p9",
+     "score": 6
+    },
+    {
+     "voter": "p8",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p4",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p10",
+     "score": 7
+    }
+   ],
+   "mvp": [
+    {
+     "voter": "p1",
+     "target": "p9"
+    },
+    {
+     "voter": "p7",
+     "target": "p10"
+    },
+    {
+     "voter": "p3",
+     "target": "p4"
+    },
+    {
+     "voter": "p11",
+     "target": "p4"
+    },
+    {
+     "voter": "p2",
+     "target": "p11"
+    },
+    {
+     "voter": "p9",
+     "target": "p4"
+    },
+    {
+     "voter": "p12",
+     "target": "p4"
+    },
+    {
+     "voter": "p10",
+     "target": "p4"
+    },
+    {
+     "voter": "p8",
+     "target": "p4"
+    }
+   ],
+   "stats": {
+    "p10": {
+     "g": 1,
+     "a": 0
+    },
+    "p3": {
+     "g": 1,
+     "a": 0
+    }
+   }
+  },
+  {
+   "id": "j3",
+   "jornada": "J3",
+   "date": "2026-10-18T20:00:00-07:00",
+   "rival": "Deportivo Sur",
+   "home": true,
+   "venue": "Cancha 2",
+   "score": {
+    "for": 1,
+    "against": 2
+   },
+   "played": [
+    "p11",
+    "p5",
+    "p6",
+    "p7",
+    "p3",
+    "p9",
+    "p8",
+    "p1",
+    "p12",
+    "p10"
+   ],
+   "ratings": [
+    {
+     "voter": "p11",
+     "target": "p5",
+     "score": 8
+    },
+    {
+     "voter": "p11",
+     "target": "p6",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p7",
+     "score": 8
+    },
+    {
+     "voter": "p11",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p9",
+     "score": 8
+    },
+    {
+     "voter": "p11",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p11",
+     "target": "p10",
+     "score": 8
+    },
+    {
+     "voter": "p5",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p5",
+     "target": "p6",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p7",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p9",
+     "score": 8
+    },
+    {
+     "voter": "p5",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p5",
+     "target": "p10",
+     "score": 6
+    },
+    {
+     "voter": "p6",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p6",
+     "target": "p5",
+     "score": 8
+    },
+    {
+     "voter": "p6",
+     "target": "p7",
+     "score": 7
+    },
+    {
+     "voter": "p6",
+     "target": "p3",
+     "score": 7
+    },
+    {
+     "voter": "p6",
+     "target": "p9",
+     "score": 9
+    },
+    {
+     "voter": "p6",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p6",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p6",
+     "target": "p12",
+     "score": 8
+    },
+    {
+     "voter": "p6",
+     "target": "p10",
+     "score": 8
+    },
+    {
+     "voter": "p7",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p7",
+     "target": "p5",
+     "score": 7
+    },
+    {
+     "voter": "p7",
+     "target": "p6",
+     "score": 5
+    },
+    {
+     "voter": "p7",
+     "target": "p3",
+     "score": 5
+    },
+    {
+     "voter": "p7",
+     "target": "p9",
+     "score": 7
+    },
+    {
+     "voter": "p7",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p7",
+     "target": "p10",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p3",
+     "target": "p5",
+     "score": 9
+    },
+    {
+     "voter": "p3",
+     "target": "p6",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p7",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p9",
+     "score": 8
+    },
+    {
+     "voter": "p3",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p1",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p12",
+     "score": 8
+    },
+    {
+     "voter": "p3",
+     "target": "p10",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p5",
+     "score": 8
+    },
+    {
+     "voter": "p9",
+     "target": "p6",
+     "score": 6
+    },
+    {
+     "voter": "p9",
+     "target": "p7",
+     "score": 8
+    },
+    {
+     "voter": "p9",
+     "target": "p3",
+     "score": 5
+    },
+    {
+     "voter": "p9",
+     "target": "p8",
+     "score": 5
+    },
+    {
+     "voter": "p9",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p9",
+     "target": "p12",
+     "score": 8
+    },
+    {
+     "voter": "p9",
+     "target": "p10",
+     "score": 8
+    },
+    {
+     "voter": "p8",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p8",
+     "target": "p5",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p6",
+     "score": 5
+    },
+    {
+     "voter": "p8",
+     "target": "p7",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p3",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p9",
+     "score": 9
+    },
+    {
+     "voter": "p8",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p8",
+     "target": "p12",
+     "score": 8
+    },
+    {
+     "voter": "p8",
+     "target": "p10",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p1",
+     "target": "p5",
+     "score": 7
+    },
+    {
+     "voter": "p1",
+     "target": "p6",
+     "score": 5
+    },
+    {
+     "voter": "p1",
+     "target": "p7",
+     "score": 8
+    },
+    {
+     "voter": "p1",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p9",
+     "score": 8
+    },
+    {
+     "voter": "p1",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p1",
+     "target": "p10",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p12",
+     "target": "p5",
+     "score": 8
+    },
+    {
+     "voter": "p12",
+     "target": "p6",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p7",
+     "score": 8
+    },
+    {
+     "voter": "p12",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p9",
+     "score": 9
+    },
+    {
+     "voter": "p12",
+     "target": "p8",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p10",
+     "score": 6
+    },
+    {
+     "voter": "p10",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p10",
+     "target": "p5",
+     "score": 7
+    },
+    {
+     "voter": "p10",
+     "target": "p6",
+     "score": 7
+    },
+    {
+     "voter": "p10",
+     "target": "p7",
+     "score": 6
+    },
+    {
+     "voter": "p10",
+     "target": "p3",
+     "score": 7
+    },
+    {
+     "voter": "p10",
+     "target": "p9",
+     "score": 9
+    },
+    {
+     "voter": "p10",
+     "target": "p8",
+     "score": 7
+    },
+    {
+     "voter": "p10",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p10",
+     "target": "p12",
+     "score": 9
+    }
+   ],
+   "mvp": [
+    {
+     "voter": "p5",
+     "target": "p9"
+    },
+    {
+     "voter": "p6",
+     "target": "p11"
+    },
+    {
+     "voter": "p7",
+     "target": "p11"
+    },
+    {
+     "voter": "p3",
+     "target": "p11"
+    },
+    {
+     "voter": "p9",
+     "target": "p3"
+    },
+    {
+     "voter": "p8",
+     "target": "p3"
+    },
+    {
+     "voter": "p1",
+     "target": "p11"
+    },
+    {
+     "voter": "p12",
+     "target": "p11"
+    },
+    {
+     "voter": "p10",
+     "target": "p11"
+    }
+   ],
+   "stats": {
+    "p3": {
+     "g": 1,
+     "a": 0
+    }
+   }
+  },
+  {
+   "id": "j4",
+   "jornada": "J4",
+   "date": "2026-10-25T20:00:00-07:00",
+   "rival": "Atlas Barrio",
+   "home": false,
+   "venue": "Cancha 2",
+   "score": {
+    "for": 4,
+    "against": 0
+   },
+   "played": [
+    "p5",
+    "p11",
+    "p4",
+    "p2",
+    "p1",
+    "p9",
+    "p3",
+    "p7",
+    "p12",
+    "p8"
+   ],
+   "ratings": [
+    {
+     "voter": "p5",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p5",
+     "target": "p4",
+     "score": 8
+    },
+    {
+     "voter": "p5",
+     "target": "p2",
+     "score": 5
+    },
+    {
+     "voter": "p5",
+     "target": "p1",
+     "score": 4
+    },
+    {
+     "voter": "p5",
+     "target": "p9",
+     "score": 9
+    },
+    {
+     "voter": "p5",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p5",
+     "target": "p7",
+     "score": 7
+    },
+    {
+     "voter": "p5",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p5",
+     "target": "p8",
+     "score": 9
+    },
+    {
+     "voter": "p11",
+     "target": "p5",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p4",
+     "score": 7
+    },
+    {
+     "voter": "p11",
+     "target": "p2",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p1",
+     "score": 4
+    },
+    {
+     "voter": "p11",
+     "target": "p9",
+     "score": 7
+    },
+    {
+     "voter": "p11",
+     "target": "p3",
+     "score": 5
+    },
+    {
+     "voter": "p11",
+     "target": "p7",
+     "score": 6
+    },
+    {
+     "voter": "p11",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p11",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p4",
+     "target": "p5",
+     "score": 7
+    },
+    {
+     "voter": "p4",
+     "target": "p11",
+     "score": 6
+    },
+    {
+     "voter": "p4",
+     "target": "p2",
+     "score": 5
+    },
+    {
+     "voter": "p4",
+     "target": "p1",
+     "score": 4
+    },
+    {
+     "voter": "p4",
+     "target": "p9",
+     "score": 8
+    },
+    {
+     "voter": "p4",
+     "target": "p3",
+     "score": 5
+    },
+    {
+     "voter": "p4",
+     "target": "p7",
+     "score": 6
+    },
+    {
+     "voter": "p4",
+     "target": "p12",
+     "score": 6
+    },
+    {
+     "voter": "p4",
+     "target": "p8",
+     "score": 7
+    },
+    {
+     "voter": "p2",
+     "target": "p5",
+     "score": 7
+    },
+    {
+     "voter": "p2",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p2",
+     "target": "p4",
+     "score": 6
+    },
+    {
+     "voter": "p2",
+     "target": "p1",
+     "score": 6
+    },
+    {
+     "voter": "p2",
+     "target": "p9",
+     "score": 7
+    },
+    {
+     "voter": "p2",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p2",
+     "target": "p7",
+     "score": 7
+    },
+    {
+     "voter": "p2",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p2",
+     "target": "p8",
+     "score": 7
+    },
+    {
+     "voter": "p1",
+     "target": "p5",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p11",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p4",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p2",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p9",
+     "score": 9
+    },
+    {
+     "voter": "p1",
+     "target": "p3",
+     "score": 5
+    },
+    {
+     "voter": "p1",
+     "target": "p7",
+     "score": 7
+    },
+    {
+     "voter": "p1",
+     "target": "p12",
+     "score": 6
+    },
+    {
+     "voter": "p1",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p9",
+     "target": "p5",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p4",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p2",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p9",
+     "target": "p3",
+     "score": 5
+    },
+    {
+     "voter": "p9",
+     "target": "p7",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p9",
+     "target": "p8",
+     "score": 8
+    },
+    {
+     "voter": "p3",
+     "target": "p5",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p4",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p2",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p3",
+     "target": "p9",
+     "score": 7
+    },
+    {
+     "voter": "p3",
+     "target": "p7",
+     "score": 8
+    },
+    {
+     "voter": "p3",
+     "target": "p12",
+     "score": 6
+    },
+    {
+     "voter": "p3",
+     "target": "p8",
+     "score": 9
+    },
+    {
+     "voter": "p7",
+     "target": "p5",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p7",
+     "target": "p4",
+     "score": 8
+    },
+    {
+     "voter": "p7",
+     "target": "p2",
+     "score": 5
+    },
+    {
+     "voter": "p7",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p7",
+     "target": "p9",
+     "score": 7
+    },
+    {
+     "voter": "p7",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p7",
+     "target": "p12",
+     "score": 7
+    },
+    {
+     "voter": "p7",
+     "target": "p8",
+     "score": 9
+    },
+    {
+     "voter": "p12",
+     "target": "p5",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p11",
+     "score": 7
+    },
+    {
+     "voter": "p12",
+     "target": "p4",
+     "score": 7
+    },
+    {
+     "voter": "p12",
+     "target": "p2",
+     "score": 5
+    },
+    {
+     "voter": "p12",
+     "target": "p1",
+     "score": 4
+    },
+    {
+     "voter": "p12",
+     "target": "p9",
+     "score": 8
+    },
+    {
+     "voter": "p12",
+     "target": "p3",
+     "score": 7
+    },
+    {
+     "voter": "p12",
+     "target": "p7",
+     "score": 6
+    },
+    {
+     "voter": "p12",
+     "target": "p8",
+     "score": 9
+    },
+    {
+     "voter": "p8",
+     "target": "p5",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p11",
+     "score": 8
+    },
+    {
+     "voter": "p8",
+     "target": "p4",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p2",
+     "score": 6
+    },
+    {
+     "voter": "p8",
+     "target": "p1",
+     "score": 5
+    },
+    {
+     "voter": "p8",
+     "target": "p9",
+     "score": 8
+    },
+    {
+     "voter": "p8",
+     "target": "p3",
+     "score": 6
+    },
+    {
+     "voter": "p8",
+     "target": "p7",
+     "score": 7
+    },
+    {
+     "voter": "p8",
+     "target": "p12",
+     "score": 8
+    }
+   ],
+   "mvp": [
+    {
+     "voter": "p5",
+     "target": "p8"
+    },
+    {
+     "voter": "p11",
+     "target": "p4"
+    },
+    {
+     "voter": "p4",
+     "target": "p8"
+    },
+    {
+     "voter": "p2",
+     "target": "p8"
+    },
+    {
+     "voter": "p1",
+     "target": "p3"
+    },
+    {
+     "voter": "p9",
+     "target": "p8"
+    },
+    {
+     "voter": "p3",
+     "target": "p8"
+    },
+    {
+     "voter": "p7",
+     "target": "p8"
+    },
+    {
+     "voter": "p12",
+     "target": "p11"
+    }
+   ],
+   "stats": {
+    "p5": {
+     "g": 2,
+     "a": 0
+    },
+    "p4": {
+     "g": 1,
+     "a": 0
+    },
+    "p11": {
+     "g": 1,
+     "a": 0
+    }
+   }
+  },
+  {
+   "id": "j5",
+   "jornada": "J5",
+   "date": "2026-11-01T20:00:00-07:00",
+   "rival": "Club Centro",
+   "home": true,
+   "venue": "Cancha 2",
+   "score": null
+  }
+ ],
+ "evaluations": [
+  {
+   "voter": "p1",
+   "target": "p2",
+   "vel": 8,
+   "tir": 4,
+   "pas": 6,
+   "reg": 7,
+   "def": 4,
+   "fis": 9
+  },
+  {
+   "voter": "p1",
+   "target": "p3",
+   "vel": 5,
+   "tir": 5,
+   "pas": 4,
+   "reg": 6,
+   "def": 6,
+   "fis": 5
+  },
+  {
+   "voter": "p1",
+   "target": "p4",
+   "vel": 5,
+   "tir": 4,
+   "pas": 8,
+   "reg": 8,
+   "def": 5,
+   "fis": 7
+  },
+  {
+   "voter": "p1",
+   "target": "p5",
+   "vel": 3,
+   "tir": 5,
+   "pas": 9,
+   "reg": 9,
+   "def": 9,
+   "fis": 5
+  },
+  {
+   "voter": "p1",
+   "target": "p6",
+   "vel": 7,
+   "tir": 7,
+   "pas": 7,
+   "reg": 5,
+   "def": 4,
+   "fis": 3
+  },
+  {
+   "voter": "p1",
+   "target": "p7",
+   "vel": 8,
+   "tir": 6,
+   "pas": 6,
+   "reg": 8,
+   "def": 5,
+   "fis": 7
+  },
+  {
+   "voter": "p1",
+   "target": "p8",
+   "vel": 5,
+   "tir": 8,
+   "pas": 6,
+   "reg": 7,
+   "def": 10,
+   "fis": 4
+  },
+  {
+   "voter": "p1",
+   "target": "p9",
+   "vel": 4,
+   "tir": 8,
+   "pas": 8,
+   "reg": 9,
+   "def": 6,
+   "fis": 7
+  },
+  {
+   "voter": "p1",
+   "target": "p10",
+   "vel": 5,
+   "tir": 7,
+   "pas": 9,
+   "reg": 5,
+   "def": 9,
+   "fis": 4
+  },
+  {
+   "voter": "p1",
+   "target": "p11",
+   "vel": 8,
+   "tir": 6,
+   "pas": 7,
+   "reg": 10,
+   "def": 8,
+   "fis": 8
+  },
+  {
+   "voter": "p1",
+   "target": "p12",
+   "vel": 6,
+   "tir": 7,
+   "pas": 7,
+   "reg": 7,
+   "def": 6,
+   "fis": 6
+  },
+  {
+   "voter": "p2",
+   "target": "p1",
+   "vel": 6,
+   "tir": 4,
+   "pas": 8,
+   "reg": 9,
+   "def": 4,
+   "fis": 4
+  },
+  {
+   "voter": "p2",
+   "target": "p3",
+   "vel": 4,
+   "tir": 4,
+   "pas": 5,
+   "reg": 7,
+   "def": 7,
+   "fis": 4
+  },
+  {
+   "voter": "p2",
+   "target": "p4",
+   "vel": 4,
+   "tir": 5,
+   "pas": 9,
+   "reg": 8,
+   "def": 5,
+   "fis": 9
+  },
+  {
+   "voter": "p2",
+   "target": "p5",
+   "vel": 3,
+   "tir": 6,
+   "pas": 10,
+   "reg": 8,
+   "def": 8,
+   "fis": 3
+  },
+  {
+   "voter": "p2",
+   "target": "p6",
+   "vel": 8,
+   "tir": 9,
+   "pas": 7,
+   "reg": 3,
+   "def": 5,
+   "fis": 3
+  },
+  {
+   "voter": "p2",
+   "target": "p7",
+   "vel": 7,
+   "tir": 4,
+   "pas": 6,
+   "reg": 6,
+   "def": 5,
+   "fis": 7
+  },
+  {
+   "voter": "p2",
+   "target": "p8",
+   "vel": 3,
+   "tir": 8,
+   "pas": 7,
+   "reg": 8,
+   "def": 9,
+   "fis": 5
+  },
+  {
+   "voter": "p2",
+   "target": "p9",
+   "vel": 4,
+   "tir": 9,
+   "pas": 7,
+   "reg": 8,
+   "def": 6,
+   "fis": 7
+  },
+  {
+   "voter": "p2",
+   "target": "p10",
+   "vel": 5,
+   "tir": 9,
+   "pas": 9,
+   "reg": 3,
+   "def": 8,
+   "fis": 3
+  },
+  {
+   "voter": "p2",
+   "target": "p11",
+   "vel": 8,
+   "tir": 5,
+   "pas": 8,
+   "reg": 9,
+   "def": 7,
+   "fis": 7
+  },
+  {
+   "voter": "p2",
+   "target": "p12",
+   "vel": 6,
+   "tir": 7,
+   "pas": 7,
+   "reg": 7,
+   "def": 5,
+   "fis": 6
+  },
+  {
+   "voter": "p3",
+   "target": "p1",
+   "vel": 6,
+   "tir": 5,
+   "pas": 7,
+   "reg": 9,
+   "def": 4,
+   "fis": 4
+  },
+  {
+   "voter": "p3",
+   "target": "p2",
+   "vel": 8,
+   "tir": 4,
+   "pas": 7,
+   "reg": 8,
+   "def": 4,
+   "fis": 9
+  },
+  {
+   "voter": "p3",
+   "target": "p4",
+   "vel": 5,
+   "tir": 3,
+   "pas": 7,
+   "reg": 7,
+   "def": 5,
+   "fis": 8
+  },
+  {
+   "voter": "p3",
+   "target": "p5",
+   "vel": 4,
+   "tir": 5,
+   "pas": 10,
+   "reg": 9,
+   "def": 8,
+   "fis": 3
+  },
+  {
+   "voter": "p3",
+   "target": "p6",
+   "vel": 8,
+   "tir": 7,
+   "pas": 7,
+   "reg": 5,
+   "def": 5,
+   "fis": 4
+  },
+  {
+   "voter": "p3",
+   "target": "p7",
+   "vel": 8,
+   "tir": 6,
+   "pas": 5,
+   "reg": 8,
+   "def": 5,
+   "fis": 7
+  },
+  {
+   "voter": "p3",
+   "target": "p8",
+   "vel": 3,
+   "tir": 9,
+   "pas": 6,
+   "reg": 9,
+   "def": 9,
+   "fis": 6
+  },
+  {
+   "voter": "p3",
+   "target": "p9",
+   "vel": 4,
+   "tir": 7,
+   "pas": 9,
+   "reg": 10,
+   "def": 6,
+   "fis": 5
+  },
+  {
+   "voter": "p3",
+   "target": "p10",
+   "vel": 4,
+   "tir": 8,
+   "pas": 9,
+   "reg": 3,
+   "def": 8,
+   "fis": 5
+  },
+  {
+   "voter": "p3",
+   "target": "p11",
+   "vel": 8,
+   "tir": 6,
+   "pas": 7,
+   "reg": 9,
+   "def": 8,
+   "fis": 6
+  },
+  {
+   "voter": "p3",
+   "target": "p12",
+   "vel": 5,
+   "tir": 6,
+   "pas": 8,
+   "reg": 8,
+   "def": 6,
+   "fis": 6
+  },
+  {
+   "voter": "p4",
+   "target": "p1",
+   "vel": 5,
+   "tir": 5,
+   "pas": 7,
+   "reg": 9,
+   "def": 4,
+   "fis": 4
+  },
+  {
+   "voter": "p4",
+   "target": "p2",
+   "vel": 8,
+   "tir": 5,
+   "pas": 6,
+   "reg": 7,
+   "def": 4,
+   "fis": 9
+  },
+  {
+   "voter": "p4",
+   "target": "p3",
+   "vel": 6,
+   "tir": 4,
+   "pas": 4,
+   "reg": 6,
+   "def": 8,
+   "fis": 4
+  },
+  {
+   "voter": "p4",
+   "target": "p5",
+   "vel": 3,
+   "tir": 5,
+   "pas": 9,
+   "reg": 9,
+   "def": 9,
+   "fis": 3
+  },
+  {
+   "voter": "p4",
+   "target": "p6",
+   "vel": 7,
+   "tir": 8,
+   "pas": 8,
+   "reg": 3,
+   "def": 4,
+   "fis": 4
+  },
+  {
+   "voter": "p4",
+   "target": "p7",
+   "vel": 8,
+   "tir": 5,
+   "pas": 5,
+   "reg": 6,
+   "def": 6,
+   "fis": 7
+  },
+  {
+   "voter": "p4",
+   "target": "p8",
+   "vel": 3,
+   "tir": 9,
+   "pas": 6,
+   "reg": 8,
+   "def": 9,
+   "fis": 6
+  },
+  {
+   "voter": "p4",
+   "target": "p9",
+   "vel": 5,
+   "tir": 8,
+   "pas": 8,
+   "reg": 9,
+   "def": 6,
+   "fis": 6
+  },
+  {
+   "voter": "p4",
+   "target": "p10",
+   "vel": 5,
+   "tir": 7,
+   "pas": 10,
+   "reg": 5,
+   "def": 8,
+   "fis": 3
+  },
+  {
+   "voter": "p4",
+   "target": "p11",
+   "vel": 8,
+   "tir": 6,
+   "pas": 6,
+   "reg": 9,
+   "def": 8,
+   "fis": 6
+  },
+  {
+   "voter": "p4",
+   "target": "p12",
+   "vel": 6,
+   "tir": 7,
+   "pas": 8,
+   "reg": 7,
+   "def": 6,
+   "fis": 7
+  },
+  {
+   "voter": "p5",
+   "target": "p1",
+   "vel": 6,
+   "tir": 4,
+   "pas": 8,
+   "reg": 10,
+   "def": 4,
+   "fis": 4
+  },
+  {
+   "voter": "p5",
+   "target": "p2",
+   "vel": 8,
+   "tir": 5,
+   "pas": 7,
+   "reg": 8,
+   "def": 5,
+   "fis": 8
+  },
+  {
+   "voter": "p5",
+   "target": "p3",
+   "vel": 5,
+   "tir": 4,
+   "pas": 3,
+   "reg": 7,
+   "def": 6,
+   "fis": 4
+  },
+  {
+   "voter": "p5",
+   "target": "p4",
+   "vel": 6,
+   "tir": 5,
+   "pas": 7,
+   "reg": 8,
+   "def": 4,
+   "fis": 8
+  },
+  {
+   "voter": "p5",
+   "target": "p6",
+   "vel": 7,
+   "tir": 7,
+   "pas": 7,
+   "reg": 3,
+   "def": 4,
+   "fis": 4
+  },
+  {
+   "voter": "p5",
+   "target": "p7",
+   "vel": 8,
+   "tir": 4,
+   "pas": 6,
+   "reg": 7,
+   "def": 5,
+   "fis": 9
+  },
+  {
+   "voter": "p5",
+   "target": "p8",
+   "vel": 4,
+   "tir": 9,
+   "pas": 6,
+   "reg": 9,
+   "def": 9,
+   "fis": 4
+  },
+  {
+   "voter": "p5",
+   "target": "p9",
+   "vel": 4,
+   "tir": 7,
+   "pas": 8,
+   "reg": 10,
+   "def": 4,
+   "fis": 6
+  },
+  {
+   "voter": "p5",
+   "target": "p10",
+   "vel": 3,
+   "tir": 7,
+   "pas": 9,
+   "reg": 3,
+   "def": 8,
+   "fis": 3
+  },
+  {
+   "voter": "p5",
+   "target": "p11",
+   "vel": 8,
+   "tir": 4,
+   "pas": 8,
+   "reg": 8,
+   "def": 8,
+   "fis": 8
+  },
+  {
+   "voter": "p5",
+   "target": "p12",
+   "vel": 6,
+   "tir": 7,
+   "pas": 7,
+   "reg": 7,
+   "def": 5,
+   "fis": 6
+  },
+  {
+   "voter": "p6",
+   "target": "p1",
+   "vel": 6,
+   "tir": 4,
+   "pas": 7,
+   "reg": 9,
+   "def": 4,
+   "fis": 4
+  },
+  {
+   "voter": "p6",
+   "target": "p2",
+   "vel": 8,
+   "tir": 4,
+   "pas": 7,
+   "reg": 8,
+   "def": 4,
+   "fis": 8
+  },
+  {
+   "voter": "p6",
+   "target": "p3",
+   "vel": 4,
+   "tir": 4,
+   "pas": 3,
+   "reg": 6,
+   "def": 6,
+   "fis": 4
+  },
+  {
+   "voter": "p6",
+   "target": "p4",
+   "vel": 6,
+   "tir": 4,
+   "pas": 9,
+   "reg": 6,
+   "def": 5,
+   "fis": 9
+  },
+  {
+   "voter": "p6",
+   "target": "p5",
+   "vel": 5,
+   "tir": 5,
+   "pas": 9,
+   "reg": 9,
+   "def": 8,
+   "fis": 4
+  },
+  {
+   "voter": "p6",
+   "target": "p7",
+   "vel": 8,
+   "tir": 6,
+   "pas": 6,
+   "reg": 6,
+   "def": 5,
+   "fis": 7
+  },
+  {
+   "voter": "p6",
+   "target": "p8",
+   "vel": 3,
+   "tir": 8,
+   "pas": 7,
+   "reg": 8,
+   "def": 8,
+   "fis": 4
+  },
+  {
+   "voter": "p6",
+   "target": "p9",
+   "vel": 5,
+   "tir": 8,
+   "pas": 8,
+   "reg": 9,
+   "def": 4,
+   "fis": 7
+  },
+  {
+   "voter": "p6",
+   "target": "p10",
+   "vel": 4,
+   "tir": 8,
+   "pas": 9,
+   "reg": 5,
+   "def": 7,
+   "fis": 4
+  },
+  {
+   "voter": "p6",
+   "target": "p11",
+   "vel": 8,
+   "tir": 5,
+   "pas": 7,
+   "reg": 9,
+   "def": 7,
+   "fis": 7
+  },
+  {
+   "voter": "p6",
+   "target": "p12",
+   "vel": 6,
+   "tir": 7,
+   "pas": 8,
+   "reg": 6,
+   "def": 6,
+   "fis": 7
+  },
+  {
+   "voter": "p7",
+   "target": "p1",
+   "vel": 5,
+   "tir": 6,
+   "pas": 7,
+   "reg": 9,
+   "def": 4,
+   "fis": 3
+  },
+  {
+   "voter": "p7",
+   "target": "p2",
+   "vel": 7,
+   "tir": 4,
+   "pas": 5,
+   "reg": 8,
+   "def": 5,
+   "fis": 7
+  },
+  {
+   "voter": "p7",
+   "target": "p3",
+   "vel": 6,
+   "tir": 3,
+   "pas": 4,
+   "reg": 7,
+   "def": 7,
+   "fis": 3
+  },
+  {
+   "voter": "p7",
+   "target": "p4",
+   "vel": 5,
+   "tir": 5,
+   "pas": 8,
+   "reg": 8,
+   "def": 4,
+   "fis": 8
+  },
+  {
+   "voter": "p7",
+   "target": "p5",
+   "vel": 4,
+   "tir": 4,
+   "pas": 10,
+   "reg": 9,
+   "def": 7,
+   "fis": 4
+  },
+  {
+   "voter": "p7",
+   "target": "p6",
+   "vel": 7,
+   "tir": 7,
+   "pas": 6,
+   "reg": 4,
+   "def": 5,
+   "fis": 3
+  },
+  {
+   "voter": "p7",
+   "target": "p8",
+   "vel": 5,
+   "tir": 9,
+   "pas": 5,
+   "reg": 7,
+   "def": 9,
+   "fis": 6
+  },
+  {
+   "voter": "p7",
+   "target": "p9",
+   "vel": 4,
+   "tir": 7,
+   "pas": 9,
+   "reg": 8,
+   "def": 4,
+   "fis": 5
+  },
+  {
+   "voter": "p7",
+   "target": "p10",
+   "vel": 5,
+   "tir": 8,
+   "pas": 8,
+   "reg": 4,
+   "def": 8,
+   "fis": 4
+  },
+  {
+   "voter": "p7",
+   "target": "p11",
+   "vel": 8,
+   "tir": 6,
+   "pas": 8,
+   "reg": 10,
+   "def": 7,
+   "fis": 8
+  },
+  {
+   "voter": "p7",
+   "target": "p12",
+   "vel": 6,
+   "tir": 6,
+   "pas": 8,
+   "reg": 6,
+   "def": 6,
+   "fis": 6
+  },
+  {
+   "voter": "p8",
+   "target": "p1",
+   "vel": 6,
+   "tir": 5,
+   "pas": 7,
+   "reg": 8,
+   "def": 5,
+   "fis": 3
+  },
+  {
+   "voter": "p8",
+   "target": "p2",
+   "vel": 9,
+   "tir": 4,
+   "pas": 5,
+   "reg": 8,
+   "def": 5,
+   "fis": 8
+  },
+  {
+   "voter": "p8",
+   "target": "p3",
+   "vel": 5,
+   "tir": 5,
+   "pas": 5,
+   "reg": 8,
+   "def": 6,
+   "fis": 4
+  },
+  {
+   "voter": "p8",
+   "target": "p4",
+   "vel": 5,
+   "tir": 3,
+   "pas": 9,
+   "reg": 6,
+   "def": 4,
+   "fis": 9
+  },
+  {
+   "voter": "p8",
+   "target": "p5",
+   "vel": 3,
+   "tir": 6,
+   "pas": 9,
+   "reg": 10,
+   "def": 8,
+   "fis": 4
+  },
+  {
+   "voter": "p8",
+   "target": "p6",
+   "vel": 7,
+   "tir": 7,
+   "pas": 7,
+   "reg": 4,
+   "def": 5,
+   "fis": 4
+  },
+  {
+   "voter": "p8",
+   "target": "p7",
+   "vel": 8,
+   "tir": 4,
+   "pas": 6,
+   "reg": 7,
+   "def": 6,
+   "fis": 9
+  },
+  {
+   "voter": "p8",
+   "target": "p9",
+   "vel": 5,
+   "tir": 7,
+   "pas": 8,
+   "reg": 8,
+   "def": 6,
+   "fis": 7
+  },
+  {
+   "voter": "p8",
+   "target": "p10",
+   "vel": 5,
+   "tir": 8,
+   "pas": 9,
+   "reg": 5,
+   "def": 8,
+   "fis": 5
+  },
+  {
+   "voter": "p8",
+   "target": "p11",
+   "vel": 8,
+   "tir": 4,
+   "pas": 7,
+   "reg": 8,
+   "def": 8,
+   "fis": 7
+  },
+  {
+   "voter": "p8",
+   "target": "p12",
+   "vel": 7,
+   "tir": 6,
+   "pas": 8,
+   "reg": 6,
+   "def": 6,
+   "fis": 6
+  },
+  {
+   "voter": "p9",
+   "target": "p1",
+   "vel": 6,
+   "tir": 4,
+   "pas": 8,
+   "reg": 10,
+   "def": 3,
+   "fis": 4
+  },
+  {
+   "voter": "p9",
+   "target": "p2",
+   "vel": 9,
+   "tir": 4,
+   "pas": 5,
+   "reg": 8,
+   "def": 3,
+   "fis": 7
+  },
+  {
+   "voter": "p9",
+   "target": "p3",
+   "vel": 5,
+   "tir": 4,
+   "pas": 4,
+   "reg": 7,
+   "def": 8,
+   "fis": 4
+  },
+  {
+   "voter": "p9",
+   "target": "p4",
+   "vel": 5,
+   "tir": 4,
+   "pas": 9,
+   "reg": 6,
+   "def": 5,
+   "fis": 8
+  },
+  {
+   "voter": "p9",
+   "target": "p5",
+   "vel": 3,
+   "tir": 4,
+   "pas": 10,
+   "reg": 10,
+   "def": 8,
+   "fis": 4
+  },
+  {
+   "voter": "p9",
+   "target": "p6",
+   "vel": 9,
+   "tir": 7,
+   "pas": 7,
+   "reg": 4,
+   "def": 6,
+   "fis": 5
+  },
+  {
+   "voter": "p9",
+   "target": "p7",
+   "vel": 8,
+   "tir": 5,
+   "pas": 6,
+   "reg": 7,
+   "def": 5,
+   "fis": 9
+  },
+  {
+   "voter": "p9",
+   "target": "p8",
+   "vel": 4,
+   "tir": 8,
+   "pas": 7,
+   "reg": 9,
+   "def": 8,
+   "fis": 5
+  },
+  {
+   "voter": "p9",
+   "target": "p10",
+   "vel": 4,
+   "tir": 7,
+   "pas": 9,
+   "reg": 5,
+   "def": 8,
+   "fis": 5
+  },
+  {
+   "voter": "p9",
+   "target": "p11",
+   "vel": 8,
+   "tir": 6,
+   "pas": 8,
+   "reg": 9,
+   "def": 8,
+   "fis": 7
+  },
+  {
+   "voter": "p9",
+   "target": "p12",
+   "vel": 5,
+   "tir": 7,
+   "pas": 8,
+   "reg": 6,
+   "def": 6,
+   "fis": 6
+  },
+  {
+   "voter": "p10",
+   "target": "p1",
+   "vel": 6,
+   "tir": 5,
+   "pas": 7,
+   "reg": 8,
+   "def": 5,
+   "fis": 5
+  },
+  {
+   "voter": "p10",
+   "target": "p2",
+   "vel": 9,
+   "tir": 4,
+   "pas": 7,
+   "reg": 8,
+   "def": 4,
+   "fis": 7
+  },
+  {
+   "voter": "p10",
+   "target": "p3",
+   "vel": 6,
+   "tir": 4,
+   "pas": 4,
+   "reg": 7,
+   "def": 7,
+   "fis": 3
+  },
+  {
+   "voter": "p10",
+   "target": "p4",
+   "vel": 5,
+   "tir": 4,
+   "pas": 9,
+   "reg": 8,
+   "def": 5,
+   "fis": 9
+  },
+  {
+   "voter": "p10",
+   "target": "p5",
+   "vel": 4,
+   "tir": 4,
+   "pas": 9,
+   "reg": 8,
+   "def": 9,
+   "fis": 5
+  },
+  {
+   "voter": "p10",
+   "target": "p6",
+   "vel": 9,
+   "tir": 7,
+   "pas": 6,
+   "reg": 5,
+   "def": 6,
+   "fis": 5
+  },
+  {
+   "voter": "p10",
+   "target": "p7",
+   "vel": 8,
+   "tir": 4,
+   "pas": 6,
+   "reg": 7,
+   "def": 5,
+   "fis": 7
+  },
+  {
+   "voter": "p10",
+   "target": "p8",
+   "vel": 5,
+   "tir": 7,
+   "pas": 5,
+   "reg": 7,
+   "def": 9,
+   "fis": 5
+  },
+  {
+   "voter": "p10",
+   "target": "p9",
+   "vel": 3,
+   "tir": 8,
+   "pas": 8,
+   "reg": 9,
+   "def": 6,
+   "fis": 5
+  },
+  {
+   "voter": "p10",
+   "target": "p11",
+   "vel": 7,
+   "tir": 4,
+   "pas": 7,
+   "reg": 9,
+   "def": 9,
+   "fis": 7
+  },
+  {
+   "voter": "p10",
+   "target": "p12",
+   "vel": 6,
+   "tir": 6,
+   "pas": 7,
+   "reg": 7,
+   "def": 7,
+   "fis": 6
+  },
+  {
+   "voter": "p11",
+   "target": "p1",
+   "vel": 6,
+   "tir": 5,
+   "pas": 8,
+   "reg": 9,
+   "def": 4,
+   "fis": 3
+  },
+  {
+   "voter": "p11",
+   "target": "p2",
+   "vel": 9,
+   "tir": 4,
+   "pas": 5,
+   "reg": 7,
+   "def": 4,
+   "fis": 9
+  },
+  {
+   "voter": "p11",
+   "target": "p3",
+   "vel": 6,
+   "tir": 3,
+   "pas": 4,
+   "reg": 7,
+   "def": 8,
+   "fis": 4
+  },
+  {
+   "voter": "p11",
+   "target": "p4",
+   "vel": 5,
+   "tir": 5,
+   "pas": 7,
+   "reg": 7,
+   "def": 5,
+   "fis": 8
+  },
+  {
+   "voter": "p11",
+   "target": "p5",
+   "vel": 5,
+   "tir": 5,
+   "pas": 8,
+   "reg": 9,
+   "def": 7,
+   "fis": 4
+  },
+  {
+   "voter": "p11",
+   "target": "p6",
+   "vel": 9,
+   "tir": 8,
+   "pas": 7,
+   "reg": 4,
+   "def": 5,
+   "fis": 5
+  },
+  {
+   "voter": "p11",
+   "target": "p7",
+   "vel": 8,
+   "tir": 5,
+   "pas": 6,
+   "reg": 6,
+   "def": 6,
+   "fis": 8
+  },
+  {
+   "voter": "p11",
+   "target": "p8",
+   "vel": 4,
+   "tir": 9,
+   "pas": 7,
+   "reg": 7,
+   "def": 9,
+   "fis": 6
+  },
+  {
+   "voter": "p11",
+   "target": "p9",
+   "vel": 3,
+   "tir": 8,
+   "pas": 7,
+   "reg": 9,
+   "def": 6,
+   "fis": 5
+  },
+  {
+   "voter": "p11",
+   "target": "p10",
+   "vel": 3,
+   "tir": 8,
+   "pas": 10,
+   "reg": 5,
+   "def": 8,
+   "fis": 3
+  },
+  {
+   "voter": "p11",
+   "target": "p12",
+   "vel": 5,
+   "tir": 7,
+   "pas": 8,
+   "reg": 7,
+   "def": 6,
+   "fis": 7
+  },
+  {
+   "voter": "p12",
+   "target": "p1",
+   "vel": 5,
+   "tir": 5,
+   "pas": 8,
+   "reg": 9,
+   "def": 4,
+   "fis": 5
+  },
+  {
+   "voter": "p12",
+   "target": "p2",
+   "vel": 8,
+   "tir": 3,
+   "pas": 5,
+   "reg": 7,
+   "def": 4,
+   "fis": 7
+  },
+  {
+   "voter": "p12",
+   "target": "p3",
+   "vel": 5,
+   "tir": 5,
+   "pas": 3,
+   "reg": 7,
+   "def": 8,
+   "fis": 4
+  },
+  {
+   "voter": "p12",
+   "target": "p4",
+   "vel": 5,
+   "tir": 5,
+   "pas": 7,
+   "reg": 6,
+   "def": 5,
+   "fis": 8
+  },
+  {
+   "voter": "p12",
+   "target": "p5",
+   "vel": 4,
+   "tir": 6,
+   "pas": 9,
+   "reg": 9,
+   "def": 8,
+   "fis": 5
+  },
+  {
+   "voter": "p12",
+   "target": "p6",
+   "vel": 7,
+   "tir": 9,
+   "pas": 7,
+   "reg": 5,
+   "def": 4,
+   "fis": 5
+  },
+  {
+   "voter": "p12",
+   "target": "p7",
+   "vel": 7,
+   "tir": 6,
+   "pas": 5,
+   "reg": 6,
+   "def": 5,
+   "fis": 8
+  },
+  {
+   "voter": "p12",
+   "target": "p8",
+   "vel": 3,
+   "tir": 8,
+   "pas": 6,
+   "reg": 8,
+   "def": 9,
+   "fis": 4
+  },
+  {
+   "voter": "p12",
+   "target": "p9",
+   "vel": 4,
+   "tir": 8,
+   "pas": 8,
+   "reg": 9,
+   "def": 4,
+   "fis": 5
+  },
+  {
+   "voter": "p12",
+   "target": "p10",
+   "vel": 3,
+   "tir": 8,
+   "pas": 8,
+   "reg": 5,
+   "def": 9,
+   "fis": 5
+  },
+  {
+   "voter": "p12",
+   "target": "p11",
+   "vel": 8,
+   "tir": 6,
+   "pas": 8,
+   "reg": 9,
+   "def": 9,
+   "fis": 7
+  }
+ ],
+ "lineups": []
+}

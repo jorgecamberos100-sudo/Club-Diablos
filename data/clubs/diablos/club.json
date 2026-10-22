@@ -4,21 +4,38 @@
  "shortName": "Diablos",
  "crest": "escudo.png",
  "watermark": "silueta.png",
- "colors": {
-  "bg": "#0b0b0b",
-  "panel": "#131313",
-  "raise": "#1b1b1b",
-  "line": "#2a2a2a",
-  "text": "#ffffff",
-  "muted": "#a3a3a3",
-  "primary": "#b30d17",
-  "primarySoft": "#ef3b44"
- },
  "contact": "Metra (#17)",
  "teams": [
   {
    "id": "domingos",
    "name": "Domingos"
   }
- ]
+ ],
+ "theme": {
+  "colors": {
+   "bg": "#0b0b0b",
+   "panel": "#131313",
+   "raise": "#1b1b1b",
+   "line": "#2a2a2a",
+   "text": "#ffffff",
+   "muted": "#a3a3a3",
+   "primary": "#b30d17",
+   "primarySoft": "#ef3b44",
+   "onPrimary": "#ffffff"
+  },
+  "fonts": {
+   "display": "Saira Extra Condensed",
+   "cond": "Saira Condensed",
+   "body": "Barlow"
+  },
+  "card": "escudo",
+  "pattern": "franjas"
+ },
+ "rating": {
+  "weights": {
+   "atributos": 0.5,
+   "forma": 0.4,
+   "compromiso": 0.1
+  }
+ }
 }

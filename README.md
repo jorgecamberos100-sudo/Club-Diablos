@@ -16,3 +16,24 @@ Pensada para varios clubes y varios equipos por club.
 ## Rutas
 
 `#/<club>/<equipo>/<vista>`, con vista `cuentas`, `plantel` o `alineacion`.
+
+## Secciones
+
+Inicio, Partidos, Plantel, Alineación y Finanzas (Finanzas solo aparece si el equipo tiene `finance`).
+
+## Estética por club (`club.json` -> `theme`)
+
+- `colors`: bg, panel, raise, line, text, muted, primary, primarySoft, onPrimary
+- `fonts`: display, cond, body (cualquier fuente de Google Fonts)
+- `card`: `escudo`, `redonda` o `recta`
+- `pattern`: `franjas`, `diagonal` o `liso`
+
+Ver `data/clubs/ejemplo` (datos ficticios) para un club con otra estética.
+
+## Calificación (`app/rating.js`)
+
+Votos de compañeros, nunca del administrador ni de uno mismo:
+- `evaluations` del equipo: atributos 1 a 10 (inicio y mitad de temporada).
+- `matches[].ratings`: calificación 1 a 10 por partido; `matches[].mvp`: voto al mejor del partido.
+- Media = 50% atributos + 40% forma (últimos 5 partidos) + 10% compromiso, escala 40 a 99. Pesos ajustables en `club.json` -> `rating.weights`.
+- Mínimo 3 votos; con 5 o más se quitan el más alto y el más bajo.

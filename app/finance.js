@@ -4,12 +4,13 @@ import { sum, money } from "./util.js";
 export function calc(fin, playersById) {
   const cuentas = fin.cuentas.map((c) => ({ ...c, name: (playersById[c.player] || {}).name || c.player }));
   const nMulta = cuentas.filter((c) => c.multa).length;
-  const share = nMulta ? fin.multa.total / nMulta : 0;
+  const share = nMulta && fin.multa ? fin.multa.total / nMulta : 0;
   cuentas.forEach((c) => {
     c.toca = fin.cuota + (c.multa ? share : 0);
     c.saldo = (c.aportado || 0) - c.toca;
   });
   const aportado = sum(cuentas, (c) => c.aportado);
+  fin.gastos = fin.gastos || []; fin.orden = fin.orden || fin.liga.map((x) => x.k);
   const ligaPag = sum(fin.liga, (x) => x.pagado);
   const gastosPag = sum(fin.gastos, (x) => x.pagado);
   const items = fin.orden
@@ -40,8 +41,8 @@ export function textVars(fin, C, contact) {
     cuota: money(fin.cuota),
     multa: money(C.share),
     cuotaMasMulta: money(fin.cuota + C.share),
-    multaTotal: money(fin.multa.total),
-    original: money(fin.multa.original || 0),
+    multaTotal: money(fin.multa ? fin.multa.total : 0),
+    original: money((fin.multa && fin.multa.original) || 0),
     nMulta: C.nMulta,
     nPagan: C.cuentas.length,
     pagaMulta: C.cuentas.filter((c) => c.multa).map((c) => c.name).join(", "),

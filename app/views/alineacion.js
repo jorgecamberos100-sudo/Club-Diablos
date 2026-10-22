@@ -1,6 +1,7 @@
 // Alineación: cancha con formaciones. Se arma tocando cada posición; se guarda en este celular.
 import { esc, store, icon } from "../util.js";
 import { POS } from "./plantel.js";
+import { nextMatch, whenText, versus } from "../matches.js";
 
 const S = (c, t, x, y) => ({ c, t, x, y });
 const POR = ["POR"], LAT = ["LAT"], DFC = ["DFC"], MCD = ["MCD"], MCO = ["MCO"], MC = ["MCD", "MCO"], EXT = ["EXT"], DC = ["DC"], LD3 = ["LAT", "DFC"];
@@ -39,7 +40,7 @@ function view(ctx) {
   const bench = active(ctx).filter((r) => !on.has(r.player));
   const filled = st.slots.filter(Boolean).length;
   return `<section class="s"><h2>Alineación <small>${filled} de ${F.s.length}</small></h2>
-    ${ctx.team.next ? `<p class="next">${esc(ctx.team.next)}</p>` : ""}
+    ${(() => { const n = nextMatch(ctx.team); return n ? `<p class="next">${esc((n.jornada ? n.jornada + " · " : "") + versus(n, ctx.club.name) + " · " + whenText(n.date))}</p>` : ""; })()}
     <div class="forms" role="group" aria-label="Formación">${forms.map((k) => `<button type="button" class="fm${k === st.form ? " on" : ""}" data-form="${k}" aria-pressed="${k === st.form}">${k}</button>`).join("")}</div>
     <div class="pitch">
       <svg class="lines" viewBox="0 0 100 135" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="100" height="135"/><line x1="0" y1="67.5" x2="100" y2="67.5"/><circle cx="50" cy="67.5" r="11"/><rect x="22" y="0" width="56" height="20"/><rect x="36" y="0" width="28" height="7"/><rect x="22" y="115" width="56" height="20"/><rect x="36" y="128" width="28" height="7"/></svg>

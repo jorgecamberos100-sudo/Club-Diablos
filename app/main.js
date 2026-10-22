@@ -2,11 +2,21 @@
 import { esc, icon, store } from "./util.js";
 import { loadClubs, loadClub, loadTeam, assetURL } from "./data.js";
 import { applyTheme } from "./theme.js";
-import * as cuentas from "./views/cuentas.js";
+import { computeRatings } from "./rating.js";
+import * as inicio from "./views/inicio.js";
+import * as partidos from "./views/partidos.js";
 import * as plantel from "./views/plantel.js";
 import * as alineacion from "./views/alineacion.js";
+import * as finanzas from "./views/cuentas.js";
 
-const VIEWS = { cuentas: { m: cuentas, label: "Cuentas" }, plantel: { m: plantel, label: "Plantel" }, alineacion: { m: alineacion, label: "Alineación" } };
+// Orden de la barra inferior. Finanzas va al final: lo primero es el juego.
+const VIEWS = {
+  inicio: { m: inicio, label: "Inicio" },
+  partidos: { m: partidos, label: "Partidos" },
+  plantel: { m: plantel, label: "Plantel" },
+  alineacion: { m: alineacion, label: "Alineación" },
+  finanzas: { m: finanzas, label: "Finanzas", needs: "finance" },
+};
 const app = document.getElementById("app");
 const cache = {};
 let installEvt = null;
@@ -15,7 +25,7 @@ window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); inst
 
 function parse() {
   const [club, team, view] = location.hash.replace(/^#\/?/, "").split("/");
-  return { club, team, view: VIEWS[view] ? view : "cuentas" };
+  return { club, team, view: VIEWS[view] ? view : view === "cuentas" ? "finanzas" : "inicio" };
 }
 
 function installHint() {
@@ -31,7 +41,8 @@ async function getCtx(clubId, teamId) {
   if (!cache[k]) {
     const [{ club, players }, team] = await Promise.all([loadClub(clubId), loadTeam(clubId, teamId)]);
     cache[k] = {
-      club, team, players,
+      clubId, club, team, players,
+      ratings: computeRatings(team, players, club.rating),
       playersById: Object.fromEntries(players.map((p) => [p.id, p])),
       crest: assetURL(clubId, club.crest),
       watermark: assetURL(clubId, club.watermark || club.crest),
@@ -53,6 +64,8 @@ async function route() {
     }
     const ctx = await getCtx(club, team);
     applyTheme(ctx.club, ctx.crest);
+    const tabs = Object.entries(VIEWS).filter(([, v]) => !v.needs || ctx.team[v.needs]);
+    if (!tabs.some(([k]) => k === view)) { location.replace(`#/${club}/${team}/inicio`); return; }
     const V = VIEWS[view].m;
     const teams = (ctx.club.teams || [team]).map((t) => (typeof t === "string" ? { id: t, name: t } : t));
     app.innerHTML = `<header class="top">
@@ -62,10 +75,9 @@ async function route() {
           ? `<select class="team-sel" aria-label="Equipo">${teams.map((t) => `<option value="${esc(t.id)}"${t.id === team ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`
           : `<p>${esc(ctx.team.name)} · ${esc(ctx.team.competition || "")}</p>`}</div>
       </header>
-      ${view === "cuentas" && ctx.team.next ? `<div class="match"><span class="tag">Próximo partido</span><div class="what">${esc(ctx.team.next)}</div></div>` : ""}
-      ${view === "cuentas" ? installHint() : ""}
+      ${view === "inicio" ? installHint() : ""}
       <div id="view" class="view">${V.render(ctx)}</div>
-      <nav class="tabbar" aria-label="Secciones">${Object.entries(VIEWS).map(([k, v]) => `<a href="#/${club}/${team}/${k}"${k === view ? ' aria-current="page"' : ""}>${icon[k]}<span>${v.label}</span></a>`).join("")}</nav>`;
+      <nav class="tabbar" style="--n:${tabs.length}" aria-label="Secciones">${tabs.map(([k, v]) => `<a href="#/${club}/${team}/${k}"${k === view ? ' aria-current="page"' : ""}>${icon[k]}<span>${v.label}</span></a>`).join("")}</nav>`;
     V.bind(document.getElementById("view"), ctx);
     const sel = app.querySelector(".team-sel");
     if (sel) sel.onchange = () => { location.hash = `#/${club}/${sel.value}/${view}`; };

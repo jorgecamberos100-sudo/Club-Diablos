@@ -6,6 +6,14 @@
    "teams": [
     "domingos"
    ]
+  },
+  {
+   "id": "ejemplo",
+   "name": "Club Ejemplo",
+   "teams": [
+    "primera"
+   ],
+   "demo": true
   }
  ]
 }

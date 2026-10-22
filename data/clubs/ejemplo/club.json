@@ -1,0 +1,41 @@
+{
+ "id": "ejemplo",
+ "name": "Club Ejemplo",
+ "shortName": "Ejemplo",
+ "crest": "escudo.svg",
+ "watermark": "escudo.svg",
+ "contact": "el administrador",
+ "teams": [
+  {
+   "id": "primera",
+   "name": "Primera"
+  }
+ ],
+ "theme": {
+  "colors": {
+   "bg": "#0a1428",
+   "panel": "#111f3b",
+   "raise": "#182a4d",
+   "line": "#253a63",
+   "text": "#f5f7fb",
+   "muted": "#9fb0cf",
+   "primary": "#f2c230",
+   "primarySoft": "#ffd75e",
+   "onPrimary": "#0a1428"
+  },
+  "fonts": {
+   "display": "Oswald",
+   "cond": "Oswald",
+   "body": "Inter"
+  },
+  "card": "redonda",
+  "pattern": "diagonal"
+ },
+ "rating": {
+  "weights": {
+   "atributos": 0.5,
+   "forma": 0.4,
+   "compromiso": 0.1
+  }
+ }
+}

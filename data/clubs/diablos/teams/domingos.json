@@ -3,7 +3,6 @@
  "name": "Domingos",
  "competition": "Liga Reforma · Intermedia",
  "format": 11,
- "next": "J13 · Domingo 25 de octubre · 5:20 p.m. · Oasis vs Club Diablos",
  "roster": [
   {
    "player": "carlos",
@@ -471,5 +470,25 @@
    }
   ]
  },
- "lineups": []
+ "lineups": [],
+ "matches": [
+  {
+   "id": "j12",
+   "jornada": "J12",
+   "date": "2026-10-18T19:00:00-07:00",
+   "rival": "Dep. Blue",
+   "venue": "CREA",
+   "score": null
+  },
+  {
+   "id": "j13",
+   "jornada": "J13",
+   "date": "2026-10-25T17:20:00-07:00",
+   "rival": "Oasis",
+   "home": false,
+   "venue": null,
+   "score": null
+  }
+ ],
+ "evaluations": []
 }

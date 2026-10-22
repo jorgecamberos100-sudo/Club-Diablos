@@ -1,0 +1,118 @@
+{
+ "players": [
+  {
+   "id": "p1",
+   "name": "Andrés",
+   "positions": [
+    "POR"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p2",
+   "name": "Beto",
+   "positions": [
+    "DFC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p3",
+   "name": "Chuy",
+   "positions": [
+    "LAT",
+    "DFC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p4",
+   "name": "Diego",
+   "positions": [
+    "MCD",
+    "MCO"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p5",
+   "name": "Emilio",
+   "positions": [
+    "MCO",
+    "EXT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p6",
+   "name": "Fer",
+   "positions": [
+    "EXT",
+    "DC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p7",
+   "name": "Gabo",
+   "positions": [
+    "DC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p8",
+   "name": "Hugo",
+   "positions": [
+    "DFC",
+    "MCD"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p9",
+   "name": "Iván",
+   "positions": [
+    "EXT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p10",
+   "name": "Javi",
+   "positions": [
+    "LAT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p11",
+   "name": "Kike",
+   "positions": [
+    "MCO"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "p12",
+   "name": "Leo",
+   "positions": [
+    "POR",
+    "DFC"
+   ],
+   "photo": null,
+   "attrs": null
+  }
+ ]
+}
