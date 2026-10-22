@@ -516,3 +516,9 @@ button.fc:focus-visible .fc-sh { filter: drop-shadow(0 0 0 var(--red-soft)) brig
 .pl { display: grid; grid-template-columns: 1fr 58px 58px; gap: 6px; align-items: stretch; }
 .pl input[type=number] { padding: 6px; text-align: center; }
 .msg { margin: 10px 0 0; padding: 10px; border-radius: 6px; background: var(--due-bg); color: var(--red-soft); font-size: 14px; }
+
+.hm-att { margin-top: 10px; font-size: 14px; color: var(--muted); }
+.hm-att summary { cursor: pointer; color: var(--fg); }
+.hm-att summary b { color: var(--ok); }
+.hm-att p { margin: 6px 0 0; }
+.bch.out { opacity: 0.4; text-decoration: line-through; }

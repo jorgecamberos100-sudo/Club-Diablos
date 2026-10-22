@@ -2,7 +2,7 @@
 // Próximo partido, su tarjeta y su cuenta, último resultado, los mejores y accesos rápidos.
 import { esc, money, store } from "../util.js";
 import { calc } from "../finance.js";
-import { nextMatch, lastPlayed, whenText, daysLeft, versus, result } from "../matches.js";
+import { nextMatch, lastPlayed, whenText, daysLeft, versus, result, attendanceOf } from "../matches.js";
 import { mvpOf } from "../rating.js";
 import { card, openSheet } from "./plantel.js";
 
@@ -28,6 +28,16 @@ function meHtml(ctx, C) {
     <details class="me-chg"><summary>No soy ${esc(p.name)}</summary>${sel}</details></section>`;
 }
 
+function attLine(ctx, m) {
+  if (ctx.live && ctx.live.approved) return ""; // con cuenta, la tarjeta «¿Vas al partido?» ya lo muestra
+  const A = attendanceOf(m, null); if (!A) return "";
+  const nm = (ids) => ids.map((id) => (ctx.playersById[id] || {}).name || id).join(", ");
+  const total = ctx.team.roster.filter((r) => r.status !== "congelado").length;
+  const left = total - A.va.length - A.no.length - A.duda.length;
+  return `<details class="hm-att"><summary><b>${A.va.length} van</b>${A.duda.length ? " · " + A.duda.length + " en duda" : ""}${A.no.length ? " · " + A.no.length + " no " + (A.no.length === 1 ? "va" : "van") : ""}${left > 0 ? " · " + left + " sin responder" : ""}</summary>
+    <p><b>Van:</b> ${esc(nm(A.va))}</p>${A.duda.length ? `<p><b>Duda:</b> ${esc(nm(A.duda))}</p>` : ""}${A.no.length ? `<p><b>No van:</b> ${esc(nm(A.no))}</p>` : ""}<p class="hint">Según la ${esc(A.source.toLowerCase())}.</p></details>`;
+}
+
 export function render(ctx) {
   const fin = ctx.team.finance;
   const C = fin ? calc(fin, ctx.playersById) : null;
@@ -39,6 +49,7 @@ export function render(ctx) {
     h += `<section class="hero-match"><div class="hm-top"><span>${esc(nx.jornada || "Próximo partido")}</span><span class="hm-cd">${esc(daysLeft(nx.date))}</span></div>
       <div class="hm-vs">${esc(versus(nx, ctx.club.name))}</div>
       <div class="hm-when">${esc(whenText(nx.date))}${nx.venue ? " · " + esc(nx.venue) : ""}</div>
+      ${attLine(ctx, nx)}
       <a class="hm-btn" href="${link(ctx, "alineacion")}">Ver alineación</a></section>`;
   }
 

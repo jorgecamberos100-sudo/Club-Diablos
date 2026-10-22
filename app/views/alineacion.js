@@ -1,7 +1,7 @@
 // Alineación: cancha con formaciones. Se arma tocando cada posición; se guarda en este celular.
 import { esc, store, icon } from "../util.js";
 import { POS } from "./plantel.js";
-import { nextMatch, whenText, versus } from "../matches.js";
+import { nextMatch, whenText, versus, attendanceOf } from "../matches.js";
 
 const S = (c, t, x, y) => ({ c, t, x, y });
 const POR = ["POR"], LAT = ["LAT"], DFC = ["DFC"], MCD = ["MCD"], MCO = ["MCO"], MC = ["MCD", "MCO"], EXT = ["EXT"], DC = ["DC"], LD3 = ["LAT", "DFC"];
@@ -23,7 +23,10 @@ function load(ctx) {
   st.slots = FORMS[st.form].s.map((_, i) => st.slots[i] || null);
   return { st, forms };
 }
-const active = (ctx) => ctx.team.roster.filter((r) => r.status !== "congelado" && ctx.playersById[r.player]);
+const att = (ctx) => { const n = nextMatch(ctx.team); const A = n && attendanceOf(n, ctx.live); return A ? { va: new Set(A.va), no: new Set(A.no) } : null; };
+const rank = (A, id) => (!A ? 1 : A.va.has(id) ? 0 : A.no.has(id) ? 2 : 1);
+const active = (ctx) => { const A = att(ctx); return ctx.team.roster.filter((r) => r.status !== "congelado" && ctx.playersById[r.player]).sort((a, b) => rank(A, a.player) - rank(A, b.player)); };
+const tag = (A, id) => (!A ? "" : A.va.has(id) ? '<span class="chip ok">Va</span>' : A.no.has(id) ? '<span class="chip na">No va</span>' : "");
 
 function token(ctx, pid, slot, i) {
   const style = `left:${slot.x}%;top:${slot.y}%`;
@@ -47,7 +50,7 @@ function view(ctx) {
       <img class="pitch-wm" src="${esc(ctx.crest)}" alt="">
       ${F.s.map((slot, i) => token(ctx, st.slots[i], slot, i)).join("")}
     </div>
-    <div class="bench"><span class="lbl">Banca (${bench.length})</span><div class="bench-row">${bench.map((r) => `<span class="bch">${r.number ? `<i>${esc(r.number)}</i>` : ""}${esc(ctx.playersById[r.player].name)}</span>`).join("") || '<span class="hint">Todos están en la cancha.</span>'}</div></div>
+    <div class="bench"><span class="lbl">Banca (${bench.length})</span><div class="bench-row">${bench.map((r) => `<span class="bch${att(ctx) && att(ctx).no.has(r.player) ? " out" : ""}">${r.number ? `<i>${esc(r.number)}</i>` : ""}${esc(ctx.playersById[r.player].name)}</span>`).join("") || '<span class="hint">Todos están en la cancha.</span>'}</div></div>
     <div class="row-acts"><span class="hint">Se guarda solo en este celular.</span>${filled ? '<button type="button" class="btn ghost" data-clear="1">Vaciar cancha</button>' : ""}</div></section>`;
 }
 
@@ -55,11 +58,12 @@ function picker(ctx, i) {
   const { st } = load(ctx);
   const slot = FORMS[st.form].s[i];
   const where = Object.fromEntries(st.slots.map((pid, j) => [pid, j]).filter(([pid]) => pid));
+  const A = att(ctx);
   const list = active(ctx).map((r) => ({ r, p: ctx.playersById[r.player] }));
   const fits = (x) => (x.p.positions || []).some((t) => slot.t.includes(t));
   const row = (x) => {
     const j = where[x.p.id];
-    const chips = (x.p.positions || []).map((t) => `<span class="chip ${slot.t.includes(t) ? "due" : "na"}">${t}</span>`).join("");
+    const chips = tag(A, x.p.id) + (x.p.positions || []).map((t) => `<span class="chip ${slot.t.includes(t) ? "due" : "na"}">${t}</span>`).join("");
     return `<button type="button" class="pick" data-pick="${esc(x.p.id)}"><span class="pk-no">${esc(x.r.number || "–")}</span><span class="pk-n">${esc(x.p.name)}<span class="chips">${chips}</span></span>${j != null && j !== i ? `<span class="pk-st">En ${esc(FORMS[st.form].s[j].c)}</span>` : j === i ? '<span class="pk-st">Aquí</span>' : ""}</button>`;
   };
   const rec = list.filter(fits), rest = list.filter((x) => !fits(x));

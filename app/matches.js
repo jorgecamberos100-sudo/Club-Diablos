@@ -35,3 +35,12 @@ export function result(m) {
   const { for: f, against: a } = m.score;
   return { text: `${f} - ${a}`, kind: f > a ? "win" : f < a ? "loss" : "draw", label: f > a ? "Ganamos" : f < a ? "Perdimos" : "Empate" };
 }
+
+// Asistencia del partido: de la app (cuentas) o, si no hay, de la encuesta del grupo guardada en el archivo.
+export function attendanceOf(m, live) {
+  const out = { va: [], no: [], duda: [], source: null };
+  const rows = live && live.approved ? (live.avail || []).filter((a) => a.match_id === m.id) : [];
+  if (rows.length) { rows.forEach((a) => out[a.answer] && out[a.answer].push(a.player_id)); out.source = "app"; return out; }
+  const a = m.attendance; if (!a) return null;
+  return { va: a.va || [], no: a.no || [], duda: a.duda || [], source: a.source || "encuesta" };
+}
