@@ -1,5 +1,5 @@
 // Alineación: cancha con formaciones. Se arma tocando cada posición; se guarda en este celular.
-import { esc, store, icon } from "../util.js";
+import { esc, store, icon, money } from "../util.js";
 import { POS } from "./plantel.js";
 import { nextMatch, whenText, versus, attendanceOf } from "../matches.js";
 
@@ -26,6 +26,7 @@ function load(ctx) {
 const att = (ctx) => { const n = nextMatch(ctx.team); const A = n && attendanceOf(n, ctx.live); return A ? { va: new Set(A.va), no: new Set(A.no) } : null; };
 const rank = (A, id) => (!A ? 1 : A.va.has(id) ? 0 : A.no.has(id) ? 2 : 1);
 const active = (ctx) => { const A = att(ctx); return ctx.team.roster.filter((r) => r.status !== "congelado" && ctx.playersById[r.player]).sort((a, b) => rank(A, a.player) - rank(A, b.player)); };
+const conf = (A, id) => !A || A.va.has(id);
 const tag = (A, id) => (!A ? "" : A.va.has(id) ? '<span class="chip ok">Va</span>' : A.no.has(id) ? '<span class="chip na">No va</span>' : "");
 
 function token(ctx, pid, slot, i) {
@@ -34,6 +35,27 @@ function token(ctx, pid, slot, i) {
   const p = ctx.playersById[pid], r = ctx.team.roster.find((x) => x.player === pid) || {};
   return `<button type="button" class="tk" data-slot="${i}" style="${style}" aria-label="${esc(slot.c)}: ${esc(p.name)}"><span class="tk-sh"></span>
     <span class="tk-no">${esc(r.number || "–")}</span><span class="tk-pos">${esc(slot.c)}</span><span class="tk-nm">${esc(p.name)}</span></button>`;
+}
+
+function benchHtml(ctx, bench) {
+  const A = att(ctx);
+  const chip = (r) => `<span class="bch${conf(A, r.player) ? "" : " out"}">${r.number ? `<i>${esc(r.number)}</i>` : ""}${esc(ctx.playersById[r.player].name)}</span>`;
+  if (!A) return `<div class="bench"><span class="lbl">Banca (${bench.length})</span><div class="bench-row">${bench.map(chip).join("") || '<span class="hint">Todos están en la cancha.</span>'}</div></div>`;
+  const yes = bench.filter((r) => conf(A, r.player)), no = bench.filter((r) => !conf(A, r.player));
+  return `<div class="bench"><span class="lbl">Confirmados en banca (${yes.length})</span><div class="bench-row">${yes.map(chip).join("") || '<span class="hint">Todos los confirmados están en la cancha.</span>'}</div>
+    <span class="lbl">Sin confirmar (${no.length})</span><div class="bench-row">${no.map(chip).join("") || '<span class="hint">Todos confirmaron.</span>'}</div></div>`;
+}
+
+function refHtml(ctx) {
+  const A = att(ctx); if (!A || !ctx.team.finance || !ctx.team.finance.arbitraje) return "";
+  const yes = active(ctx).filter((r) => conf(A, r.player));
+  const pay = yes.filter((r) => r.arbitraje !== false);
+  if (!pay.length) return "";
+  const items = ctx.team.finance.arbitraje.items.filter((i) => /rbitro|ripleta/.test(i.t));
+  return `<div class="arb"><span class="lbl">Arbitraje entre los confirmados</span>
+    <p class="hint">${yes.length} confirmados, pagan ${pay.length} (el portero becado no paga).</p>
+    <ul>${items.map((i) => `<li><span>${esc(i.t)} ${money(i.m)}</span><b>${money(Math.ceil(i.m / pay.length))} c/u</b></li>`).join("")}</ul>
+    <p class="hint">Si alguien sin credencial juega, suma $20 de permiso. Cambia si se confirman más o menos jugadores.</p></div>`;
 }
 
 function view(ctx) {
@@ -50,7 +72,8 @@ function view(ctx) {
       <img class="pitch-wm" src="${esc(ctx.crest)}" alt="">
       ${F.s.map((slot, i) => token(ctx, st.slots[i], slot, i)).join("")}
     </div>
-    <div class="bench"><span class="lbl">Banca (${bench.length})</span><div class="bench-row">${bench.map((r) => `<span class="bch${att(ctx) && att(ctx).no.has(r.player) ? " out" : ""}">${r.number ? `<i>${esc(r.number)}</i>` : ""}${esc(ctx.playersById[r.player].name)}</span>`).join("") || '<span class="hint">Todos están en la cancha.</span>'}</div></div>
+    ${benchHtml(ctx, bench)}
+    ${refHtml(ctx)}
     <div class="row-acts"><span class="hint">Se guarda solo en este celular.</span>${filled ? '<button type="button" class="btn ghost" data-clear="1">Vaciar cancha</button>' : ""}</div></section>`;
 }
 
@@ -66,12 +89,13 @@ function picker(ctx, i) {
     const chips = tag(A, x.p.id) + (x.p.positions || []).map((t) => `<span class="chip ${slot.t.includes(t) ? "due" : "na"}">${t}</span>`).join("");
     return `<button type="button" class="pick" data-pick="${esc(x.p.id)}"><span class="pk-no">${esc(x.r.number || "–")}</span><span class="pk-n">${esc(x.p.name)}<span class="chips">${chips}</span></span>${j != null && j !== i ? `<span class="pk-st">En ${esc(FORMS[st.form].s[j].c)}</span>` : j === i ? '<span class="pk-st">Aquí</span>' : ""}</button>`;
   };
-  const rec = list.filter(fits), rest = list.filter((x) => !fits(x));
+  const byFit = (x, y) => fits(y) - fits(x);
+  const yes = list.filter((x) => conf(A, x.p.id)).sort(byFit), no = list.filter((x) => !conf(A, x.p.id)).sort(byFit);
+  const sec = (l, arr, dim) => (arr.length ? `<span class="lbl">${l}</span><div${dim ? ' class="dim"' : ""}>${arr.map(row).join("")}</div>` : "");
   return `<div class="bd" data-close="1"></div><div class="sp" role="dialog" aria-modal="true" aria-label="Elegir ${esc(slot.c)}">
     <div class="sp-h"><div><h3>${esc(slot.c)}</h3><p>${esc(slot.t.map((t) => POS[t] || t).join(" o "))}</p></div><button type="button" class="x" data-close="1" aria-label="Cerrar">${icon.close}</button></div>
     ${st.slots[i] ? `<button type="button" class="btn ghost" data-unpick="${i}">Dejar vacía esta posición</button>` : ""}
-    ${rec.length ? `<span class="lbl">Juegan de ${esc(slot.c)}</span>${rec.map(row).join("")}` : ""}
-    ${rest.length ? `<span class="lbl">Otros jugadores</span>${rest.map(row).join("")}` : ""}</div>`;
+    ${A ? sec(`Confirmados (${yes.length})`, yes, false) + sec(`Sin confirmar (${no.length})`, no, true) : sec("Jugadores", yes.concat(no), false)}</div>`;
 }
 
 export function render(ctx) { return `<div id="lineup">${view(ctx)}</div>`; }

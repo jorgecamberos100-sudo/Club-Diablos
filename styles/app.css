@@ -522,3 +522,11 @@ button.fc:focus-visible .fc-sh { filter: drop-shadow(0 0 0 var(--red-soft)) brig
 .hm-att summary b { color: var(--ok); }
 .hm-att p { margin: 6px 0 0; }
 .bch.out { opacity: 0.4; text-decoration: line-through; }
+
+.dim { opacity: 0.45; }
+.bench .lbl { display: block; margin-top: 8px; }
+.arb { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.arb ul { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.arb li { display: flex; justify-content: space-between; gap: 10px; }
+.arb li b { font-family: var(--display); font-size: 20px; color: var(--red-soft); }
+.bch.out { text-decoration: none; opacity: 0.5; }
