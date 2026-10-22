@@ -1,0 +1,11 @@
+{
+ "clubs": [
+  {
+   "id": "diablos",
+   "name": "Club Diablos",
+   "teams": [
+    "domingos"
+   ]
+  }
+ ]
+}

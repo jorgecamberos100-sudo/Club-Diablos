@@ -1,0 +1,223 @@
+{
+ "players": [
+  {
+   "id": "carlos",
+   "name": "Carlos",
+   "positions": [
+    "POR"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "carrillo",
+   "name": "Carrillo",
+   "positions": [
+    "LAT",
+    "DFC",
+    "MCD"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "jorge",
+   "name": "Jorge G",
+   "positions": [
+    "LAT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "corona",
+   "name": "Corona",
+   "positions": [
+    "LAT",
+    "DC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "chepo",
+   "name": "Chepo",
+   "positions": [
+    "EXT",
+    "DC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "lalo",
+   "name": "Lalo",
+   "positions": [
+    "LAT",
+    "EXT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "gelo",
+   "name": "Gelo2",
+   "positions": [
+    "DC",
+    "POR"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "metra",
+   "name": "Metra",
+   "positions": [
+    "MCO",
+    "DC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "dani",
+   "name": "Dani",
+   "positions": [
+    "DFC",
+    "MCD",
+    "MCO"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "irving",
+   "name": "Irving",
+   "positions": [
+    "MCO",
+    "EXT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "kael",
+   "name": "Kael",
+   "positions": [
+    "LAT",
+    "EXT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "mares",
+   "name": "Mares",
+   "positions": [
+    "MCD",
+    "MCO"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "ismael",
+   "name": "Ismael",
+   "positions": [
+    "MCO",
+    "EXT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "roman",
+   "name": "Román",
+   "positions": [
+    "DFC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "arturo",
+   "name": "Arturo",
+   "positions": [],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "juan",
+   "name": "Juan",
+   "positions": [
+    "LAT",
+    "DFC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "alexis",
+   "name": "Alexis",
+   "positions": [
+    "MCO",
+    "EXT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "cgonz",
+   "name": "Carlos G.",
+   "positions": [
+    "EXT",
+    "DC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "isaias",
+   "name": "Isaias",
+   "positions": [
+    "LAT",
+    "DFC"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "jose",
+   "name": "José Lateral",
+   "positions": [
+    "LAT"
+   ],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "angel",
+   "name": "Ángel",
+   "positions": [],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "jordy",
+   "name": "Jordy",
+   "positions": [],
+   "photo": null,
+   "attrs": null
+  },
+  {
+   "id": "pedro",
+   "name": "Pedro",
+   "positions": [
+    "MCO",
+    "MCD"
+   ],
+   "photo": null,
+   "attrs": null
+  }
+ ]
+}

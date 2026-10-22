@@ -1,0 +1,475 @@
+{
+ "id": "domingos",
+ "name": "Domingos",
+ "competition": "Liga Reforma · Intermedia",
+ "format": 11,
+ "next": "J13 · Domingo 25 de octubre · 5:20 p.m. · Oasis vs Club Diablos",
+ "roster": [
+  {
+   "player": "carlos",
+   "number": "1",
+   "note": "Portero becado"
+  },
+  {
+   "player": "carrillo",
+   "number": "3"
+  },
+  {
+   "player": "jorge",
+   "number": "4"
+  },
+  {
+   "player": "corona",
+   "number": "5"
+  },
+  {
+   "player": "chepo",
+   "number": "7"
+  },
+  {
+   "player": "lalo",
+   "number": "8"
+  },
+  {
+   "player": "gelo",
+   "number": "12"
+  },
+  {
+   "player": "metra",
+   "number": "17"
+  },
+  {
+   "player": "dani",
+   "number": "19"
+  },
+  {
+   "player": "irving",
+   "number": "20"
+  },
+  {
+   "player": "kael",
+   "number": "21"
+  },
+  {
+   "player": "mares",
+   "number": "23"
+  },
+  {
+   "player": "ismael",
+   "number": "25"
+  },
+  {
+   "player": "roman",
+   "number": "27"
+  },
+  {
+   "player": "arturo",
+   "number": "28"
+  },
+  {
+   "player": "juan",
+   "number": "29"
+  },
+  {
+   "player": "alexis",
+   "number": "66"
+  },
+  {
+   "player": "cgonz",
+   "number": "67"
+  },
+  {
+   "player": "isaias",
+   "number": "98"
+  },
+  {
+   "player": "jose",
+   "number": ""
+  },
+  {
+   "player": "angel",
+   "number": ""
+  },
+  {
+   "player": "jordy",
+   "number": ""
+  },
+  {
+   "player": "pedro",
+   "number": "",
+   "status": "congelado"
+  }
+ ],
+ "finance": {
+  "updated": "2026-10-20T03:50:00Z",
+  "cuota": 300,
+  "multa": {
+   "total": 1450,
+   "original": 3000,
+   "titulo": "La multa del 13 de septiembre",
+   "texto": "Ese partido no se jugó porque no completamos. La liga cobraba {original} y la dejó en {multaTotal}. La pagan los que estaban en el equipo y no confirmaron ese partido.",
+   "plazo": "Se puede pagar en dos partes: la mitad antes del partido del 25 de octubre y el resto antes del 1 de noviembre.",
+   "exentosTexto": "Confirmaron ese partido o llegaron después"
+  },
+  "liga": [
+   {
+    "k": "inscripcion",
+    "label": "Inscripción del equipo",
+    "costo": 2000,
+    "pagado": 700,
+    "desc": "Entrada a la Liga Reforma. Ya trae 12 credenciales.",
+    "short": "Entrada a la liga, ya trae 12 credenciales"
+   },
+   {
+    "k": "credenciales",
+    "label": "Credenciales enmicadas",
+    "costo": 1570,
+    "pagado": 920,
+    "desc": "11 credenciales extra a $80 cada una, y el enmicado de las 23 credenciales a $30 cada una.",
+    "short": "11 extra a $80 y el enmicado de las 23 a $30"
+   },
+   {
+    "k": "deposito",
+    "label": "Depósito de garantía",
+    "costo": 1500,
+    "pagado": 0,
+    "desc": "Si terminamos el torneo sin deber nada ni tirar partidos, la liga lo regresa.",
+    "short": "La liga lo regresa al final del torneo"
+   },
+   {
+    "k": "multa",
+    "label": "Multa por default",
+    "costo": 1450,
+    "pagado": 500,
+    "desc": "Partido del 13 de septiembre que no se jugó."
+   }
+  ],
+  "gastos": [
+   {
+    "k": "balones",
+    "label": "Balones",
+    "costo": 750,
+    "pagado": 750,
+    "desc": "Dos balones para el equipo."
+   },
+   {
+    "k": "uniforme_portero",
+    "label": "Uniforme del portero",
+    "costo": 480,
+    "pagado": 0,
+    "desc": "El equipo cubre lo del portero."
+   }
+  ],
+  "orden": [
+   "inscripcion",
+   "multa",
+   "credenciales",
+   "deposito",
+   "uniforme_portero"
+  ],
+  "cuotaNota": "La cuota cubre la inscripción, las 23 credenciales enmicadas, el depósito, los balones y lo del portero. Todo se reparte entre los 21 que pagamos:",
+  "porteroNota": "Lo del portero (cuota, arbitraje y uniforme) lo cubre el equipo.",
+  "cuentas": [
+   {
+    "player": "carrillo",
+    "aportado": 0,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "jorge",
+    "aportado": 740,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "corona",
+    "aportado": 445,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "chepo",
+    "aportado": 250,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "lalo",
+    "aportado": 0,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "gelo",
+    "aportado": 250,
+    "multa": false,
+    "why": "confirmó ese partido"
+   },
+   {
+    "player": "metra",
+    "aportado": 445,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "dani",
+    "aportado": 250,
+    "multa": false,
+    "why": "confirmó ese partido"
+   },
+   {
+    "player": "irving",
+    "aportado": 250,
+    "multa": false,
+    "why": "confirmó ese partido"
+   },
+   {
+    "player": "kael",
+    "aportado": 0,
+    "multa": false,
+    "why": "confirmó ese partido"
+   },
+   {
+    "player": "mares",
+    "aportado": 250,
+    "multa": false,
+    "why": "confirmó ese partido"
+   },
+   {
+    "player": "ismael",
+    "aportado": 0,
+    "multa": false,
+    "why": "confirmó ese partido"
+   },
+   {
+    "player": "roman",
+    "aportado": 250,
+    "multa": false,
+    "why": "confirmó ese partido"
+   },
+   {
+    "player": "arturo",
+    "aportado": 250,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "juan",
+    "aportado": 130,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "alexis",
+    "aportado": 250,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "cgonz",
+    "aportado": 0,
+    "multa": true,
+    "why": ""
+   },
+   {
+    "player": "isaias",
+    "aportado": 0,
+    "multa": false,
+    "why": "llegó después"
+   },
+   {
+    "player": "jose",
+    "aportado": 0,
+    "multa": false,
+    "why": "llegó después"
+   },
+   {
+    "player": "angel",
+    "aportado": 0,
+    "multa": false,
+    "why": "llegó después"
+   },
+   {
+    "player": "jordy",
+    "aportado": 0,
+    "multa": false,
+    "why": "llegó después"
+   }
+  ],
+  "uniformes": {
+   "texto": "Los uniformes no tocan el dinero de la liga. El que quiera uniforme lo paga completo al pedirlo: $480, o $530 con manga larga.",
+   "items": [
+    {
+     "n": "Alexis",
+     "items": "#66 · M",
+     "costo": 480,
+     "pagado": 480,
+     "estado": "Pendiente de entrega del proveedor"
+    },
+    {
+     "n": "Jorge G",
+     "items": "#4 S manga larga y repuestos #101 S, #102 M, #103 L",
+     "costo": 1970,
+     "pagado": 2000,
+     "estado": "En el pedido nuevo"
+    },
+    {
+     "n": "Isaias",
+     "items": "#98 · S · manga larga",
+     "costo": 530,
+     "pagado": 530,
+     "estado": "En el pedido nuevo"
+    },
+    {
+     "n": "Carlos (portero)",
+     "items": "#1 · XL",
+     "costo": 480,
+     "pagado": 0,
+     "estado": "En el pedido nuevo",
+     "pend": "Lo paga el equipo"
+    }
+   ]
+  },
+  "arbitraje": {
+   "texto": "No sale de la cuota. Se paga en efectivo en la cancha antes de cada partido y se divide entre los que juegan. Sin el papel de pagado, el árbitro no inicia el partido.",
+   "items": [
+    {
+     "t": "Un árbitro",
+     "d": "Si el equipo se porta bien",
+     "m": 725
+    },
+    {
+     "t": "Tripleta",
+     "d": "Árbitro y dos abanderados",
+     "m": 850
+    },
+    {
+     "t": "Permiso sin credencial",
+     "d": "Por jugador, por partido",
+     "m": 20
+    }
+   ]
+  },
+  "faq": [
+   {
+    "q": "¿Cuánto me toca pagar?",
+    "k": "cuanto toca pagar debo mi cuenta falta total cantidad",
+    "a": [
+     "La cuota es de **{cuota}** para todos. Si no confirmaste el partido del 13 de septiembre, pagas además la multa de **{multa}**, y en ese caso son **{cuotaMasMulta}** en total.",
+     "Elige tu nombre en «Mi cuenta» y ves exactamente lo que te falta."
+    ]
+   },
+   {
+    "q": "¿Cuánto falta por pagar en total?",
+    "k": "falta total deuda debemos liga equipo cuanto",
+    "a": [
+     "A la liga todavía le debemos **{ligaFalta}**, y falta **{gastosFalta}** del uniforme del portero. Eso se va pagando con lo que da cada jugador.",
+     "Hoy, entre todos los jugadores, faltan por juntar **{falta}**."
+    ]
+   },
+   {
+    "q": "¿Para qué es la cuota de {cuota}?",
+    "k": "cuota para que es incluye cubre de donde sale 300",
+    "a": [
+     "Cubre {cubreLista}. Todo junto son **{cubreTot}**, repartidos entre los {nPagan} que pagamos: {cuota} cada uno."
+    ]
+   },
+   {
+    "q": "¿Por qué la cuota subió de $250 a {cuota}?",
+    "k": "subio aumento 250 300 cambio por que mas",
+    "a": [
+     "Los $250 del inicio se calcularon con menos credenciales y sin contar al portero. Después se hicieron las 23 credenciales, todas enmicadas, y el equipo decidió cubrir lo del portero entre todos. Ya con todo contado, el reparto exacto es de {cuota}."
+    ]
+   },
+   {
+    "q": "¿Quién paga la multa y por qué?",
+    "k": "multa default 13 septiembre quien paga por que 145 partido",
+    "a": [
+     "El 13 de septiembre no completamos para jugar y la liga cobró una multa de **{multaTotal}** (la liga pedía {original} y la dejó en esa cantidad). La pagan los que estaban en el equipo y no confirmaron ese partido: {pagaMulta}.",
+     "Son {nMulta} jugadores, así que {multaTotal} entre {nMulta} = **{multa}** cada uno."
+    ]
+   },
+   {
+    "q": "Yo sí confirmé ese partido, ¿por qué me aparece multa?",
+    "k": "confirme multa error no deberia aparece cobran",
+    "a": [
+     "Si confirmaste, no la pagas. Revisa tu cuenta en «Mi cuenta»: si te aparece multa y sí confirmaste, mándale a {contacto} por privado tu captura de la confirmación y se corrige."
+    ]
+   },
+   {
+    "q": "¿Cuándo tengo que pagar?",
+    "k": "cuando fecha plazo limite pagar antes",
+    "a": [
+     "La multa se puede pagar en dos partes: la mitad antes del partido del 25 de octubre y el resto antes del 1 de noviembre.",
+     "La cuota, lo antes posible: lo que va entrando se usa para ir pagando a la liga."
+    ]
+   },
+   {
+    "q": "¿A dónde va mi dinero?",
+    "k": "a donde va dinero pago aportacion que se hace caja usa",
+    "a": [
+     "Todo lo que das va a la caja del equipo, que lleva {contacto}, y se usa para pagar a la liga en este orden: {orden}.",
+     "No se usa para nada más. En «Caja del equipo» está todo lo que ha entrado y en qué se ha gastado."
+    ]
+   },
+   {
+    "q": "¿Cómo pago?",
+    "k": "como pago transferencia efectivo donde mando deposito comprobante",
+    "a": [
+     "Por privado con {contacto}. Después de pagar mándale tu comprobante para que lo registre; la app se actualiza con cada pago registrado."
+    ]
+   },
+   {
+    "q": "¿Para qué es el depósito y me lo regresan?",
+    "k": "deposito garantia regresan devuelven 1500",
+    "a": [
+     "Es un depósito de garantía de **{deposito}** que cobra la liga. Si terminamos el torneo sin deber nada y sin tirar partidos, la liga lo regresa. Por eso es importante confirmar a cada partido."
+    ]
+   },
+   {
+    "q": "¿Qué pasa si di de más?",
+    "k": "di de mas a favor sobra saldo de mas regresan",
+    "a": [
+     "Queda como «A favor» en tu cuenta. {contacto} te lo regresa o lo aplica a lo que acuerden, por ejemplo a un uniforme."
+    ]
+   },
+   {
+    "q": "¿Por qué el portero no paga?",
+    "k": "portero carlos becado no paga beca",
+    "a": [
+     "El equipo decidió becarlo entre todos para tener un portero fijo. Se le cubre la cuota, la credencial, el arbitraje, el permiso y el uniforme. Esa parte está repartida dentro de la cuota de {cuota}."
+    ]
+   },
+   {
+    "q": "¿Por qué se reparte entre {nPagan} y no entre más?",
+    "k": "21 jugadores entre cuantos repartido somos nombres cuantos pagan",
+    "a": [
+     "Los {nPagan} que pagamos son todos los del plantel menos el portero, que está becado."
+    ]
+   },
+   {
+    "q": "¿Los uniformes están incluidos en la cuota?",
+    "k": "uniforme uniformes camiseta jersey incluido manga larga precio 480 530",
+    "a": [
+     "No. Los uniformes son una cuenta aparte. Quien quiera uniforme lo paga completo al pedirlo: $480, o $530 con manga larga. Mira la sección «Uniformes»."
+    ]
+   },
+   {
+    "q": "¿Quién paga el arbitraje de cada partido?",
+    "k": "arbitraje arbitro cancha efectivo 725 850 permiso",
+    "a": [
+     "No sale de la cuota. Se paga en efectivo en la cancha antes de cada partido y se divide entre los que juegan. Un árbitro cuesta $725 si el equipo se porta bien, y la tripleta $850. El permiso por jugador sin credencial es de $20."
+    ]
+   },
+   {
+    "q": "Ya pagué y no aparece, ¿qué hago?",
+    "k": "pague no aparece actualizado no sale mi pago falta registrado",
+    "a": [
+     "La app se actualiza cuando {contacto} registra el pago. Arriba dice la fecha y hora de la última actualización. Si pagaste después de esa hora, todavía no está registrado; si pagaste antes y no aparece, mándale tu comprobante por privado."
+    ]
+   }
+  ]
+ },
+ "lineups": []
+}
