@@ -14,6 +14,18 @@ export const FORMS = {
   "2-3-1": { f: 7, s: [S("DC", DC, 50, 13), S("EI", EXT, 15, 38), S("MC", MC, 50, 43), S("ED", EXT, 85, 38), S("DFC", DFC, 30, 70), S("DFC", DFC, 70, 70), S("POR", POR, 50, 89)] },
   "3-2-1": { f: 7, s: [S("DC", DC, 50, 13), S("MC", MC, 31, 41), S("MC", MC, 69, 41), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
   "3-1-2": { f: 7, s: [S("DC", DC, 34, 13), S("DC", DC, 66, 13), S("MC", MC, 50, 40), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
+  // Fútbol 5, 6, 8 y 9 (el portero cuenta como uno de los jugadores).
+  "2-1-1": { f: 5, s: [S("DC", DC, 50, 14), S("MC", MC, 50, 40), S("DFC", DFC, 30, 67), S("DFC", DFC, 70, 67), S("POR", POR, 50, 89)] },
+  "1-2-1": { f: 5, s: [S("DC", DC, 50, 14), S("EI", EXT, 16, 41), S("ED", EXT, 84, 41), S("DFC", DFC, 50, 67), S("POR", POR, 50, 89)] },
+  "2-2-1": { f: 6, s: [S("DC", DC, 50, 13), S("MC", MC, 32, 40), S("MC", MC, 68, 40), S("DFC", DFC, 30, 68), S("DFC", DFC, 70, 68), S("POR", POR, 50, 89)] },
+  "2-1-2": { f: 6, s: [S("DC", DC, 36, 13), S("DC", DC, 64, 13), S("MC", MC, 50, 41), S("DFC", DFC, 30, 68), S("DFC", DFC, 70, 68), S("POR", POR, 50, 89)] },
+  "3-1-1": { f: 6, s: [S("DC", DC, 50, 13), S("MC", MC, 50, 40), S("LI", LD3, 16, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 84, 66), S("POR", POR, 50, 89)] },
+  "3-3-1": { f: 8, s: [S("DC", DC, 50, 12), S("EI", EXT, 15, 36), S("MC", MC, 50, 41), S("ED", EXT, 85, 36), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
+  "3-2-2": { f: 8, s: [S("DC", DC, 36, 12), S("DC", DC, 64, 12), S("MC", MC, 32, 40), S("MC", MC, 68, 40), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
+  "2-4-1": { f: 8, s: [S("DC", DC, 50, 12), S("MI", EXT, 12, 38), S("MC", MC, 37, 43), S("MC", MC, 63, 43), S("MD", EXT, 88, 38), S("DFC", DFC, 30, 70), S("DFC", DFC, 70, 70), S("POR", POR, 50, 89)] },
+  "3-3-2": { f: 9, s: [S("DC", DC, 36, 11), S("DC", DC, 64, 11), S("EI", EXT, 14, 37), S("MC", MC, 50, 42), S("ED", EXT, 86, 37), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
+  "3-4-1": { f: 9, s: [S("DC", DC, 50, 11), S("MI", EXT, 12, 36), S("MC", MC, 37, 43), S("MC", MC, 63, 43), S("MD", EXT, 88, 36), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
+  "4-3-1": { f: 9, s: [S("DC", DC, 50, 11), S("EI", EXT, 15, 36), S("MC", MC, 50, 42), S("ED", EXT, 85, 36), S("LI", LAT, 11, 66), S("DFC", DFC, 36, 71), S("DFC", DFC, 64, 71), S("LD", LAT, 89, 66), S("POR", POR, 50, 89)] },
 };
 
 function load(ctx) {

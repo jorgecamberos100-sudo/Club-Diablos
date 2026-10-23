@@ -99,9 +99,9 @@ async function teamsCard() {
     ${mine.length > 1 ? `<label>Equipo<select name="team">${mine.map((m) => `<option value="${esc(m.club_id)}/${esc(m.team_id)}">${esc(name(m.club_id))}</option>`).join("")}</select></label>` : `<input type="hidden" name="team" value="${esc(mine[0].club_id)}/${esc(mine[0].team_id)}">`}
     <button class="btn ghost" type="submit">Pedir vinculación</button><p class="msg" role="alert" hidden></p><p class="hint">Tu liga te da el código. Al vincularte, la liga puede darte Pro sin costo mientras su contrato siga vigente.</p></form>` : "";
   const form = `<form data-pf="team" class="fld"><label>${mine.length ? "Crear otro equipo" : "Crea tu equipo"}<input name="nm" placeholder="Nombre del equipo" maxlength="60" required></label>
-    <div class="pick fmt"><label class="pick-o"><input type="radio" name="fmt" value="7" checked><span><b>Fútbol 7</b></span></label><label class="pick-o"><input type="radio" name="fmt" value="11"><span><b>Fútbol 11</b></span></label></div>
+    <div class="pickgrid fmts">${[5, 6, 7, 8, 9, 11].map((n) => `<label class="opt"><input type="radio" name="fmt" value="${n}"${n === 7 ? " checked" : ""}><span>Fútbol ${n}</span></label>`).join("")}</div>
     <button class="btn" type="submit">Crear equipo</button><p class="msg" role="alert" hidden></p></form>`;
-  return card("Mis equipos", `${rows}${rows ? "" : `<p>Todavía no administras ningún equipo. Si ya existe, abre su enlace y entra con esta cuenta.</p>`}${linkForm}${form}<p class="hint">Los formatos de fútbol 5, 6, 8 y 9 llegan después.</p>`);
+  return card("Mis equipos", `${rows}${rows ? "" : `<p>Todavía no administras ningún equipo. Si ya existe, abre su enlace y entra con esta cuenta.</p>`}${linkForm}${form}`);
 }
 
 async function leaguesCard() {

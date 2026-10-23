@@ -1,6 +1,8 @@
 // Pantallas de cuenta: entrar, elegir nombre, aprobar, perfil, asistencia, resultados y votos.
 import { esc } from "./util.js";
 import { api, friendly } from "./cloud.js";
+import { open, close, say, guard, reload } from "./sheet.js";
+import * as teamadmin from "./teamadmin.js";
 import { POS, ATTRS } from "./views/plantel.js";
 import { nextMatch, sorted, versus, whenText } from "./matches.js";
 import { calc } from "./finance.js";
@@ -10,23 +12,12 @@ const ANS = [["va", "Voy"], ["duda", "Duda"], ["no", "No voy"]];
 const active = (ctx) => ctx.team.roster.filter((r) => r.status !== "congelado" && ctx.playersById[r.player]);
 const nameOf = (ctx, id) => (ctx.playersById[id] || {}).name || id;
 const money = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-MX");
-const KIND = { cuota: "Cuota", uniforme: "Uniforme", salida: "Pago a la liga" };
+const KIND = { cuota: "Cuota", uniforme: "Uniforme", salida: "Pago a la liga", ingreso: "Ingreso" };
 const ST = { pending: ["due", "En revisión"], approved: ["ok", "Aprobado"], rejected: ["na", "No aprobado"] };
 const dshort = (d) => new Date(d).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
 const contact = (ctx) => esc(((ctx.club.contact || "el administrador").split(" (")[0]));
 const GOOGLE = `<svg class="g" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
 export const googleBtn = () => `<button type="button" class="gbtn" data-cl="google">${GOOGLE}<span>Continuar con Google</span></button>`;
-
-function open(title, sub, body) {
-  const h = sheet();
-  h.innerHTML = `<div class="bd" data-cl="close"></div><div class="sp cl" role="dialog" aria-modal="true" aria-label="${esc(title)}">
-    <div class="sp-h"><div><h3>${esc(title)}</h3>${sub ? `<p>${esc(sub)}</p>` : ""}</div><button type="button" class="x" data-cl="close" aria-label="Cerrar">×</button></div>
-    <div class="cl-body">${body}</div><p class="msg" role="alert" hidden></p></div>`;
-  h.hidden = false;
-  const f = h.querySelector("input, select, button.btn"); if (f) f.focus();
-}
-const close = () => { const h = sheet(); h.hidden = true; h.innerHTML = ""; };
-const say = (t) => { const m = sheet().querySelector(".msg"); if (m) { m.textContent = t; m.hidden = !t; } };
 
 // ---------- Tarjetas dentro de las vistas ----------
 function accountCard(ctx) {
@@ -62,7 +53,7 @@ function pendingVotes(ctx) {
   const L = ctx.live; if (!L.approved) return [];
   const out = [], me = L.member.player_id;
   sorted(ctx.team).forEach((m) => {
-    if (m.cloud && me && (m.played || []).includes(me)) {
+    if (m.cloud && me && L.can("ratings") && (m.played || []).includes(me)) {
       const done = L.mine.rating.some((x) => x.match === m.id);
       out.push({ kind: "rate", m, done });
     }
@@ -88,13 +79,13 @@ function attrsCard(ctx) {
 
 export function mount(root, ctx, view) {
   if (!ctx.live) return;
-  const html = view === "inicio" ? accountCard(ctx) + availCard(ctx) : view === "partidos" ? matchesCard(ctx) : view === "plantel" ? attrsCard(ctx) : "";
+  const html = view === "inicio" ? accountCard(ctx) + availCard(ctx) : view === "partidos" ? matchesCard(ctx) : view === "plantel" && ctx.live.can("ratings") ? attrsCard(ctx) : "";
   if (view === "inicio") {
     const hero = root.querySelector(".hero-match");
-    const parts = availCard(ctx) + accountCard(ctx);
+    const parts = availCard(ctx) + accountCard(ctx) + teamadmin.cards(ctx, "inicio");
     if (hero) hero.insertAdjacentHTML("afterend", parts); else root.insertAdjacentHTML("afterbegin", parts);
   } else if (html) root.insertAdjacentHTML("afterbegin", html);
-  if (view === "plantel" && ctx.live.admin && ctx.team.db) root.insertAdjacentHTML("afterbegin", `<section class="s cl-card"><h2>Tu plantel</h2><p>${ctx.team.roster.length ? ctx.team.roster.length + " jugadores." : "Aún no hay jugadores."} Agrégalos aquí; no necesitan cuenta.</p><div class="row-acts"><button type="button" class="btn" data-cl="addp">Agregar jugador</button></div></section>`);
+  { const ta = teamadmin.cards(ctx, view); if (ta && view !== "inicio") root.insertAdjacentHTML("afterbegin", ta); }
   if (view === "partidos" && !ctx.live.user) root.insertAdjacentHTML("afterbegin", `<section class="s cl-card"><p class="hint">Entra desde Inicio para calificar los partidos.</p></section>`);
   root.addEventListener("click", (e) => { const t = e.target.closest("[data-cl]"); if (t && !t.closest("#sheet")) act(ctx, t.dataset.cl, t); });
   const L = ctx.live;
@@ -106,7 +97,6 @@ export function mount(root, ctx, view) {
 
 // ---------- Acciones ----------
 let wired = false;
-const reload = () => { window.__reload && window.__reload(); };
 export function wireSheet(ctxGet) {
   if (wired) return; wired = true;
   sheet().addEventListener("click", (e) => { const t = e.target.closest("[data-cl]"); if (t && t.closest(".cl, .bd")) act(ctxGet(), t.dataset.cl, t); });
@@ -117,10 +107,10 @@ export function wireSheet(ctxGet) {
   });
 }
 
-async function guard(fn) { try { say(""); await fn(); } catch (e) { say(friendly(e)); } }
 
 function act(ctx, a, el) {
   const c = ctx && ctx.clubId, t = ctx && ctx.team && ctx.team.id;
+  if (ctx && teamadmin.handle(ctx, a, el)) return;
   if (a === "close") return close();
   if (a === "auth-in" || a === "auth-up") return authSheet(a === "auth-up");
   if (a === "google") return guard(async () => { await api.signInGoogle(); });
@@ -232,7 +222,7 @@ async function adminSheet(ctx, pending, pays = []) {
   open("Panel de administrador", ctx.team.name, `${fin ? `<span class="lbl">Pagos por revisar (${pays.length})</span>
     ${pays.map((p) => payRow(ctx, p)).join("") || '<p class="hint">No hay pagos por revisar.</p>'}
     <span class="lbl">Registrar un pago</span>
-    <div class="reg-acts"><button type="button" class="btn ghost" data-cl="reg" data-k="cuota">De un jugador</button><button type="button" class="btn ghost" data-cl="reg" data-k="uniforme">Uniforme</button><button type="button" class="btn ghost" data-cl="reg" data-k="salida">A la liga o gasto</button></div>` : ""}
+    <div class="reg-acts"><button type="button" class="btn ghost" data-cl="reg" data-k="cuota">De un jugador</button><button type="button" class="btn ghost" data-cl="reg" data-k="uniforme">Uniforme</button><button type="button" class="btn ghost" data-cl="reg" data-k="salida">A la liga o gasto</button><button type="button" class="btn ghost" data-cl="reg" data-k="ingreso">Otro ingreso</button></div>` : ""}
     <span class="lbl">Solicitudes para entrar (${pending.length})</span>
     ${pending.map((m) => `<div class="cl-row static"><span><b>${esc(m.display_name)}</b><small>${m.player_id ? "Dice ser " + esc(nameOf(ctx, m.player_id)) : "No está en la lista"}</small></span>
       <span class="acts"><button type="button" class="btn" data-cl="ok" data-u="${esc(m.user_id)}">Aprobar</button><button type="button" class="btn ghost" data-cl="no" data-u="${esc(m.user_id)}">Rechazar</button></span></div>`).join("") || '<p class="hint">No hay solicitudes pendientes.</p>'}
@@ -260,9 +250,9 @@ function regSheet(ctx, k) {
   const people = (k === "cuota" ? fin.cuentas.map((x) => x.player) : active(ctx).map((r) => r.player)).filter((id) => ctx.playersById[id])
     .sort((a, b) => nameOf(ctx, a).localeCompare(nameOf(ctx, b), "es"));
   const items = (fin.liga || []).concat(fin.gastos || []).map((x) => ({ ...x, falta: Math.max(0, x.costo - x.pagado) })).filter((x) => x.falta > 0);
-  const titles = { cuota: ["Pago de un jugador", "Cuota o multa, en efectivo o por transferencia."], uniforme: ["Uniforme", "Va en la cuenta aparte de uniformes."], salida: ["Pago a la liga o gasto", "Lo que salió de la caja."] };
+  const titles = { cuota: ["Pago de un jugador", "Cuota o multa, en efectivo o por transferencia."], uniforme: ["Uniforme", "Va en la cuenta aparte de uniformes."], salida: ["Pago a la liga o gasto", "Lo que salió de la caja."], ingreso: ["Otro ingreso", "Dinero que entra a la caja y no es cuota: patrocinio, rifa, venta…"] };
   open(titles[k][0], titles[k][1], `<form data-form="reg" data-k="${k}" class="fld">
-    ${k === "salida"
+    ${k === "ingreso" ? '<label>De qué es<input name="detail" maxlength="100" placeholder="Ej. Patrocinio de la tienda" required></label>' : k === "salida"
       ? `<label>Concepto<select name="item" required>${items.map((x) => `<option value="${esc(x.k)}">${esc(x.label)} · faltan ${money(x.falta)}</option>`).join("")}</select></label>`
       : `<label>Jugador<select name="player" required><option value="">Elige</option>${people.map((id) => `<option value="${esc(id)}">${esc(nameOf(ctx, id))}</option>`).join("")}</select></label>`}
     <label>Cantidad<input name="amount" type="number" inputmode="numeric" min="1" step="1" required></label>

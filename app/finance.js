@@ -25,7 +25,8 @@ export function calc(fin, playersById) {
   return {
     cuentas, nMulta, share, aportado, ligaPag, gastosPag, items, cubre,
     cubreTot: sum(cubre, (x) => x.costo),
-    caja: aportado - ligaPag - gastosPag,
+    ingresos: sum(fin.ingresos || [], (x) => x.monto),
+    caja: aportado + sum(fin.ingresos || [], (x) => x.monto) - ligaPag - gastosPag,
     falta: sum(cuentas, (c) => Math.max(0, -c.saldo)),
     favor: sum(cuentas, (c) => Math.max(0, c.saldo)),
     ligaTot: sum(fin.liga, (x) => x.costo),

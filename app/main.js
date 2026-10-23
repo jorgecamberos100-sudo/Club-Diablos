@@ -21,11 +21,13 @@ const VIEWS = {
   alineacion: { m: alineacion, label: "Alineación" },
   finanzas: { m: finanzas, label: "Finanzas", needs: "finance" },
 };
+const ABS = /^(https?:|data:)/;
 const GENERIC = new URL("../icons/escudo-generico.svg", import.meta.url).href;
 const app = document.getElementById("app");
 const cache = {};
 let installEvt = null;
 let current = null;
+window.__ctx = () => current;
 window.__reload = () => { Object.keys(cache).forEach((k) => delete cache[k]); return route(); };
 
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; const b = document.getElementById("install-go"); if (b) b.hidden = false; });
@@ -54,8 +56,8 @@ async function getCtx(clubId, teamId) {
       clubId, club, team, players, live,
       ratings: computeRatings(team, players, club.rating),
       playersById: Object.fromEntries(players.map((p) => [p.id, p])),
-      crest: club.crest ? assetURL(clubId, club.crest) : GENERIC,
-      watermark: club.watermark || club.crest ? assetURL(clubId, club.watermark || club.crest) : GENERIC,
+      crest: club.crest ? (ABS.test(club.crest) ? club.crest : assetURL(clubId, club.crest)) : GENERIC,
+      watermark: club.watermark || club.crest ? (ABS.test(club.watermark || club.crest) ? (club.watermark || club.crest) : assetURL(clubId, club.watermark || club.crest)) : GENERIC,
       asset: (f) => (/^(https?:|data:)/.test(f) ? f : assetURL(clubId, f)),
       key: "app:" + k,
     };

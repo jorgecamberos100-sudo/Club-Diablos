@@ -594,3 +594,9 @@ a.btn { text-decoration: none; display: inline-block; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.bad { border-color: var(--red-soft); color: var(--red-soft); }
 .cl-row.sub { margin-left: 14px; margin-top: 4px; background: transparent; border-style: dashed; }
+.frow { display: grid; grid-template-columns: 1fr 96px; gap: 8px; margin-bottom: 8px; }
+.frow input, .fld input[type=color] { padding: 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font-size: 16px; min-width: 0; }
+.fld input[type=color] { height: 46px; padding: 3px; width: 100%; }
+.crest-prev { display: flex; align-items: center; gap: 12px; }
+.crest-prev img { object-fit: contain; border: 1px solid var(--line); border-radius: 6px; background: var(--raise); width: 56px; height: 56px; }
+.fmts { grid-template-columns: repeat(3, 1fr); }

@@ -1,9 +1,10 @@
 // Mezcla los datos en vivo (resultados, votos, fotos, pagos) con los archivos del equipo.
 import { on, init, api } from "./cloud.js";
+import { can } from "./plans.js";
 
 export async function enrich(clubId, team, players) {
   if (!on) return { team, players, live: null };
-  const live = { on: true, user: null, member: null, approved: false, admin: false, avail: [], mine: { attr: [], rating: [], mvp: [] },
+  const live = { on: true, ent: null, can: () => true, moves: [], user: null, member: null, approved: false, admin: false, avail: [], mine: { attr: [], rating: [], mvp: [] },
     myPays: [], pendingPays: [], pendingMembers: [], error: null };
   let results = [], profiles = [], votes = { attr: [], rating: [], mvp: [] }, paid = [];
   try {
@@ -11,12 +12,16 @@ export async function enrich(clubId, team, players) {
     live.user = await api.user();
     [results, profiles, paid] = await Promise.all([api.results(clubId, team.id), api.profiles(clubId), team.finance ? api.paid(clubId, team.id) : []]);
     if (live.user) live.member = await api.membership(clubId, team.id);
+    // Funciones del plan: solo los equipos creados en la app las restringen (los de archivo conservan todo).
+    if (live.user && team.db) live.ent = await api.entitlement("team", clubId + "/" + team.id).catch(() => null);
     live.approved = !!live.member && live.member.status === "approved";
     live.admin = live.approved && live.member.role === "admin";
     if (live.approved) [votes, live.avail, live.mine, live.myPays] = await Promise.all([api.votes(clubId, team.id), api.avail(clubId, team.id), api.mine(clubId, team.id), team.finance ? api.myPayments(clubId, team.id) : []]);
     if (live.admin) [live.pendingPays, live.pendingMembers] = await Promise.all([team.finance ? api.pendingPayments(clubId, team.id) : [], api.pending(clubId, team.id)]);
   } catch (e) { console.error(e); live.error = e; }
 
+  live.can = (f) => !team.db || can(live.ent, f);
+  live.moves = paid;
   const byMatch = Object.fromEntries(results.map((r) => [r.match_id, r]));
   const matches = (team.matches || []).map((m) => {
     const r = byMatch[m.id];
@@ -48,6 +53,8 @@ export function addPayments(fin0, paid, players) {
     } else if (p.kind === "uniforme") {
       fin.uniformes = fin.uniformes || { texto: "", items: [] };
       fin.uniformes.items.push({ n: name(p.player_id), items: p.detail || "Uniforme", costo: amt, pagado: amt, estado: "Pagado" });
+    } else if (p.kind === "ingreso") {
+      fin.ingresos = fin.ingresos || []; fin.ingresos.push({ label: p.detail || "Ingreso", monto: amt });
     } else if (p.kind === "salida") {
       const x = (fin.liga || []).find((y) => y.k === p.item) || (fin.gastos || []).find((y) => y.k === p.item);
       if (x) x.pagado = (x.pagado || 0) + amt;

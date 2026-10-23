@@ -120,7 +120,7 @@ export function render(ctx) {
   /* cuota */
   h += `<section class="s" id="cuota"><h2>Por qué la cuota es de ${money(fin.cuota)}</h2><p>${esc(fin.cuotaNota || "")}</p>
     <div class="card"><ul class="rows">${C.cubre.map((x) => `<li><span class="t">${esc(x.label)}</span><span class="d">${esc(x.short || x.desc)}</span><span class="m"><b>${money(x.costo)}</b></span></li>`).join("")}
-    <li class="tot"><span class="t">Total</span><span class="d">Entre ${C.cuentas.length} jugadores = ${money(C.cubreTot / C.cuentas.length)} cada uno</span><span class="m"><b>${money(C.cubreTot)}</b></span></li></ul></div></section>`;
+    <li class="tot"><span class="t">Total</span><span class="d">Entre ${C.cuentas.length} jugadores = ${money(C.cuentas.length ? C.cubreTot / C.cuentas.length : 0)} cada uno</span><span class="m"><b>${money(C.cubreTot)}</b></span></li></ul></div></section>`;
 
   /* multa */
   if (fin.multa && fin.multa.total) {
@@ -137,6 +137,7 @@ export function render(ctx) {
   h += `<section class="s" id="caja"><h2>Caja del equipo</h2><p>Todo lo que han dado los jugadores y en qué se ha usado.</p><div class="card"><ul class="rows">
     <li><span class="t">Lo que han dado los jugadores</span><span class="d">Suma de las cuotas y multas entregadas</span><span class="m"><b>${money(C.aportado)}</b></span></li>
     <li><span class="t">Pagado a la liga</span><span class="d">${esc(fin.liga.filter((x) => x.pagado > 0).map((x) => x.label.toLowerCase()).join(", "))}</span><span class="m"><b>−${money(C.ligaPag)}</b></span></li>
+    ${(fin.ingresos || []).map((x) => `<li><span class="t">${esc(x.label)}</span><span class="d">Ingreso</span><span class="m"><b>+${money(x.monto)}</b></span></li>`).join("")}
     ${fin.gastos.filter((x) => x.pagado > 0).map((x) => `<li><span class="t">${esc(x.label)}</span><span class="d">${esc(x.desc)}</span><span class="m"><b>−${money(x.pagado)}</b></span></li>`).join("")}
     <li class="tot"><span class="t">Hay en caja</span><span class="d">Se usa para el siguiente pago a la liga</span><span class="m"><b class="big">${money(C.caja)}</b></span></li></ul></div>
     ${C.favor > 0.005 ? `<p>De lo que hay en caja, ${money(C.favor)} es de quien dio de más y está a su favor.</p>` : ""}</section>`;
@@ -155,6 +156,15 @@ export function render(ctx) {
   if (fin.arbitraje) {
     h += `<section class="s" id="arbitraje"><h2>Arbitraje de cada partido</h2><p>${esc(fin.arbitraje.texto || "")}</p><div class="card"><ul class="rows">
       ${fin.arbitraje.items.map((a) => `<li><span class="t">${esc(a.t)}</span><span class="d">${esc(a.d)}</span><span class="m"><b>${money(a.m)}</b></span></li>`).join("")}</ul></div></section>`;
+  }
+
+  /* movimientos: historial de lo que se ha registrado en la app */
+  const mv = ((ctx.live && ctx.live.moves) || []).slice().sort((a, b) => String(b.decided_at).localeCompare(String(a.decided_at))).slice(0, 40);
+  if (mv.length) {
+    const KIND = { cuota: "Cuota", uniforme: "Uniforme", salida: "Pago", ingreso: "Ingreso" };
+    const nm = (id) => (ctx.playersById[id] || {}).name || "";
+    h += `<section class="s" id="movimientos"><h2>Movimientos <small>${mv.length}</small></h2><details class="faq"><summary>Ver el historial<span class="ar" aria-hidden="true">▶</span></summary><div class="ans"><ul class="rows">
+      ${mv.map((m) => `<li><span class="t">${esc(KIND[m.kind] || m.kind)}${nm(m.player_id) ? " · " + esc(nm(m.player_id)) : ""}</span><span class="d">${esc(fecha(m.decided_at))}${m.detail ? " · " + esc(m.detail) : ""}</span><span class="m"><b>${m.kind === "salida" ? "−" : "+"}${money(m.amount)}</b></span></li>`).join("")}</ul></div></details></section>`;
   }
 
   h += `<p class="foot-note">Dudas o aclaraciones, por privado con ${esc(ctx.club.contact || "el administrador")}.</p>`;

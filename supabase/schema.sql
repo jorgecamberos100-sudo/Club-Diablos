@@ -687,3 +687,220 @@ language sql stable security definer set search_path = public as $$
 grant execute on function public.create_invite(text,text,int,int), public.revoke_invite(text,text), public.request_link(text,text,text,text),
   public.decide_link(text,uuid,boolean), public.set_team_pro(text,uuid,boolean), public.unlink_team(uuid),
   public.league_contract(text), public.team_links(text,text) to authenticated;
+
+-- ============ Etapa 4 del producto: gestión completa de equipos ============
+-- Permiso por función según el plan del equipo. Los equipos de archivo (Diablos, ejemplo) no tienen restricción:
+-- se conservan tal cual. Solo los equipos creados en la app (team_docs) respetan las funciones de su plan.
+create or replace function public.has_feature(c text, t text, f text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select not exists (select 1 from team_docs where club_id = c and team_id = t)
+      or f = any (array(select jsonb_array_elements_text(entitlement('team', c || '/' || t)->'features'))) $$;
+
+-- Funciones de Pro también en la base de datos: calificaciones y finanzas.
+drop policy if exists attr_own on public.attr_votes;
+create policy attr_own on public.attr_votes for all using (voter = auth.uid())
+  with check (voter = auth.uid() and is_member(club_id, team_id) and has_feature(club_id, team_id, 'ratings') and target <> coalesce(my_player(club_id, team_id), ''));
+drop policy if exists mv_own on public.match_votes;
+create policy mv_own on public.match_votes for all using (voter = auth.uid())
+  with check (voter = auth.uid() and is_member(club_id, team_id) and has_feature(club_id, team_id, 'ratings') and target <> coalesce(my_player(club_id, team_id), '')
+    and exists (select 1 from results r where r.club_id = match_votes.club_id and r.team_id = match_votes.team_id and r.match_id = match_votes.match_id
+                and my_player(club_id, team_id) = any (r.played) and target = any (r.played)));
+drop policy if exists mvp_own on public.mvp_votes;
+create policy mvp_own on public.mvp_votes for all using (voter = auth.uid())
+  with check (voter = auth.uid() and is_member(club_id, team_id) and has_feature(club_id, team_id, 'ratings') and target <> coalesce(my_player(club_id, team_id), '')
+    and exists (select 1 from results r where r.club_id = mvp_votes.club_id and r.team_id = mvp_votes.team_id and r.match_id = mvp_votes.match_id
+                and my_player(club_id, team_id) = any (r.played) and target = any (r.played)));
+
+-- Ingresos distintos de cuotas (patrocinio, venta de cosas…) y finanzas solo con la función del plan.
+alter table public.payments drop constraint if exists payments_kind_check;
+alter table public.payments add constraint payments_kind_check check (kind in ('cuota','uniforme','salida','ingreso'));
+drop policy if exists pay_insert on public.payments;
+create policy pay_insert on public.payments for insert with check (
+  user_id = auth.uid() and has_feature(club_id, team_id, 'finance') and (
+    is_admin(club_id, team_id)
+    or (status = 'pending' and decided_at is null and kind in ('cuota','uniforme')
+        and is_member(club_id, team_id) and player_id = my_player(club_id, team_id))));
+
+-- Formatos: fútbol 5, 6, 7, 8, 9 y 11.
+create or replace function public.create_team(nm text, fmt int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare base text; cid text; n int := 1; who text;
+begin
+  if auth.uid() is null then raise exception 'Inicia sesión primero'; end if;
+  if nm is null or length(trim(nm)) < 2 then raise exception 'Escribe el nombre del equipo'; end if;
+  if fmt not in (5, 6, 7, 8, 9, 11) then raise exception 'Elige el formato del equipo'; end if;
+  if (select count(*) from members where user_id = auth.uid() and status = 'approved' and role = 'admin') >= team_cap()
+    then raise exception 'Ya tienes el máximo de equipos de tu plan'; end if;
+  base := slugify(nm);
+  if base in ('', 'cuenta', 'liga', 'diablos', 'ejemplo') then base := 'equipo'; end if;
+  cid := left(base, 40);
+  while exists (select 1 from club_docs where id = cid) or cid in ('cuenta', 'liga', 'diablos', 'ejemplo') loop n := n + 1; cid := left(base, 36) || '-' || n; end loop;
+  insert into club_docs (id, owner, club) values (cid, auth.uid(), jsonb_build_object(
+    'id', cid, 'name', left(trim(nm), 60), 'shortName', left(trim(nm), 24), 'crest', '', 'contact', 'el administrador',
+    'teams', jsonb_build_array(jsonb_build_object('id', 'principal', 'name', 'Principal')),
+    'theme', jsonb_build_object('colors', jsonb_build_object('bg', '#0e1110', 'panel', '#151a18', 'raise', '#1c2321', 'line', '#2a3330',
+      'text', '#ffffff', 'muted', '#a0aaa6', 'primary', '#1f9d61', 'primarySoft', '#3fd18a', 'onPrimary', '#ffffff'), 'card', 'escudo', 'pattern', 'franjas')));
+  insert into team_docs (club_id, team_id, data) values (cid, 'principal', jsonb_build_object(
+    'id', 'principal', 'name', 'Principal', 'competition', '', 'format', fmt, 'roster', '[]'::jsonb, 'matches', '[]'::jsonb, 'evaluations', '[]'::jsonb, 'lineups', '[]'::jsonb));
+  select coalesce(nullif(split_part(email, '@', 1), ''), 'Administrador') into who from auth.users where id = auth.uid();
+  insert into members (club_id, team_id, user_id, display_name, role, status) values (cid, 'principal', auth.uid(), left(who, 60), 'admin', 'approved');
+  return jsonb_build_object('club', cid, 'team', 'principal');
+end $$;
+
+-- Datos del equipo.
+create or replace function public.update_team(c text, t text, nm text, comp text, fmt int) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if nm is null or length(trim(nm)) < 2 then raise exception 'Escribe el nombre del equipo'; end if;
+  if fmt not in (5, 6, 7, 8, 9, 11) then raise exception 'Elige el formato del equipo'; end if;
+  if not exists (select 1 from team_docs where club_id = c and team_id = t) then raise exception 'Este equipo se administra desde archivos'; end if;
+  update club_docs set club = club || jsonb_build_object('name', left(trim(nm), 60), 'shortName', left(trim(nm), 24)) where id = c;
+  update team_docs set data = data || jsonb_build_object('competition', left(trim(coalesce(comp, '')), 80), 'format', fmt) where club_id = c and team_id = t;
+end $$;
+
+-- Escudo: la imagen se sube a la carpeta propia del usuario en el almacenamiento público; aquí solo se guarda su enlace.
+create or replace function public.set_crest(c text, url text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin(c, t_of(c)) then raise exception 'Sin permiso'; end if;
+  if url is null or url !~ ('^https://[^ ]+/storage/v1/object/public/photos/' || auth.uid()::text || '/[^ ]+$') then raise exception 'Datos no válidos'; end if;
+  update club_docs set club = club || jsonb_build_object('crest', url) where id = c;
+end $$;
+create or replace function public.t_of(c text) returns text language sql stable security definer set search_path = public as $$
+  select team_id from team_docs where club_id = c order by team_id limit 1 $$;
+revoke all on function public.t_of(text) from public, anon, authenticated;
+
+-- Colores y forma de las tarjetas (función Pro "themes").
+create or replace function public.set_theme(c text, t text, colors jsonb, card text, pattern text) returns void
+language plpgsql security definer set search_path = public as $$
+declare k text; v text;
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if not has_feature(c, t, 'themes') then raise exception 'Tu plan no incluye esa función'; end if;
+  if card not in ('escudo', 'redonda', 'recta') or pattern not in ('franjas', 'diagonal', 'liso') then raise exception 'Datos no válidos'; end if;
+  for k, v in select key, value from jsonb_each_text(colors) loop
+    if k not in ('bg','panel','raise','line','text','muted','primary','primarySoft','onPrimary') or v !~ '^#[0-9a-fA-F]{6}$' then raise exception 'Datos no válidos'; end if;
+  end loop;
+  update club_docs set club = jsonb_set(club, '{theme}', coalesce(club->'theme', '{}') || jsonb_build_object('colors', coalesce(club->'theme'->'colors', '{}') || colors, 'card', card, 'pattern', pattern)) where id = c;
+end $$;
+
+-- Jugadores: editar datos y dar de baja/alta. Nunca se borran: su historial de partidos y cuentas se conserva.
+create or replace function public.update_player(c text, t text, pid text, nm text, num text, pos text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if nm is null or length(trim(nm)) < 2 then raise exception 'Escribe el nombre del jugador'; end if;
+  if coalesce(pos, '') <> '' and pos not in ('POR','LAT','DFC','MCD','MCO','EXT','DC') then raise exception 'Posición no válida'; end if;
+  if not exists (select 1 from team_docs d, jsonb_array_elements(d.data->'roster') e where d.club_id = c and d.team_id = t and e->>'player' = pid) then raise exception 'Jugador no encontrado'; end if;
+  update club_docs set players = (select coalesce(jsonb_agg(case when e->>'id' = pid then e || jsonb_build_object('name', left(trim(nm), 40),
+      'positions', case when coalesce(pos, '') = '' then '[]'::jsonb else jsonb_build_array(pos) end) else e end order by ord), '[]')
+    from jsonb_array_elements(players) with ordinality x(e, ord)) where id = c;
+  update team_docs set data = jsonb_set(data, '{roster}', (select coalesce(jsonb_agg(case when e->>'player' = pid then e || jsonb_build_object('number', left(coalesce(num, ''), 3)) else e end order by ord), '[]')
+    from jsonb_array_elements(data->'roster') with ordinality x(e, ord))) where club_id = c and team_id = t;
+end $$;
+
+create or replace function public.set_player_status(c text, t text, pid text, st text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if st not in ('activo', 'congelado') then raise exception 'Datos no válidos'; end if;
+  if not exists (select 1 from team_docs d, jsonb_array_elements(d.data->'roster') e where d.club_id = c and d.team_id = t and e->>'player' = pid) then raise exception 'Jugador no encontrado'; end if;
+  update team_docs set data = jsonb_set(data, '{roster}', (select coalesce(jsonb_agg(case when e->>'player' = pid then
+      case when st = 'activo' then e - 'status' else e || jsonb_build_object('status', 'congelado') end else e end order by ord), '[]')
+    from jsonb_array_elements(data->'roster') with ordinality x(e, ord))) where club_id = c and team_id = t;
+end $$;
+
+-- add_player: cuenta solo a los jugadores activos para el límite del plan.
+create or replace function public.add_player(c text, t text, nm text, num text, pos text) returns text
+language plpgsql security definer set search_path = public as $$
+declare pid text; lim int; cnt int;
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if nm is null or length(trim(nm)) < 2 then raise exception 'Escribe el nombre del jugador'; end if;
+  if pos is not null and pos <> '' and pos not in ('POR','LAT','DFC','MCD','MCO','EXT','DC') then raise exception 'Posición no válida'; end if;
+  select count(*) filter (where e->>'status' is distinct from 'congelado') into cnt from team_docs d, jsonb_array_elements(d.data->'roster') e where d.club_id = c and d.team_id = t;
+  if not exists (select 1 from team_docs where club_id = c and team_id = t) then raise exception 'Este equipo se administra desde archivos'; end if;
+  lim := (entitlement('team', c || '/' || t)->'limits'->>'players')::int;
+  if lim is not null and cnt >= lim then raise exception 'Tu plan llegó al límite de jugadores'; end if;
+  select 'p' || (jsonb_array_length(players) + 1) into pid from club_docs where id = c;
+  update club_docs set players = players || jsonb_build_array(jsonb_build_object('id', pid, 'name', left(trim(nm), 40),
+    'positions', case when coalesce(pos, '') = '' then '[]'::jsonb else jsonb_build_array(pos) end, 'photo', null, 'attrs', null)) where id = c;
+  update team_docs set data = jsonb_set(data, '{roster}', (data->'roster') || jsonb_build_array(jsonb_build_object('player', pid, 'number', left(coalesce(num, ''), 3))))
+    where club_id = c and team_id = t;
+  return pid;
+end $$;
+
+-- Calendario: agregar o editar un partido (los resultados viven aparte, en "results").
+create or replace function public.save_match(c text, t text, m jsonb) returns text
+language plpgsql security definer set search_path = public as $$
+declare mid text := nullif(m->>'id', ''); ts timestamptz; item jsonb; rival text := left(trim(coalesce(m->>'rival', '')), 40);
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if not exists (select 1 from team_docs where club_id = c and team_id = t) then raise exception 'Este equipo se administra desde archivos'; end if;
+  if rival = '' then raise exception 'Escribe el rival'; end if;
+  begin ts := (m->>'date')::timestamptz; exception when others then raise exception 'Fecha no válida'; end;
+  if ts is null then raise exception 'Fecha no válida'; end if;
+  item := jsonb_build_object('jornada', left(trim(coalesce(m->>'jornada', '')), 20), 'date', m->>'date', 'rival', rival,
+    'home', coalesce((m->>'home')::boolean, true), 'venue', left(trim(coalesce(m->>'venue', '')), 40));
+  if mid is null then
+    mid := 'm' || substr(md5(gen_random_uuid()::text), 1, 6);
+    update team_docs set data = jsonb_set(data, '{matches}', coalesce(data->'matches', '[]') || jsonb_build_array(item || jsonb_build_object('id', mid))) where club_id = c and team_id = t;
+  else
+    if not exists (select 1 from team_docs d, jsonb_array_elements(d.data->'matches') e where d.club_id = c and d.team_id = t and e->>'id' = mid) then raise exception 'Partido no encontrado'; end if;
+    update team_docs set data = jsonb_set(data, '{matches}', (select jsonb_agg(case when e->>'id' = mid then e || item else e end order by ord)
+      from jsonb_array_elements(data->'matches') with ordinality x(e, ord))) where club_id = c and team_id = t;
+  end if;
+  return mid;
+end $$;
+
+-- Un partido con resultado no se borra (es historial); sin resultado sí se puede quitar del calendario.
+create or replace function public.delete_match(c text, t text, mid text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if exists (select 1 from results where club_id = c and team_id = t and match_id = mid) then raise exception 'Ese partido ya tiene resultado'; end if;
+  update team_docs set data = jsonb_set(data, '{matches}', (select coalesce(jsonb_agg(e order by ord), '[]') from jsonb_array_elements(data->'matches') with ordinality x(e, ord) where e->>'id' <> mid))
+    where club_id = c and team_id = t;
+end $$;
+
+-- Finanzas internas del equipo (registros administrativos, no pagos reales). Lo "pagado" no lo manda el cliente:
+-- se calcula con los pagos aprobados. Solo con la función "finance" del plan.
+create or replace function public.save_finance(c text, t text, fin jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare cuota numeric; item jsonb; liga jsonb := '[]'; gastos jsonb := '[]'; cuentas jsonb := '[]'; orden jsonb := '[]'; multa jsonb := null;
+        k text; lbl text; costo numeric; n int := 0; used text[] := '{}'; r jsonb; flags jsonb := coalesce(fin->'multas', '[]'); fl jsonb; mt numeric;
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if not exists (select 1 from team_docs where club_id = c and team_id = t) then raise exception 'Este equipo se administra desde archivos'; end if;
+  if not has_feature(c, t, 'finance') then raise exception 'Tu plan no incluye las finanzas del equipo'; end if;
+  begin cuota := (fin->>'cuota')::numeric; exception when others then raise exception 'Datos no válidos'; end;
+  if cuota is null or cuota < 0 or cuota > 50000 then raise exception 'Datos no válidos'; end if;
+  -- conceptos de la liga y gastos
+  for item in select jsonb_build_object('s', 'liga', 'x', x) from jsonb_array_elements(coalesce(fin->'liga', '[]')) x
+              union all select jsonb_build_object('s', 'gastos', 'x', x) from jsonb_array_elements(coalesce(fin->'gastos', '[]')) x loop
+    n := n + 1; if n > 40 then raise exception 'Datos no válidos'; end if;
+    lbl := left(trim(coalesce(item->'x'->>'label', '')), 40); if lbl = '' then raise exception 'Datos no válidos'; end if;
+    begin costo := (item->'x'->>'costo')::numeric; exception when others then raise exception 'Datos no válidos'; end;
+    if costo is null or costo < 0 or costo > 500000 then raise exception 'Datos no válidos'; end if;
+    k := left(coalesce(nullif(slugify(coalesce(item->'x'->>'k', '')), ''), slugify(lbl), 'x'), 24); if k = '' then k := 'x'; end if;
+    while k = any (used) loop k := left(k, 21) || '-' || n; end loop;
+    used := used || k; orden := orden || to_jsonb(k);
+    r := jsonb_build_object('k', k, 'label', lbl, 'costo', costo, 'pagado', 0, 'desc', left(trim(coalesce(item->'x'->>'desc', '')), 120));
+    if item->>'s' = 'liga' then liga := liga || jsonb_build_array(r); else gastos := gastos || jsonb_build_array(r); end if;
+  end loop;
+  -- multa repartida entre los jugadores marcados
+  begin mt := coalesce((fin->>'multaTotal')::numeric, 0); exception when others then raise exception 'Datos no válidos'; end;
+  if mt < 0 or mt > 50000 then raise exception 'Datos no válidos'; end if;
+  if mt > 0 then multa := jsonb_build_object('total', mt, 'original', mt); liga := liga || jsonb_build_array(jsonb_build_object('k', 'multa', 'label', 'Multas', 'costo', mt, 'pagado', 0, 'desc', '')); orden := orden || '"multa"'; end if;
+  for r in select e from team_docs d, jsonb_array_elements(d.data->'roster') e where d.club_id = c and d.team_id = t and e->>'status' is distinct from 'congelado' loop
+    select f into fl from jsonb_array_elements(flags) f where f->>'player' = r->>'player' limit 1;
+    cuentas := cuentas || jsonb_build_array(jsonb_build_object('player', r->>'player', 'aportado', 0, 'multa', mt > 0 and fl is not null, 'why', case when mt > 0 and fl is not null then left(coalesce(fl->>'why', ''), 60) else '' end));
+  end loop;
+  update team_docs set data = jsonb_set(data, '{finance}', jsonb_strip_nulls(jsonb_build_object('updated', now(), 'cuota', cuota, 'multa', multa, 'liga', liga, 'gastos', gastos, 'orden', orden,
+    'cuotaNota', left(trim(coalesce(fin->>'cuotaNota', '')), 200), 'cuentas', cuentas, 'faq', '[]'::jsonb))) where club_id = c and team_id = t;
+end $$;
+
+grant execute on function public.has_feature(text,text,text), public.update_team(text,text,text,text,int), public.set_crest(text,text),
+  public.set_theme(text,text,jsonb,text,text), public.update_player(text,text,text,text,text,text), public.set_player_status(text,text,text,text),
+  public.save_match(text,text,jsonb), public.delete_match(text,text,text), public.save_finance(text,text,jsonb) to authenticated;

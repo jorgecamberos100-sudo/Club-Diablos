@@ -29,6 +29,13 @@ const ERR = {
   "límite de jugadores": "Tu plan llegó al límite de jugadores.",
   "Escribe el nombre del jugador": "Escribe el nombre del jugador.",
   "Sin permiso": "No tienes permiso para hacer esto.",
+  "row-level security": "Esa función no está incluida en el plan de tu equipo o no tienes permiso.",
+  "Tu plan no incluye": "Esa función no está incluida en el plan de tu equipo.",
+  "ya tiene resultado": "Ese partido ya tiene resultado: es historial y no se borra.",
+  "Escribe el rival": "Escribe el nombre del rival.",
+  "Fecha no válida": "Revisa la fecha y la hora.",
+  "Jugador no encontrado": "No se encontró a ese jugador.",
+  "Partido no encontrado": "No se encontró ese partido.",
   "No quedan espacios de Pro": "No quedan espacios de Pro en el contrato de tu liga.",
   "contrato vigente": "La liga no tiene un contrato vigente.",
   "ya no está pendiente": "Esa solicitud ya fue atendida.",
@@ -135,6 +142,19 @@ async function supa() {
     async createTeam(name, format) { return ok(await sb.rpc("create_team", { nm: name, fmt: format })); },
     async addPlayer(c, t, { name, number, pos }) { return ok(await sb.rpc("add_player", { c, t, nm: name, num: number || "", pos: pos || "" })); },
     async entitlement(st, sid) { return ok(await sb.rpc("entitlement", { st, sid })) || defaultPlan(st); },
+    // ----- gestión del equipo -----
+    async updateTeam(c, t, { name, comp, format }) { ok(await sb.rpc("update_team", { c, t, nm: name, comp: comp || "", fmt: format })); },
+    async updatePlayer(c, t, pid, { name, number, pos }) { ok(await sb.rpc("update_player", { c, t, pid, nm: name, num: number || "", pos: pos || "" })); },
+    async setPlayerStatus(c, t, pid, st) { ok(await sb.rpc("set_player_status", { c, t, pid, st })); },
+    async saveMatch(c, t, m) { return ok(await sb.rpc("save_match", { c, t, m })); },
+    async deleteMatch(c, t, id) { ok(await sb.rpc("delete_match", { c, t, mid: id })); },
+    async saveFinance(c, t, fin) { ok(await sb.rpc("save_finance", { c, t, fin })); },
+    async setTheme(c, t, { colors, card, pattern }) { ok(await sb.rpc("set_theme", { c, t, colors, card, pattern })); },
+    async setCrest(c, blob) {
+      const u = await uid(), path = `${u}/crest-${c}-${Date.now()}.png`;
+      ok(await sb.storage.from("photos").upload(path, blob, { upsert: true, contentType: blob.type || "image/png" }));
+      const url = sb.storage.from("photos").getPublicUrl(path).data.publicUrl; ok(await sb.rpc("set_crest", { c, url })); return url;
+    },
     // ----- invitaciones y vinculación -----
     async createInvite(l, { label, maxUses, days }) { return ok(await sb.rpc("create_invite", { l, lbl: label || "", max_uses: maxUses || null, days: days || null })); },
     async revokeInvite(l, code) { ok(await sb.rpc("revoke_invite", { l, c: code })); },
@@ -196,6 +216,12 @@ function demo() {
   const ensure = (v, msg) => { if (!v) throw new Error(msg || "Sin permiso"); };
   const isLeagueAdmin = (d, l, perm) => d.ladmins.some((a) => a.league_id === l && a.user_id === d.session && a.status === "active" && (a.role === "owner" || !perm || a.perms.includes("*") || a.perms.includes(perm)));
   const contractValid = (c) => !!c && c.status === "active" && (!c.ends_at || new Date(c.ends_at) > Date.now()) && new Date(c.starts_at) <= Date.now();
+  const FMTS = [5, 6, 7, 8, 9, 11], POSS = ["POR", "LAT", "DFC", "MCD", "MCO", "EXT", "DC"];
+  const isDbTeam = (d, c, t) => d.teamdocs.some((x) => x.club_id === c && x.team_id === t);
+  // Igual que has_feature() en la base de datos: los equipos de archivo no tienen restricción.
+  const need = async (c, t, f) => { if (isDbTeam(db(), c, t)) { const e = await api.entitlement("team", c + "/" + t); ensure((e.features || []).includes(f), "Tu plan no incluye esa función"); } };
+  const docs = (d, c, t) => { const cd = d.clubdocs.find((x) => x.id === c), td = d.teamdocs.find((x) => x.club_id === c && x.team_id === t); ensure(cd && td, "Este equipo se administra desde archivos"); return [cd, td]; };
+  const slug = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const log = (d, l, action, detail) => d.audit.push({ id: d.audit.length + 1, league_id: l, actor: d.session, action, detail: detail || {}, at: new Date().toISOString() });
   // Equipos que hoy reciben Pro de su liga (mismo criterio que la base de datos: contrato vigente y dentro del cupo, los más antiguos primero).
   const proTeams = (d) => d.contracts.filter(contractValid).flatMap((c) => d.lteams.filter((x) => x.league_id === c.league_id && x.status === "approved" && x.pro)
@@ -258,12 +284,12 @@ function demo() {
       return { attr: mine(d.attr), rating: mine(d.rating), mvp: mine(d.mvp) };
     },
     async saveAttr(c, t, target, v) {
-      const d = db(); const m = approved(d, c, t); ensure(m && target !== m.player_id);
+      await need(c, t, "ratings"); const d = db(); const m = approved(d, c, t); ensure(m && target !== m.player_id);
       d.attr = d.attr.filter((x) => !(same(c, t)(x) && x.voter === m.user_id && x.target === target));
       d.attr.push({ club_id: c, team_id: t, voter: m.user_id, target, ...v }); save(d);
     },
     async saveMatchVotes(c, t, match, scores, mvp) {
-      const d = db(); const m = approved(d, c, t); ensure(m);
+      await need(c, t, "ratings"); const d = db(); const m = approved(d, c, t); ensure(m);
       const r = d.results.find((x) => same(c, t)(x) && x.match_id === match); ensure(r && r.played.includes(m.player_id));
       const mine = (x) => !(same(c, t)(x) && x.match === match && x.voter === m.user_id);
       d.rating = d.rating.filter(mine); d.mvp = d.mvp.filter(mine);
@@ -304,7 +330,7 @@ function demo() {
     async dbTeam(c, t) { const r = db().teamdocs.find((x) => x.club_id === c && x.team_id === t); return r ? r.data : null; },
     async createTeam(name, format) {
       const d = db(); const u = cur(d);
-      ensure(name && name.trim().length > 1, "Escribe el nombre del equipo"); ensure([7, 11].includes(format), "Elige el formato");
+      ensure(name && name.trim().length > 1, "Escribe el nombre del equipo"); ensure(FMTS.includes(format), "Elige el formato");
       const mine = d.members.filter((m) => m.user_id === u.id && m.status === "approved" && m.role === "admin");
       let cap = (DEFAULTS.find((p) => p.id === "team-free").limits.teams) || 1;
       for (const m of mine) { const e = await this.entitlement("team", m.club_id + "/" + m.team_id); cap = Math.max(cap, e.limits && e.limits.teams != null ? e.limits.teams : 1e6); }
@@ -321,7 +347,7 @@ function demo() {
     async addPlayer(c, t, { name, number, pos }) {
       const d = db(); ensure(isAdmin(d, c, t)); ensure(name && name.trim().length > 1, "Escribe el nombre del jugador");
       const cd = d.clubdocs.find((x) => x.id === c), td = d.teamdocs.find((x) => x.club_id === c && x.team_id === t); ensure(cd && td, "Este equipo se administra desde archivos");
-      const e = await this.entitlement("team", c + "/" + t); ensure(e.limits.players == null || td.data.roster.length < e.limits.players, "límite de jugadores");
+      const e = await this.entitlement("team", c + "/" + t); ensure(e.limits.players == null || td.data.roster.filter((r) => r.status !== "congelado").length < e.limits.players, "límite de jugadores");
       const pid = "p" + (cd.players.length + 1);
       cd.players.push({ id: pid, name: name.trim().slice(0, 40), positions: pos ? [pos] : [], photo: null, attrs: null }); td.data.roster.push({ player: pid, number: String(number || "").slice(0, 3) });
       save(d); return pid;
@@ -332,6 +358,53 @@ function demo() {
       const lg = st === "team" ? proTeams(d).filter((x) => x.club_id + "/" + x.team_id === sid).map((x) => ({ ...DEFAULTS.find((p) => p.id === x.plan), source: "league", league_id: x.league_id, pri: 1 })) : [];
       const best = [...own, ...lg].sort((a, b) => b.tier - a.tier || a.pri - b.pri)[0];
       return best || defaultPlan(st);
+    },
+    // ----- gestión del equipo (navegador) -----
+    async updateTeam(c, t, { name, comp, format }) {
+      const d = db(); ensure(isAdmin(d, c, t)); ensure(name && name.trim().length > 1, "Escribe el nombre del equipo"); ensure(FMTS.includes(format), "Elige el formato"); const [cd, td] = docs(d, c, t);
+      cd.club.name = name.trim().slice(0, 60); cd.club.shortName = name.trim().slice(0, 24); td.data.competition = String(comp || "").trim().slice(0, 80); td.data.format = format; save(d);
+    },
+    async updatePlayer(c, t, pid, { name, number, pos }) {
+      const d = db(); ensure(isAdmin(d, c, t)); ensure(name && name.trim().length > 1, "Escribe el nombre del jugador"); ensure(!pos || POSS.includes(pos), "Posición no válida"); const [cd, td] = docs(d, c, t);
+      const r = td.data.roster.find((x) => x.player === pid), p = cd.players.find((x) => x.id === pid); ensure(r && p, "Jugador no encontrado");
+      p.name = name.trim().slice(0, 40); p.positions = pos ? [pos] : []; r.number = String(number || "").slice(0, 3); save(d);
+    },
+    async setPlayerStatus(c, t, pid, st) {
+      const d = db(); ensure(isAdmin(d, c, t)); ensure(["activo", "congelado"].includes(st), "Datos no válidos"); const [, td] = docs(d, c, t);
+      const r = td.data.roster.find((x) => x.player === pid); ensure(r, "Jugador no encontrado"); if (st === "activo") delete r.status; else r.status = "congelado"; save(d);
+    },
+    async saveMatch(c, t, m) {
+      const d = db(); ensure(isAdmin(d, c, t)); const [, td] = docs(d, c, t); const rival = String(m.rival || "").trim().slice(0, 40);
+      ensure(rival, "Escribe el rival"); ensure(m.date && !isNaN(new Date(m.date)), "Fecha no válida");
+      const item = { jornada: String(m.jornada || "").trim().slice(0, 20), date: m.date, rival, home: m.home !== false, venue: String(m.venue || "").trim().slice(0, 40) };
+      if (!m.id) { const id = "m" + Math.random().toString(36).slice(2, 8); td.data.matches.push({ id, ...item }); save(d); return id; }
+      const i = td.data.matches.findIndex((x) => x.id === m.id); ensure(i > -1, "Partido no encontrado"); td.data.matches[i] = { ...td.data.matches[i], ...item }; save(d); return m.id;
+    },
+    async deleteMatch(c, t, id) {
+      const d = db(); ensure(isAdmin(d, c, t)); const [, td] = docs(d, c, t);
+      ensure(!d.results.some((r) => same(c, t)(r) && r.match_id === id), "ya tiene resultado"); td.data.matches = td.data.matches.filter((x) => x.id !== id); save(d);
+    },
+    async setTheme(c, t, { colors, card, pattern }) {
+      const d = db(); ensure(isAdmin(d, c, t)); await need(c, t, "themes"); const [cd] = docs(d, c, t);
+      ensure(["escudo", "redonda", "recta"].includes(card) && ["franjas", "diagonal", "liso"].includes(pattern), "Datos no válidos");
+      Object.entries(colors).forEach(([k, v]) => ensure(["bg", "panel", "raise", "line", "text", "muted", "primary", "primarySoft", "onPrimary"].includes(k) && /^#[0-9a-fA-F]{6}$/.test(v), "Datos no válidos"));
+      cd.club.theme = { ...cd.club.theme, colors: { ...cd.club.theme.colors, ...colors }, card, pattern }; save(d);
+    },
+    async setCrest(c, blob) { const d = db(); const t = (d.teamdocs.find((x) => x.club_id === c) || {}).team_id; ensure(isAdmin(d, c, t)); const [cd] = docs(d, c, t); cd.club.crest = await dataURL(blob); save(d); return cd.club.crest; },
+    async saveFinance(c, t, fin) {
+      const d = db(); ensure(isAdmin(d, c, t)); const [, td] = docs(d, c, t); await need(c, t, "finance");
+      const num = (v, max) => { const n = Number(v); ensure(Number.isFinite(n) && n >= 0 && n <= max, "Datos no válidos"); return n; };
+      const cuota = num(fin.cuota, 50000), used = [], orden = [], liga = [], gastos = [];
+      const items = [...(fin.liga || []).map((x) => ["liga", x]), ...(fin.gastos || []).map((x) => ["gastos", x])]; ensure(items.length <= 40, "Datos no válidos");
+      items.forEach(([src, x], n) => {
+        const label = String(x.label || "").trim().slice(0, 40); ensure(label, "Datos no válidos"); const costo = num(x.costo, 500000);
+        let k = (slug(x.k) || slug(label) || "x").slice(0, 24); while (used.includes(k)) k = k.slice(0, 21) + "-" + (n + 1);
+        used.push(k); orden.push(k); (src === "liga" ? liga : gastos).push({ k, label, costo, pagado: 0, desc: String(x.desc || "").trim().slice(0, 120) });
+      });
+      const mt = num(fin.multaTotal || 0, 50000), flags = fin.multas || []; let multa;
+      if (mt > 0) { multa = { total: mt, original: mt }; liga.push({ k: "multa", label: "Multas", costo: mt, pagado: 0, desc: "" }); orden.push("multa"); }
+      const cuentas = td.data.roster.filter((r) => r.status !== "congelado").map((r) => { const f = flags.find((x) => x.player === r.player); return { player: r.player, aportado: 0, multa: mt > 0 && !!f, why: mt > 0 && f ? String(f.why || "").slice(0, 60) : "" }; });
+      td.data.finance = { updated: new Date().toISOString(), cuota, ...(multa ? { multa } : {}), liga, gastos, orden, cuotaNota: String(fin.cuotaNota || "").trim().slice(0, 200), cuentas, faq: [] }; save(d);
     },
     // ----- invitaciones y vinculación (navegador) -----
     async createInvite(l, { label, maxUses, days }) {
@@ -399,12 +472,12 @@ function demo() {
     async myPayments(c, t) { const d = db(); return d.pays.filter((p) => same(c, t)(p) && p.user_id === d.session && p.kind !== "salida").reverse().slice(0, 20); },
     async pendingPayments(c, t) { const d = db(); ensure(isAdmin(d, c, t)); return d.pays.filter((p) => same(c, t)(p) && p.status === "pending").map((p) => ({ ...p, receipt_url: p.receipt })); },
     async reportPayment(c, t, { kind, amount, detail, file }) {
-      const d = db(); const m = approved(d, c, t); ensure(m && m.player_id); ensure(amount > 0, "payments_amount");
+      await need(c, t, "finance"); const d = db(); const m = approved(d, c, t); ensure(m && m.player_id); ensure(amount > 0, "payments_amount");
       d.pays.push({ id: "p" + Date.now(), club_id: c, team_id: t, user_id: m.user_id, player_id: m.player_id, kind, amount, detail: detail || null, receipt: file ? await dataURL(file) : null, status: "pending", created_at: new Date().toISOString(), decided_at: null });
       save(d);
     },
     async adminPayment(c, t, { kind, item, player, amount, detail }) {
-      const d = db(); ensure(isAdmin(d, c, t)); ensure(amount > 0, "payments_amount"); const now = new Date().toISOString();
+      await need(c, t, "finance"); const d = db(); ensure(isAdmin(d, c, t)); ensure(amount > 0, "payments_amount"); const now = new Date().toISOString();
       d.pays.push({ id: "p" + Date.now(), club_id: c, team_id: t, user_id: d.session, player_id: player || null, kind, item: item || null, amount, detail: detail || null, receipt: null, status: "approved", created_at: now, decided_at: now });
       save(d);
     },
