@@ -1167,6 +1167,7 @@ begin
   if not is_league_admin(l, 'results') then raise exception 'Sin permiso'; end if;
   select * into cur from league_matches where id = mid and league_id = l for update;
   if cur.id is null then raise exception 'Partido no encontrado'; end if;
+  if (select status from tournaments where id = cur.tournament_id) = 'finished' then raise exception 'El torneo ya terminó'; end if;
   if hg is null or ag is null or hg < 0 or ag < 0 or hg > 99 or ag > 99 then raise exception 'Datos no válidos'; end if;
   if jsonb_typeof(coalesce(events, '[]')) <> 'array' or jsonb_array_length(coalesce(events, '[]')) > 100 then raise exception 'Datos no válidos'; end if;
   for e in select * from jsonb_array_elements(coalesce(events, '[]')) loop
@@ -1193,6 +1194,7 @@ begin
   if not is_league_admin(l, 'results') then raise exception 'Sin permiso'; end if;
   select * into cur from league_matches where id = mid and league_id = l and status = 'played' for update;
   if cur.id is null then raise exception 'Partido no encontrado'; end if;
+  if (select status from tournaments where id = cur.tournament_id) = 'finished' then raise exception 'El torneo ya terminó'; end if;
   delete from match_events where match_id = mid;
   update league_matches set status = 'scheduled', home_goals = null, away_goals = null, updated_by = auth.uid(), updated_at = now() where id = mid;
   perform log_action(l, 'result.clear', jsonb_build_object('match', mid, 'before', jsonb_build_object('home', cur.home_goals, 'away', cur.away_goals)));
@@ -1202,3 +1204,349 @@ grant execute on function public.create_tournament(text,jsonb), public.update_to
   public.add_tournament_team(text,uuid,text,uuid,text), public.remove_tournament_team(text,uuid), public.league_save_match(text,jsonb),
   public.league_create_matches(text,uuid,jsonb), public.league_delete_match(text,uuid), public.record_result(text,uuid,int,int,jsonb,text),
   public.clear_result(text,uuid) to authenticated;
+
+-- ============ Etapa 6 del producto: administradores, sanciones, objeciones, finanzas de liga ============
+-- Las finanzas de la liga (cargos y pagos de los equipos a la liga) son registros administrativos de la liga.
+-- No tienen relación con las suscripciones ni el contrato con la plataforma (tablas subscriptions y league_contracts).
+
+create or replace function public.valid_admin_perms(p text[]) returns boolean language sql immutable as $$
+  select coalesce(p <@ array['teams','tournaments','schedule','results','sanctions','finance','registration','audit','settings']::text[], false) $$;
+
+create table if not exists public.admin_invites (
+  code text primary key,
+  league_id text not null references public.leagues(id) on delete cascade,
+  perms text[] not null check (valid_admin_perms(perms)),
+  label text check (label is null or length(label) <= 60),
+  expires_at timestamptz not null,
+  active boolean not null default true,
+  used_by uuid references auth.users(id), used_at timestamptz,
+  created_by uuid references auth.users(id), created_at timestamptz not null default now()
+);
+alter table public.admin_invites enable row level security;
+drop policy if exists admin_invites_read on public.admin_invites;
+create policy admin_invites_read on public.admin_invites for select using (is_league_admin(league_id, 'admins'));
+grant select on public.admin_invites to authenticated;
+
+create or replace function public.create_admin_invite(l text, p text[], lbl text default null, days int default 7) returns text
+language plpgsql security definer set search_path = public as $$
+declare raw text; c text;
+begin
+  if not is_league_admin(l, 'admins') then raise exception 'Sin permiso'; end if;
+  if p is null or cardinality(p) = 0 or not valid_admin_perms(p) then raise exception 'Datos no válidos'; end if;
+  if days is null or days < 1 or days > 60 then raise exception 'Datos no válidos'; end if;
+  raw := upper(substr(md5(gen_random_uuid()::text || clock_timestamp()::text), 1, 12));
+  c := substr(raw, 1, 4) || '-' || substr(raw, 5, 4) || '-' || substr(raw, 9, 4);
+  insert into admin_invites (code, league_id, perms, label, expires_at, created_by) values (c, l, p, nullif(left(trim(coalesce(lbl, '')), 60), ''), now() + make_interval(days => days), auth.uid());
+  perform log_action(l, 'admin.invite', jsonb_build_object('code', c, 'perms', p));
+  return c;
+end $$;
+
+create or replace function public.revoke_admin_invite(l text, c text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_league_admin(l, 'admins') then raise exception 'Sin permiso'; end if;
+  update admin_invites set active = false where code = c and league_id = l;
+  perform log_action(l, 'admin.invite_revoke', jsonb_build_object('code', c));
+end $$;
+
+-- Un código sirve una sola vez. Comparte el límite de intentos fallidos con las invitaciones de equipos.
+create or replace function public.accept_admin_invite(p_code text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare inv admin_invites; cid text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g')); lim int; n int; cur league_admins;
+begin
+  if auth.uid() is null then raise exception 'Inicia sesión primero'; end if;
+  if (select count(*) from invite_attempts where user_id = auth.uid() and at > now() - interval '1 hour') >= 8 then return jsonb_build_object('error', 'throttled'); end if;
+  select * into inv from admin_invites i where i.code = substr(cid, 1, 4) || '-' || substr(cid, 5, 4) || '-' || substr(cid, 9, 4) and i.active and i.used_by is null and i.expires_at > now() for update;
+  if inv.code is null then insert into invite_attempts (user_id) values (auth.uid()); return jsonb_build_object('error', 'invalid'); end if;
+  select * into cur from league_admins where league_id = inv.league_id and user_id = auth.uid();
+  if cur.user_id is not null and cur.status = 'active' then return jsonb_build_object('error', 'already'); end if;
+  lim := (entitlement('league', inv.league_id)->'limits'->>'admins')::int;
+  select count(*) into n from league_admins where league_id = inv.league_id and status = 'active';
+  if lim is not null and n >= lim then return jsonb_build_object('error', 'limit'); end if;
+  insert into league_admins (league_id, user_id, role, perms, status) values (inv.league_id, auth.uid(), 'admin', inv.perms, 'active')
+    on conflict (league_id, user_id) do update set status = 'active', perms = excluded.perms, role = 'admin';
+  update admin_invites set used_by = auth.uid(), used_at = now(), active = false where code = inv.code;
+  perform log_action(inv.league_id, 'admin.join', jsonb_build_object('user', auth.uid(), 'perms', inv.perms));
+  return jsonb_build_object('ok', true, 'league', (select name from leagues where id = inv.league_id), 'league_id', inv.league_id);
+end $$;
+
+create or replace function public.set_admin_perms(l text, u uuid, p text[]) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur league_admins;
+begin
+  if not is_league_admin(l, 'admins') then raise exception 'Sin permiso'; end if;
+  if p is null or not valid_admin_perms(p) then raise exception 'Datos no válidos'; end if;
+  select * into cur from league_admins where league_id = l and user_id = u and status = 'active' for update;
+  if cur.user_id is null then raise exception 'Administrador no encontrado'; end if;
+  if cur.role = 'owner' then raise exception 'El superadministrador no se modifica'; end if;
+  update league_admins set perms = p where league_id = l and user_id = u;
+  perform log_action(l, 'admin.perms', jsonb_build_object('user', u, 'before', cur.perms, 'after', p));
+end $$;
+
+create or replace function public.revoke_admin(l text, u uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur league_admins;
+begin
+  if not is_league_admin(l, 'admins') then raise exception 'Sin permiso'; end if;
+  select * into cur from league_admins where league_id = l and user_id = u and status = 'active' for update;
+  if cur.user_id is null then raise exception 'Administrador no encontrado'; end if;
+  if cur.role = 'owner' then raise exception 'El superadministrador no se modifica'; end if;
+  update league_admins set status = 'revoked' where league_id = l and user_id = u;
+  perform log_action(l, 'admin.revoke', jsonb_build_object('user', u, 'perms', cur.perms));
+end $$;
+
+create or replace function public.league_admins_list(l text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_league_admin(l, 'admins') then raise exception 'Sin permiso'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('user_id', a.user_id, 'email', u.email, 'role', a.role, 'perms', a.perms, 'status', a.status, 'since', a.created_at) order by a.role, a.created_at)
+    from league_admins a join auth.users u on u.id = a.user_id where a.league_id = l), '[]');
+end $$;
+
+-- Historial de la liga con el nombre (correo) de quien actuó; ref filtra por un registro concreto (partido, sanción, objeción…).
+create or replace function public.audit_view(l text, lim int default 100, ref text default null) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_league_admin(l, 'audit') then raise exception 'Sin permiso'; end if;
+  return coalesce((select jsonb_agg(x order by x->>'at' desc) from (
+    select jsonb_build_object('id', a.id, 'action', a.action, 'detail', a.detail, 'at', a.at, 'actor', u.email) x
+    from audit_log a left join auth.users u on u.id = a.actor
+    where a.league_id = l and (ref is null or exists (select 1 from jsonb_each_text(a.detail) e where e.value = ref))
+    order by a.at desc, a.id desc limit least(greatest(coalesce(lim, 100), 1), 500)) s), '[]');
+end $$;
+
+-- ---- Finanzas de la liga ----
+create table if not exists public.sanctions (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  tournament_id uuid references public.tournaments(id) on delete set null,
+  team_id uuid references public.tournament_teams(id) on delete set null,
+  player text check (player is null or length(trim(player)) between 1 and 60),
+  kind text not null check (kind in ('amonestacion','suspension','multa','puntos','expulsion')),
+  reason text not null check (length(trim(reason)) between 3 and 500),
+  matches smallint check (matches is null or matches between 1 and 99),
+  points smallint check (points is null or points between 1 and 50),
+  amount numeric(10,2) check (amount is null or (amount > 0 and amount <= 100000)),
+  starts_on date, ends_on date, evidence text check (evidence is null or length(evidence) <= 500),
+  status text not null default 'active' check (status in ('active','served','revoked')),
+  created_by uuid references auth.users(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  check (team_id is not null or player is not null),
+  check (kind <> 'multa' or amount is not null),
+  check (kind <> 'puntos' or (points is not null and team_id is not null)),
+  check (kind <> 'suspension' or matches is not null or ends_on is not null),
+  check (ends_on is null or starts_on is null or ends_on >= starts_on)
+);
+create index if not exists sanctions_league on public.sanctions (league_id, created_at desc);
+
+create table if not exists public.disputes (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  tournament_id uuid references public.tournaments(id) on delete set null,
+  match_id uuid references public.league_matches(id) on delete set null,
+  sanction_id uuid references public.sanctions(id) on delete set null,
+  team_id uuid references public.tournament_teams(id) on delete set null,
+  kind text not null check (kind in ('objection','protest')),
+  subject text not null check (length(trim(subject)) between 3 and 120),
+  detail text check (detail is null or length(detail) <= 2000),
+  status text not null default 'open' check (status in ('open','in_review','accepted','rejected','withdrawn')),
+  resolution text check (resolution is null or length(resolution) <= 2000),
+  resolved_by uuid references auth.users(id), resolved_at timestamptz,
+  created_by uuid references auth.users(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create index if not exists disputes_league on public.disputes (league_id, created_at desc);
+
+create table if not exists public.league_charges (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  tournament_id uuid references public.tournaments(id) on delete set null,
+  team_id uuid not null references public.tournament_teams(id),
+  concept text not null check (length(trim(concept)) between 2 and 80),
+  amount numeric(10,2) not null check (amount > 0 and amount <= 1000000),
+  due_on date, sanction_id uuid references public.sanctions(id) on delete set null,
+  status text not null default 'active' check (status in ('active','void')), void_reason text check (void_reason is null or length(void_reason) <= 300),
+  created_by uuid references auth.users(id), created_at timestamptz not null default now()
+);
+create index if not exists charges_league on public.league_charges (league_id, created_at desc);
+
+create table if not exists public.league_movements (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  tournament_id uuid references public.tournaments(id) on delete set null,
+  team_id uuid references public.tournament_teams(id),
+  charge_id uuid references public.league_charges(id),
+  kind text not null check (kind in ('payment','income','expense')),
+  concept text not null check (length(trim(concept)) between 2 and 80),
+  amount numeric(10,2) not null check (amount > 0 and amount <= 1000000),
+  method text not null default 'efectivo' check (method in ('efectivo','transferencia','otro')),
+  paid_on date not null default current_date, note text check (note is null or length(note) <= 300),
+  status text not null default 'active' check (status in ('active','void')), void_reason text check (void_reason is null or length(void_reason) <= 300),
+  created_by uuid references auth.users(id), created_at timestamptz not null default now(),
+  check (kind <> 'payment' or team_id is not null)
+);
+create index if not exists movements_league on public.league_movements (league_id, paid_on desc);
+
+alter table public.sanctions enable row level security; alter table public.disputes enable row level security;
+alter table public.league_charges enable row level security; alter table public.league_movements enable row level security;
+drop policy if exists sanctions_read on public.sanctions; create policy sanctions_read on public.sanctions for select using (is_league_admin(league_id, 'sanctions'));
+drop policy if exists disputes_read on public.disputes; create policy disputes_read on public.disputes for select using (is_league_admin(league_id, 'sanctions'));
+drop policy if exists charges_read on public.league_charges; create policy charges_read on public.league_charges for select using (is_league_admin(league_id, 'finance'));
+drop policy if exists movements_read on public.league_movements; create policy movements_read on public.league_movements for select using (is_league_admin(league_id, 'finance'));
+grant select on public.sanctions, public.disputes, public.league_charges, public.league_movements to authenticated;
+
+create or replace function public.save_sanction(l text, s jsonb) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare sid uuid := nullif(s->>'id', '')::uuid; cur sanctions; tm tournament_teams; k text := s->>'kind'; cid uuid;
+begin
+  if not is_league_admin(l, 'sanctions') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'sanctions') then raise exception 'Tu plan no incluye esa función'; end if;
+  if nullif(s->>'team', '') is not null then
+    select * into tm from tournament_teams where id = (s->>'team')::uuid and league_id = l;
+    if tm.id is null then raise exception 'Equipo no encontrado'; end if;
+  end if;
+  if sid is null then
+    insert into sanctions (league_id, tournament_id, team_id, player, kind, reason, matches, points, amount, starts_on, ends_on, evidence, created_by)
+    values (l, tm.tournament_id, tm.id, nullif(left(trim(coalesce(s->>'player', '')), 60), ''), k, left(trim(coalesce(s->>'reason', '')), 500), nullif(s->>'matches', '')::int, nullif(s->>'points', '')::int,
+      nullif(s->>'amount', '')::numeric, nullif(s->>'starts_on', '')::date, nullif(s->>'ends_on', '')::date, nullif(left(trim(coalesce(s->>'evidence', '')), 500), ''), auth.uid()) returning id into sid;
+    if k = 'multa' and tm.id is not null and coalesce((s->>'charge')::boolean, false) then
+      insert into league_charges (league_id, tournament_id, team_id, concept, amount, sanction_id, created_by)
+      values (l, tm.tournament_id, tm.id, left('Multa: ' || trim(s->>'reason'), 80), (s->>'amount')::numeric, sid, auth.uid()) returning id into cid;
+      if not league_feature(l, 'league_finance') then raise exception 'Tu plan no incluye esa función'; end if;
+    end if;
+    perform log_action(l, 'sanction.create', jsonb_build_object('sanction', sid, 'kind', k, 'team', tm.id, 'player', s->>'player', 'charge', cid));
+  else
+    select * into cur from sanctions where id = sid and league_id = l for update;
+    if cur.id is null then raise exception 'Sanción no encontrada'; end if;
+    if cur.status = 'revoked' then raise exception 'Esa sanción está revocada'; end if;
+    update sanctions set reason = left(trim(coalesce(s->>'reason', reason)), 500), matches = nullif(coalesce(s->>'matches', matches::text), '')::int, points = nullif(coalesce(s->>'points', points::text), '')::int,
+      amount = nullif(coalesce(s->>'amount', amount::text), '')::numeric, starts_on = nullif(coalesce(s->>'starts_on', starts_on::text), '')::date, ends_on = nullif(coalesce(s->>'ends_on', ends_on::text), '')::date,
+      evidence = case when s ? 'evidence' then nullif(left(trim(coalesce(s->>'evidence', '')), 500), '') else evidence end, updated_at = now() where id = sid;
+    perform log_action(l, 'sanction.update', jsonb_build_object('sanction', sid, 'before', jsonb_build_object('reason', cur.reason, 'matches', cur.matches, 'points', cur.points, 'amount', cur.amount, 'ends_on', cur.ends_on, 'evidence', cur.evidence),
+      'after', jsonb_build_object('reason', s->>'reason', 'matches', s->>'matches', 'points', s->>'points', 'amount', s->>'amount', 'ends_on', s->>'ends_on', 'evidence', s->>'evidence')));
+  end if;
+  return sid;
+end $$;
+
+create or replace function public.set_sanction_status(l text, sid uuid, st text, note text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur sanctions;
+begin
+  if not is_league_admin(l, 'sanctions') then raise exception 'Sin permiso'; end if;
+  if st not in ('active','served','revoked') then raise exception 'Datos no válidos'; end if;
+  select * into cur from sanctions where id = sid and league_id = l for update;
+  if cur.id is null then raise exception 'Sanción no encontrada'; end if;
+  if cur.status = 'revoked' then raise exception 'Esa sanción está revocada'; end if;
+  if st = 'revoked' and length(trim(coalesce(note, ''))) < 3 then raise exception 'Escribe el motivo'; end if;
+  update sanctions set status = st, updated_at = now() where id = sid;
+  if st = 'revoked' then update league_charges set status = 'void', void_reason = 'Sanción revocada' where sanction_id = sid and status = 'active'; end if;
+  perform log_action(l, 'sanction.status', jsonb_build_object('sanction', sid, 'from', cur.status, 'to', st, 'note', left(note, 300)));
+end $$;
+
+create or replace function public.file_dispute(l text, d jsonb) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare did uuid; tid uuid; m league_matches; tm tournament_teams;
+begin
+  if not is_league_admin(l, 'sanctions') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'sanctions') then raise exception 'Tu plan no incluye esa función'; end if;
+  if d->>'kind' not in ('objection','protest') then raise exception 'Datos no válidos'; end if;
+  if nullif(d->>'match', '') is not null then select * into m from league_matches where id = (d->>'match')::uuid and league_id = l; if m.id is null then raise exception 'Partido no encontrado'; end if; tid := m.tournament_id; end if;
+  if nullif(d->>'team', '') is not null then select * into tm from tournament_teams where id = (d->>'team')::uuid and league_id = l; if tm.id is null then raise exception 'Equipo no encontrado'; end if; tid := coalesce(tid, tm.tournament_id); end if;
+  if nullif(d->>'sanction', '') is not null and not exists (select 1 from sanctions where id = (d->>'sanction')::uuid and league_id = l) then raise exception 'Sanción no encontrada'; end if;
+  insert into disputes (league_id, tournament_id, match_id, sanction_id, team_id, kind, subject, detail, created_by)
+  values (l, tid, m.id, nullif(d->>'sanction', '')::uuid, tm.id, d->>'kind', left(trim(coalesce(d->>'subject', '')), 120), nullif(left(trim(coalesce(d->>'detail', '')), 2000), ''), auth.uid()) returning id into did;
+  perform log_action(l, 'dispute.file', jsonb_build_object('dispute', did, 'kind', d->>'kind', 'match', m.id, 'sanction', d->>'sanction', 'team', tm.id));
+  return did;
+end $$;
+
+create or replace function public.resolve_dispute(l text, did uuid, st text, res text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur disputes;
+begin
+  if not is_league_admin(l, 'sanctions') then raise exception 'Sin permiso'; end if;
+  if st not in ('open','in_review','accepted','rejected','withdrawn') then raise exception 'Datos no válidos'; end if;
+  select * into cur from disputes where id = did and league_id = l for update;
+  if cur.id is null then raise exception 'Objeción no encontrada'; end if;
+  if st in ('accepted','rejected') and length(trim(coalesce(res, ''))) < 3 then raise exception 'Escribe la resolución'; end if;
+  update disputes set status = st, resolution = case when st in ('accepted','rejected') then left(trim(res), 2000) else coalesce(nullif(left(trim(coalesce(res, '')), 2000), ''), resolution) end,
+    resolved_by = case when st in ('accepted','rejected','withdrawn') then auth.uid() else null end, resolved_at = case when st in ('accepted','rejected','withdrawn') then now() else null end, updated_at = now() where id = did;
+  perform log_action(l, case when cur.status in ('accepted','rejected','withdrawn') then 'dispute.change' else 'dispute.resolve' end,
+    jsonb_build_object('dispute', did, 'before', jsonb_build_object('status', cur.status, 'resolution', cur.resolution), 'after', jsonb_build_object('status', st, 'resolution', left(res, 2000))));
+end $$;
+
+create or replace function public.create_charges(l text, tid uuid, p_concept text, p_amount numeric, p_due date default null, p_team uuid default null) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int := 0; r tournament_teams; cn text := left(trim(coalesce(p_concept, '')), 80);
+begin
+  if not is_league_admin(l, 'finance') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'league_finance') then raise exception 'Tu plan no incluye esa función'; end if;
+  if length(cn) < 2 or p_amount is null or p_amount <= 0 or p_amount > 1000000 then raise exception 'Datos no válidos'; end if;
+  if not exists (select 1 from tournaments where id = tid and league_id = l) then raise exception 'Torneo no encontrado'; end if;
+  for r in select * from tournament_teams where tournament_id = tid and league_id = l and status = 'active' and (p_team is null or id = p_team) loop
+    if not exists (select 1 from league_charges where team_id = r.id and lower(concept) = lower(cn) and status = 'active' and sanction_id is null) then    -- sin duplicar el mismo concepto
+      insert into league_charges (league_id, tournament_id, team_id, concept, amount, due_on, created_by) values (l, tid, r.id, cn, p_amount, p_due, auth.uid()); n := n + 1;
+    end if;
+  end loop;
+  if p_team is not null and n = 0 then raise exception 'Ese cargo ya existe para el equipo'; end if;
+  perform log_action(l, 'charge.create', jsonb_build_object('tournament', tid, 'concept', cn, 'amount', p_amount, 'count', n));
+  return n;
+end $$;
+
+create or replace function public.void_charge(l text, cid uuid, reason text) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur league_charges;
+begin
+  if not is_league_admin(l, 'finance') then raise exception 'Sin permiso'; end if;
+  if length(trim(coalesce(reason, ''))) < 3 then raise exception 'Escribe el motivo'; end if;
+  select * into cur from league_charges where id = cid and league_id = l and status = 'active' for update;
+  if cur.id is null then raise exception 'Cargo no encontrado'; end if;
+  update league_charges set status = 'void', void_reason = left(trim(reason), 300) where id = cid;
+  perform log_action(l, 'charge.void', jsonb_build_object('charge', cid, 'team', cur.team_id, 'concept', cur.concept, 'amount', cur.amount, 'reason', left(reason, 300)));
+end $$;
+
+create or replace function public.record_movement(l text, m jsonb) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare mid uuid; k text := m->>'kind'; tm tournament_teams; ch league_charges; amt numeric := nullif(m->>'amount', '')::numeric;
+begin
+  if not is_league_admin(l, 'finance') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'league_finance') then raise exception 'Tu plan no incluye esa función'; end if;
+  if k not in ('payment','income','expense') or amt is null or amt <= 0 then raise exception 'Datos no válidos'; end if;
+  if nullif(m->>'team', '') is not null then select * into tm from tournament_teams where id = (m->>'team')::uuid and league_id = l; if tm.id is null then raise exception 'Equipo no encontrado'; end if; end if;
+  if k = 'payment' and tm.id is null then raise exception 'Elige el equipo que pagó'; end if;
+  if k <> 'payment' and length(trim(coalesce(m->>'concept', ''))) < 2 then raise exception 'Escribe el concepto'; end if;
+  if nullif(m->>'charge', '') is not null then
+    select * into ch from league_charges where id = (m->>'charge')::uuid and league_id = l and status = 'active';
+    if ch.id is null or ch.team_id is distinct from tm.id then raise exception 'Cargo no encontrado'; end if;
+  end if;
+  insert into league_movements (league_id, tournament_id, team_id, charge_id, kind, concept, amount, method, paid_on, note, created_by)
+  values (l, coalesce(tm.tournament_id, ch.tournament_id), tm.id, ch.id, k, left(trim(coalesce(nullif(trim(m->>'concept'), ''), ch.concept, case when k = 'payment' then 'Pago' end, '')), 80), amt, coalesce(nullif(m->>'method', ''), 'efectivo'),
+    coalesce(nullif(m->>'paid_on', '')::date, current_date), nullif(left(trim(coalesce(m->>'note', '')), 300), ''), auth.uid()) returning id into mid;
+  perform log_action(l, 'movement.' || k, jsonb_build_object('movement', mid, 'team', tm.id, 'charge', ch.id, 'amount', amt));
+  return mid;
+end $$;
+
+create or replace function public.void_movement(l text, mid uuid, reason text) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur league_movements;
+begin
+  if not is_league_admin(l, 'finance') then raise exception 'Sin permiso'; end if;
+  if length(trim(coalesce(reason, ''))) < 3 then raise exception 'Escribe el motivo'; end if;
+  select * into cur from league_movements where id = mid and league_id = l and status = 'active' for update;
+  if cur.id is null then raise exception 'Movimiento no encontrado'; end if;
+  update league_movements set status = 'void', void_reason = left(trim(reason), 300) where id = mid;
+  perform log_action(l, 'movement.void', jsonb_build_object('movement', mid, 'kind', cur.kind, 'team', cur.team_id, 'amount', cur.amount, 'reason', left(reason, 300)));
+end $$;
+
+grant execute on function public.create_admin_invite(text,text[],text,int), public.revoke_admin_invite(text,text), public.accept_admin_invite(text),
+  public.set_admin_perms(text,uuid,text[]), public.revoke_admin(text,uuid), public.league_admins_list(text), public.audit_view(text,int,text),
+  public.save_sanction(text,jsonb), public.set_sanction_status(text,uuid,text,text), public.file_dispute(text,jsonb), public.resolve_dispute(text,uuid,text,text),
+  public.create_charges(text,uuid,text,numeric,date,uuid), public.void_charge(text,uuid,text), public.record_movement(text,jsonb), public.void_movement(text,uuid,text) to authenticated;
+
+-- Descuentos de puntos por sanción: los ve cualquier administrador de la liga (la tabla de posiciones debe ser igual para todos),
+-- sin exponer el resto de los datos de la sanción.
+create or replace function public.standings_adjustments(l text, tid uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_league_admin(l) then raise exception 'Sin permiso'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('team_id', team_id, 'points', pts)) from (
+    select team_id, sum(points)::int as pts from sanctions where league_id = l and tournament_id = tid and kind = 'puntos' and status <> 'revoked' group by team_id) x), '[]');
+end $$;
+grant execute on function public.standings_adjustments(text,uuid) to authenticated;

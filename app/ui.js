@@ -23,3 +23,9 @@ export async function copyText(text) {
 }
 export const waLink = (text) => "https://wa.me/?text=" + encodeURIComponent(text);
 export const appURL = () => location.origin + location.pathname;
+
+// Entrega un archivo generado en el navegador (CSV, etc.) como descarga.
+export function saveFile(name, text, mime = "text/csv;charset=utf-8") {
+  const url = URL.createObjectURL(new Blob([text], { type: mime })), a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+}

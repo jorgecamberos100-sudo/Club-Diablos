@@ -15,3 +15,12 @@ export const close = () => { const h = el(); h.hidden = true; h.innerHTML = ""; 
 export const say = (t) => { const m = el().querySelector(".msg"); if (m) { m.textContent = t; m.hidden = !t; } };
 export async function guard(fn) { try { say(""); await fn(); } catch (e) { console.error(e); say(friendly(e)); } }
 export const reload = () => { window.__reload && window.__reload(); };
+
+// Escucha una sola vez los botones [data-<ns>j] y formularios [data-<ns>form] que viven dentro de la hoja.
+const wiredNs = new Set();
+export function wireNs(ns, onClick, onSubmit) {
+  if (wiredNs.has(ns)) return; wiredNs.add(ns);
+  const sh = el();
+  sh.addEventListener("click", (e) => { const t = e.target.closest(`[data-${ns}j]`); if (t) onClick(t.dataset[ns + "j"], t, e); });
+  sh.addEventListener("submit", (e) => { const f = e.target.closest(`form[data-${ns}form]`); if (f) { e.preventDefault(); onSubmit(f.dataset[ns + "form"], f, new FormData(f)); } });
+}

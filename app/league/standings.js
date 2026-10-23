@@ -56,10 +56,11 @@ function split(group, crit, ctx) {
   }
 }
 
-export function standings(tournament, teams, matches, events = []) {
+export function standings(tournament, teams, matches, events = [], adjust = []) {
   const rules = { pts_win: tournament.pts_win ?? 3, pts_draw: tournament.pts_draw ?? 1, pts_loss: tournament.pts_loss ?? 0 };
   const ctx = { teams, matches, rules };
   const R = tally(teams, matches, events, rules);
+  for (const a of adjust) { const r = R.get(a.team_id); if (r) { r.pts -= a.points; r.adj = (r.adj || 0) - a.points; } }   // descuentos por sanción
   const rows = [...R.values()];
   const crits = (tournament.tiebreakers || []).filter((c) => TIEBREAKERS[c]);
   if (!crits.includes("alpha")) crits.push("alpha");        // al final, para que el orden sea siempre el mismo

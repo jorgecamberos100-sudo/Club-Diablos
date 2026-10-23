@@ -59,4 +59,6 @@ t("nadie juega dos veces por jornada", [...new Set(rr.map((m) => m.round))].ever
 t("cada par se enfrenta una vez", new Set(rr.map((m) => [m.home, m.away].sort().join())).size === 6);
 t("5 equipos: descansa uno por jornada, 10 partidos", roundRobin(["a", "b", "c", "d", "e"]).length === 10);
 t("ida y vuelta duplica y cambia la localía", roundRobin(["a", "b", "c", "d"], 2).length === 12 && roundRobin(["a", "b"], 2).map((m) => m.home).join() === "a,b");
+r = standings({ ...base, tiebreakers: ["dg"] }, teams, [M(1, "a", "b", 2, 0)], [], [{ team_id: "a", points: 4 }]);
+t("el descuento de puntos baja al equipo en la tabla", r.find((x) => x.id === "a").pts === -1 && r.find((x) => x.id === "a").adj === -4 && r[0].id !== "a", r.map((x) => x.id + x.pts).join());
 console.log(`\n${ok} pruebas pasaron, ${bad} fallaron`); process.exit(bad ? 1 : 0);

@@ -51,6 +51,19 @@ const ERR = {
   "inscritos y activos": "Los dos equipos deben estar inscritos y activos en el torneo.",
   "superan el marcador": "Los goles de los jugadores superan el marcador.",
   "check constraint": "Revisa los datos: alguno no es válido.",
+  "Sanción no encontrada": "No se encontró esa sanción.",
+  "Objeción no encontrada": "No se encontró esa objeción.",
+  "Cargo no encontrado": "No se encontró ese cargo.",
+  "Movimiento no encontrado": "No se encontró ese movimiento.",
+  "Administrador no encontrado": "No se encontró a ese administrador.",
+  "superadministrador no se modifica": "El superadministrador no se puede modificar.",
+  "está revocada": "Esa sanción está revocada y ya no se edita.",
+  "Escribe el motivo": "Escribe el motivo.",
+  "Escribe la resolución": "Escribe la resolución.",
+  "Escribe el concepto": "Escribe el concepto.",
+  "Elige el equipo que pagó": "Elige el equipo que pagó.",
+  "Ese cargo ya existe": "Ese cargo ya existe para el equipo.",
+  "límite de administradores": "Tu plan llegó al límite de administradores.",
 };
 
 // Al volver de Google se regresa a la misma sección de la app.
@@ -179,8 +192,33 @@ async function supa() {
     async auditLog(l) { return ok(await sb.from("audit_log").select("*").eq("league_id", l).order("at", { ascending: false }).limit(100)); },
     // Solo para pruebas en modo demo; en Supabase el contrato lo administra la plataforma.
     async demoContract() { throw new Error("Sin permiso"); },
+    // ----- administradores, sanciones, objeciones y finanzas de la liga -----
+    async leagueAdmins(l) { return ok(await sb.rpc("league_admins_list", { l })); },
+    async adminInvites(l) { return ok(await sb.from("admin_invites").select("*").eq("league_id", l).order("created_at", { ascending: false }).limit(30)); },
+    async createAdminInvite(l, perms, label, days) { return ok(await sb.rpc("create_admin_invite", { l, p: perms, lbl: label || null, days: days || 7 })); },
+    async revokeAdminInvite(l, code) { ok(await sb.rpc("revoke_admin_invite", { l, c: code })); },
+    async acceptAdminInvite(code) { return ok(await sb.rpc("accept_admin_invite", { p_code: code })); },
+    async setAdminPerms(l, u, perms) { ok(await sb.rpc("set_admin_perms", { l, u, p: perms })); },
+    async revokeAdmin(l, u) { ok(await sb.rpc("revoke_admin", { l, u })); },
+    async auditView(l, lim, ref) { return ok(await sb.rpc("audit_view", { l, lim: lim || 100, ref: ref || null })); },
+    async adjustments(l, tid) { return ok(await sb.rpc("standings_adjustments", { l, tid })); },
+    async sanctions(l) { return ok(await sb.from("sanctions").select("*").eq("league_id", l).order("created_at", { ascending: false })); },
+    async saveSanction(l, s) { return ok(await sb.rpc("save_sanction", { l, s })); },
+    async setSanctionStatus(l, id, st, note) { ok(await sb.rpc("set_sanction_status", { l, sid: id, st, note: note || null })); },
+    async disputes(l) { return ok(await sb.from("disputes").select("*").eq("league_id", l).order("created_at", { ascending: false })); },
+    async fileDispute(l, d) { return ok(await sb.rpc("file_dispute", { l, d })); },
+    async resolveDispute(l, id, st, res) { ok(await sb.rpc("resolve_dispute", { l, did: id, st, res: res || null })); },
+    async leagueFinance(l) {
+      const [c, m] = await Promise.all([sb.from("league_charges").select("*").eq("league_id", l).order("created_at"), sb.from("league_movements").select("*").eq("league_id", l).order("paid_on", { ascending: false })]);
+      return { charges: ok(c), movements: ok(m) };
+    },
+    async createCharges(l, tid, concept, amount, due, team) { return ok(await sb.rpc("create_charges", { l, tid, p_concept: concept, p_amount: amount, p_due: due || null, p_team: team || null })); },
+    async voidCharge(l, id, reason) { ok(await sb.rpc("void_charge", { l, cid: id, reason })); },
+    async recordMovement(l, m) { return ok(await sb.rpc("record_movement", { l, m })); },
+    async voidMovement(l, id, reason) { ok(await sb.rpc("void_movement", { l, mid: id, reason })); },
     // ----- torneos, calendario y resultados (la liga; todo se escribe por funciones con permiso) -----
     async tournaments(l) { return ok(await sb.from("tournaments").select("*").eq("league_id", l).order("created_at", { ascending: false })); },
+    async leagueTeams(l) { return ok(await sb.from("tournament_teams").select("*").eq("league_id", l).eq("status", "active").order("created_at")); },
     async tournamentData(l, tid) {
       const [teams, matches] = await Promise.all([
         sb.from("tournament_teams").select("*").eq("tournament_id", tid).order("created_at"),
@@ -233,7 +271,7 @@ async function supa() {
 function demo() {
   const K = "demo-db";
   const load = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch (e) { return {}; } };
-  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [], contracts: [], invites: [], lteams: [], attempts: [], audit: [], tourn: [], ttems: [], lmatches: [], mevents: [] }, load());
+  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [], contracts: [], invites: [], lteams: [], attempts: [], audit: [], tourn: [], ttems: [], lmatches: [], mevents: [], ainv: [], sanc: [], disp: [], chg: [], mov: [] }, load());
   const dataURL = (f) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
   const save = (d) => { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ } };
   const cur = (d) => { const u = d.users.find((x) => x.id === d.session); if (!u) throw new Error("Inicia sesión primero"); return u; };
@@ -252,6 +290,14 @@ function demo() {
   const docs = (d, c, t) => { const cd = d.clubdocs.find((x) => x.id === c), td = d.teamdocs.find((x) => x.club_id === c && x.team_id === t); ensure(cd && td, "Este equipo se administra desde archivos"); return [cd, td]; };
   const slug = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const log = (d, l, action, detail) => d.audit.push({ id: d.audit.length + 1, league_id: l, actor: d.session, action, detail: detail || {}, at: new Date().toISOString() });
+  const PERMS = ["teams", "tournaments", "schedule", "results", "sanctions", "finance", "registration", "audit", "settings"];
+  const validPerms = (p) => Array.isArray(p) && p.every((x) => PERMS.includes(x));
+  // Mismas restricciones que las columnas de la tabla sanctions.
+  const sanctionChecks = (r) => {
+    ensure(r.team_id || r.player, "Datos no válidos"); ensure(["amonestacion", "suspension", "multa", "puntos", "expulsion"].includes(r.kind), "Datos no válidos"); ensure(r.reason.length >= 3, "Datos no válidos");
+    ensure(r.kind !== "multa" || (r.amount > 0 && r.amount <= 100000), "Datos no válidos"); ensure(r.kind !== "puntos" || (r.points >= 1 && r.points <= 50 && r.team_id), "Datos no válidos");
+    ensure(r.kind !== "suspension" || r.matches || r.ends_on, "Datos no válidos"); ensure(!r.ends_on || !r.starts_on || r.ends_on >= r.starts_on, "Datos no válidos");
+  };
   const TB = ["dg", "gf", "wins", "gc_low", "h2h", "fairplay", "alpha"];
   const lneed = async (l, f) => { const e = await api.entitlement("league", l); ensure((e.features || []).includes(f), "Tu plan no incluye esa función"); };
   // Campos de un torneo con las mismas validaciones y límites que las columnas de la base de datos.
@@ -513,8 +559,123 @@ function demo() {
       const d = db(); ensure(isLeagueAdmin(d, l)); d.contracts = d.contracts.filter((x) => x.league_id !== l);
       d.contracts.push({ league_id: l, pro_slots: slots, status: "active", starts_at: new Date().toISOString(), ends_at: days ? new Date(Date.now() + days * 864e5).toISOString() : null }); save(d);
     },
+    // ----- administradores, sanciones, objeciones y finanzas de la liga (mismas reglas que las funciones SQL) -----
+    async leagueAdmins(l) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "admins"));
+      return d.ladmins.filter((a) => a.league_id === l).map((a) => ({ user_id: a.user_id, email: (d.users.find((u) => u.id === a.user_id) || {}).email || "", role: a.role, perms: a.perms, status: a.status, since: a.created_at || null }));
+    },
+    async adminInvites(l) { const d = db(); return isLeagueAdmin(d, l, "admins") ? d.ainv.filter((x) => x.league_id === l).slice().reverse() : []; },
+    async createAdminInvite(l, perms, label, days) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "admins")); ensure(perms && perms.length && validPerms(perms), "Datos no válidos"); days = days || 7; ensure(days >= 1 && days <= 60, "Datos no válidos");
+      const raw = (Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2) + "000000000000").slice(0, 12).toUpperCase(), c = raw.slice(0, 4) + "-" + raw.slice(4, 8) + "-" + raw.slice(8, 12);
+      d.ainv.push({ code: c, league_id: l, perms, label: String(label || "").trim().slice(0, 60) || null, expires_at: new Date(Date.now() + days * 864e5).toISOString(), active: true, used_by: null, created_at: new Date().toISOString() });
+      log(d, l, "admin.invite", { code: c, perms }); save(d); return c;
+    },
+    async revokeAdminInvite(l, code) { const d = db(); ensure(isLeagueAdmin(d, l, "admins")); const i = d.ainv.find((x) => x.code === code && x.league_id === l); if (i) i.active = false; log(d, l, "admin.invite_revoke", { code }); save(d); },
+    async acceptAdminInvite(code) {
+      const d = db(), u = cur(d); const hour = Date.now() - 36e5;
+      if (d.attempts.filter((a) => a.user_id === u.id && a.at > hour).length >= 8) return { error: "throttled" };
+      const cid = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), key = cid.slice(0, 4) + "-" + cid.slice(4, 8) + "-" + cid.slice(8, 12);
+      const inv = d.ainv.find((x) => x.code === key && x.active && !x.used_by && new Date(x.expires_at) > Date.now());
+      if (!inv) { d.attempts.push({ user_id: u.id, at: Date.now() }); save(d); return { error: "invalid" }; }
+      const mine = d.ladmins.find((a) => a.league_id === inv.league_id && a.user_id === u.id);
+      if (mine && mine.status === "active") return { error: "already" };
+      const e = await api.entitlement("league", inv.league_id);
+      if (e.limits.admins != null && d.ladmins.filter((a) => a.league_id === inv.league_id && a.status === "active").length >= e.limits.admins) return { error: "limit" };
+      if (mine) Object.assign(mine, { status: "active", perms: inv.perms, role: "admin" }); else d.ladmins.push({ league_id: inv.league_id, user_id: u.id, role: "admin", perms: inv.perms, status: "active", created_at: new Date().toISOString() });
+      inv.used_by = u.id; inv.active = false; d.session = u.id; log(d, inv.league_id, "admin.join", { user: u.id, perms: inv.perms }); save(d);
+      return { ok: true, league: (d.leagues.find((x) => x.id === inv.league_id) || {}).name, league_id: inv.league_id };
+    },
+    async setAdminPerms(l, u, perms) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "admins")); ensure(perms && validPerms(perms), "Datos no válidos");
+      const a = d.ladmins.find((x) => x.league_id === l && x.user_id === u && x.status === "active"); ensure(a, "Administrador no encontrado"); ensure(a.role !== "owner", "El superadministrador no se modifica");
+      log(d, l, "admin.perms", { user: u, before: a.perms, after: perms }); a.perms = perms; save(d);
+    },
+    async revokeAdmin(l, u) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "admins")); const a = d.ladmins.find((x) => x.league_id === l && x.user_id === u && x.status === "active");
+      ensure(a, "Administrador no encontrado"); ensure(a.role !== "owner", "El superadministrador no se modifica"); a.status = "revoked"; log(d, l, "admin.revoke", { user: u, perms: a.perms }); save(d);
+    },
+    async auditView(l, lim, ref) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "audit"));
+      return d.audit.filter((a) => a.league_id === l && (!ref || Object.values(a.detail || {}).includes(ref))).slice().reverse().slice(0, Math.min(Math.max(lim || 100, 1), 500))
+        .map((a) => ({ id: a.id, action: a.action, detail: a.detail, at: a.at, actor: (d.users.find((u) => u.id === a.actor) || {}).email || null }));
+    },
+    async adjustments(l, tid) { const d = db(); ensure(isLeagueAdmin(d, l)); const by = {}; d.sanc.filter((x) => x.league_id === l && x.tournament_id === tid && x.kind === "puntos" && x.status !== "revoked").forEach((x) => (by[x.team_id] = (by[x.team_id] || 0) + x.points)); return Object.entries(by).map(([team_id, points]) => ({ team_id, points })); },
+    async sanctions(l) { const d = db(); return isLeagueAdmin(d, l, "sanctions") ? d.sanc.filter((x) => x.league_id === l).slice().reverse() : []; },
+    async saveSanction(l, s) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "sanctions")); await lneed(l, "sanctions");
+      const tm = s.team ? d.ttems.find((x) => x.id === s.team && x.league_id === l) : null; if (s.team) ensure(tm, "Equipo no encontrado");
+      const num = (v) => (v === "" || v == null ? null : +v);
+      if (!s.id) {
+        const r = { id: "sn" + Date.now() + Math.random().toString(36).slice(2, 5), league_id: l, tournament_id: tm ? tm.tournament_id : null, team_id: tm ? tm.id : null, player: String(s.player || "").trim().slice(0, 60) || null, kind: s.kind,
+          reason: String(s.reason || "").trim().slice(0, 500), matches: num(s.matches), points: num(s.points), amount: num(s.amount), starts_on: s.starts_on || null, ends_on: s.ends_on || null, evidence: String(s.evidence || "").trim().slice(0, 500) || null,
+          status: "active", created_by: d.session, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+        sanctionChecks(r); let cid = null;
+        if (r.kind === "multa" && tm && s.charge) { await lneed(l, "league_finance"); cid = "ch" + Date.now() + Math.random().toString(36).slice(2, 5); d.chg.push({ id: cid, league_id: l, tournament_id: tm.tournament_id, team_id: tm.id, concept: ("Multa: " + r.reason).slice(0, 80), amount: r.amount, due_on: null, sanction_id: r.id, status: "active", void_reason: null, created_at: r.created_at }); }
+        d.sanc.push(r); log(d, l, "sanction.create", { sanction: r.id, kind: r.kind, team: tm && tm.id, player: s.player, charge: cid }); save(d); return r.id;
+      }
+      const r = d.sanc.find((x) => x.id === s.id && x.league_id === l); ensure(r, "Sanción no encontrada"); ensure(r.status !== "revoked", "Esa sanción está revocada");
+      const before = { reason: r.reason, matches: r.matches, points: r.points, amount: r.amount, ends_on: r.ends_on, evidence: r.evidence }, n = { ...r };
+      if ("reason" in s) n.reason = String(s.reason).trim().slice(0, 500); if ("matches" in s) n.matches = num(s.matches); if ("points" in s) n.points = num(s.points); if ("amount" in s) n.amount = num(s.amount);
+      if ("starts_on" in s) n.starts_on = s.starts_on || null; if ("ends_on" in s) n.ends_on = s.ends_on || null; if ("evidence" in s) n.evidence = String(s.evidence || "").trim().slice(0, 500) || null;
+      sanctionChecks(n); Object.assign(r, n, { updated_at: new Date().toISOString() });
+      log(d, l, "sanction.update", { sanction: r.id, before, after: { reason: s.reason, matches: s.matches, points: s.points, amount: s.amount, ends_on: s.ends_on, evidence: s.evidence } }); save(d); return r.id;
+    },
+    async setSanctionStatus(l, id, st, note) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "sanctions")); ensure(["active", "served", "revoked"].includes(st), "Datos no válidos"); const r = d.sanc.find((x) => x.id === id && x.league_id === l);
+      ensure(r, "Sanción no encontrada"); ensure(r.status !== "revoked", "Esa sanción está revocada"); ensure(st !== "revoked" || String(note || "").trim().length >= 3, "Escribe el motivo");
+      log(d, l, "sanction.status", { sanction: id, from: r.status, to: st, note: String(note || "").slice(0, 300) || null }); r.status = st; r.updated_at = new Date().toISOString();
+      if (st === "revoked") d.chg.filter((c) => c.sanction_id === id && c.status === "active").forEach((c) => { c.status = "void"; c.void_reason = "Sanción revocada"; }); save(d);
+    },
+    async disputes(l) { const d = db(); return isLeagueAdmin(d, l, "sanctions") ? d.disp.filter((x) => x.league_id === l).slice().reverse() : []; },
+    async fileDispute(l, x) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "sanctions")); await lneed(l, "sanctions"); ensure(["objection", "protest"].includes(x.kind), "Datos no válidos");
+      const m = x.match ? d.lmatches.find((y) => y.id === x.match && y.league_id === l) : null; if (x.match) ensure(m, "Partido no encontrado");
+      const tm = x.team ? d.ttems.find((y) => y.id === x.team && y.league_id === l) : null; if (x.team) ensure(tm, "Equipo no encontrado");
+      if (x.sanction) ensure(d.sanc.some((y) => y.id === x.sanction && y.league_id === l), "Sanción no encontrada");
+      const subject = String(x.subject || "").trim().slice(0, 120); ensure(subject.length >= 3, "Datos no válidos");
+      const r = { id: "ds" + Date.now() + Math.random().toString(36).slice(2, 5), league_id: l, tournament_id: m ? m.tournament_id : tm ? tm.tournament_id : null, match_id: m ? m.id : null, sanction_id: x.sanction || null, team_id: tm ? tm.id : null, kind: x.kind, subject,
+        detail: String(x.detail || "").trim().slice(0, 2000) || null, status: "open", resolution: null, resolved_by: null, resolved_at: null, created_by: d.session, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      d.disp.push(r); log(d, l, "dispute.file", { dispute: r.id, kind: x.kind, match: r.match_id, sanction: x.sanction || null, team: r.team_id }); save(d); return r.id;
+    },
+    async resolveDispute(l, id, st, res) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "sanctions")); ensure(["open", "in_review", "accepted", "rejected", "withdrawn"].includes(st), "Datos no válidos"); const r = d.disp.find((x) => x.id === id && x.league_id === l); ensure(r, "Objeción no encontrada");
+      ensure(!["accepted", "rejected"].includes(st) || String(res || "").trim().length >= 3, "Escribe la resolución");
+      const was = r.status, before = { status: was, resolution: r.resolution }, closed = ["accepted", "rejected", "withdrawn"].includes(st), text = String(res || "").trim().slice(0, 2000);
+      r.status = st; r.resolution = ["accepted", "rejected"].includes(st) ? text : text || r.resolution; r.resolved_by = closed ? d.session : null; r.resolved_at = closed ? new Date().toISOString() : null; r.updated_at = new Date().toISOString();
+      log(d, l, ["accepted", "rejected", "withdrawn"].includes(was) ? "dispute.change" : "dispute.resolve", { dispute: id, before, after: { status: st, resolution: res ? String(res).slice(0, 2000) : null } }); save(d);
+    },
+    async leagueFinance(l) { const d = db(); ensure(isLeagueAdmin(d, l, "finance")); return { charges: d.chg.filter((x) => x.league_id === l), movements: d.mov.filter((x) => x.league_id === l).slice().reverse() }; },
+    async createCharges(l, tid, concept, amount, due, team) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "finance")); await lneed(l, "league_finance"); const cn = String(concept || "").trim().slice(0, 80);
+      ensure(cn.length >= 2 && amount > 0 && amount <= 1000000, "Datos no válidos"); ensure(d.tourn.some((x) => x.id === tid && x.league_id === l), "Torneo no encontrado"); let n = 0;
+      for (const t of d.ttems.filter((x) => x.tournament_id === tid && x.league_id === l && x.status === "active" && (!team || x.id === team))) {
+        if (d.chg.some((c) => c.team_id === t.id && c.concept.toLowerCase() === cn.toLowerCase() && c.status === "active" && !c.sanction_id)) continue;
+        d.chg.push({ id: "ch" + Date.now() + Math.random().toString(36).slice(2, 6) + n, league_id: l, tournament_id: tid, team_id: t.id, concept: cn, amount: +amount, due_on: due || null, sanction_id: null, status: "active", void_reason: null, created_at: new Date().toISOString() }); n++;
+      }
+      ensure(!team || n > 0, "Ese cargo ya existe para el equipo"); log(d, l, "charge.create", { tournament: tid, concept: cn, amount, count: n }); save(d); return n;
+    },
+    async voidCharge(l, id, reason) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "finance")); ensure(String(reason || "").trim().length >= 3, "Escribe el motivo"); const c = d.chg.find((x) => x.id === id && x.league_id === l && x.status === "active"); ensure(c, "Cargo no encontrado");
+      c.status = "void"; c.void_reason = String(reason).trim().slice(0, 300); log(d, l, "charge.void", { charge: id, team: c.team_id, concept: c.concept, amount: c.amount, reason: c.void_reason }); save(d);
+    },
+    async recordMovement(l, m) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "finance")); await lneed(l, "league_finance"); const amt = +m.amount; ensure(["payment", "income", "expense"].includes(m.kind) && amt > 0 && amt <= 1000000, "Datos no válidos");
+      const tm = m.team ? d.ttems.find((x) => x.id === m.team && x.league_id === l) : null; if (m.team) ensure(tm, "Equipo no encontrado"); ensure(m.kind !== "payment" || tm, "Elige el equipo que pagó");
+      ensure(m.kind === "payment" || String(m.concept || "").trim().length >= 2, "Escribe el concepto");
+      const ch = m.charge ? d.chg.find((x) => x.id === m.charge && x.league_id === l && x.status === "active") : null; if (m.charge) ensure(ch && tm && ch.team_id === tm.id, "Cargo no encontrado");
+      const r = { id: "mv" + Date.now() + Math.random().toString(36).slice(2, 5), league_id: l, tournament_id: (tm || ch || {}).tournament_id || null, team_id: tm ? tm.id : null, charge_id: ch ? ch.id : null, kind: m.kind,
+        concept: (String(m.concept || "").trim() || (ch && ch.concept) || (m.kind === "payment" ? "Pago" : "")).slice(0, 80), amount: amt, method: ["efectivo", "transferencia", "otro"].includes(m.method) ? m.method : "efectivo",
+        paid_on: m.paid_on || new Date().toISOString().slice(0, 10), note: String(m.note || "").trim().slice(0, 300) || null, status: "active", void_reason: null, created_at: new Date().toISOString() };
+      d.mov.push(r); log(d, l, "movement." + m.kind, { movement: r.id, team: r.team_id, charge: r.charge_id, amount: amt }); save(d); return r.id;
+    },
+    async voidMovement(l, id, reason) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "finance")); ensure(String(reason || "").trim().length >= 3, "Escribe el motivo"); const x = d.mov.find((y) => y.id === id && y.league_id === l && y.status === "active"); ensure(x, "Movimiento no encontrado");
+      x.status = "void"; x.void_reason = String(reason).trim().slice(0, 300); log(d, l, "movement.void", { movement: id, kind: x.kind, team: x.team_id, amount: x.amount, reason: x.void_reason }); save(d);
+    },
     // ----- torneos, calendario y resultados (mismas reglas que las funciones SQL) -----
     async tournaments(l) { const d = db(); return isLeagueAdmin(d, l) ? d.tourn.filter((x) => x.league_id === l).slice().reverse() : []; },
+    async leagueTeams(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return d.ttems.filter((x) => x.league_id === l && x.status === "active"); },
     async tournamentData(l, tid) {
       const d = db(); ensure(isLeagueAdmin(d, l)); const ms = d.lmatches.filter((m) => m.tournament_id === tid);
       return { teams: d.ttems.filter((x) => x.tournament_id === tid), matches: ms.slice().sort((a, b) => String(a.starts_at || "~").localeCompare(String(b.starts_at || "~"))), events: d.mevents.filter((e) => ms.some((m) => m.id === e.match_id)) };

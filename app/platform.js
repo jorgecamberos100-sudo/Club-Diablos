@@ -11,9 +11,12 @@ import { FEATURES, can } from "./plans.js";
 import { card, chip, toast, dshort } from "./ui.js";
 import * as equipos from "./league/equipos.js";
 import * as torneos from "./league/torneos.js";
+import * as sanciones from "./league/sanciones.js";
+import * as finanzas from "./league/finanzas.js";
+import * as ajustes from "./league/ajustes.js";
 
 // Cada sección con módulo propio exporta render(ctx), actions y forms. Las demás muestran su descripción.
-const MODULES = { equipos, torneos };
+const MODULES = { equipos, torneos, sanciones, finanzas, ajustes };
 
 const THEME = {
   name: "Mi cuenta",
@@ -71,6 +74,8 @@ async function hub(app, user) {
   const parts = [];
   if (roles.includes("team")) parts.push(await teamsCard());
   if (roles.includes("league")) parts.push(await leaguesCard());
+  parts.push(card("¿Te invitaron a administrar una liga?", `<form data-pf="adminjoin" class="fld"><label>Código de administrador<input name="code" placeholder="XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" required></label>
+    <button class="btn ghost" type="submit">Entrar a la liga</button><p class="msg" role="alert" hidden></p><p class="hint">La liga te da el código y define qué puedes hacer. Cada código sirve una sola vez.</p></form>`));
   const missing = Object.keys(ROLES).filter((r) => !roles.includes(r));
   parts.push(card("Lo que organizas", `<p>${roles.map((r) => ROLES[r][0]).join(" y ")}.</p>
     ${missing.length ? `<div class="row-acts">${missing.map((r) => `<button type="button" class="btn ghost" data-cl="add-role" data-r="${r}">Agregar: ${esc(ROLES[r][0].toLowerCase())}</button>`).join("")}</div>` : ""}`));
@@ -190,6 +195,13 @@ function wire(app) {
         const fd = new FormData(f), r = await api.createTeam(fd.get("nm").trim(), +fd.get("fmt"));
         location.hash = `#/${r.club}/${r.team}/plantel`;
         return;
+      }
+      if (f.dataset.pf === "adminjoin") {
+        const r = await api.acceptAdminInvite(new FormData(f).get("code"));
+        const M = { invalid: "Ese código no es válido, ya se usó o venció.", already: "Ya administras esa liga con esta cuenta.", limit: "Esa liga llegó al máximo de administradores de su plan.", throttled: "Demasiados intentos. Prueba de nuevo en una hora." };
+        if (r.error) { btn.disabled = false; return say(f, M[r.error] || "No se pudo entrar."); }
+        const acc = (await api.account()) || { roles: [] }; if (!(acc.roles || []).includes("league")) await api.setRoles([...(acc.roles || []), "league"]);
+        toast("Ahora administras " + r.league); location.hash = `#/liga/${r.league_id}/inicio`; return;
       }
       if (f.dataset.pf === "league") {
         const lid = await api.createLeague(new FormData(f).get("nm").trim());

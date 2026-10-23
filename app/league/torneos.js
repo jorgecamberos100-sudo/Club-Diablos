@@ -5,19 +5,21 @@ import { api } from "../cloud.js";
 import { can as hasFeature } from "../plans.js";
 import { card, chip, row, btn, empty, dtime, toast } from "../ui.js";
 import * as sheet from "../sheet.js";
+import { disputeFor } from "./sanciones.js";
 import { standings, scorers, roundRobin, TIEBREAKERS } from "./standings.js";
 
 const ST = { draft: ["due", "Borrador"], published: ["ok", "Publicado"], paused: ["due", "En pausa"], finished: ["na", "Terminado"] };
 const TABS = [["tabla", "Tabla"], ["calendario", "Calendario"], ["equipos", "Equipos"], ["goleo", "Goleo"], ["reglas", "Reglas"]];
 const FMT = [5, 6, 7, 8, 9, 11];
 const DEFAULT_TB = ["dg", "gf", "h2h", "fairplay"];
-let sel = null, tab = "tabla", S = null;   // torneo elegido, pestaña, y datos de la última pantalla (para las hojas)
+let sel = null, tab = "tabla", S = null, who = null, inLeague = null;   // torneo elegido, pestaña, y datos de la última pantalla (para las hojas)
 
 const local = (iso) => { if (!iso) return ""; const d = new Date(iso), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 const iso = (v) => (v ? new Date(v).toISOString() : null);
 const tname = (id) => { const t = S && S.teams.find((x) => x.id === id); return t ? t.name : "—"; };
 
 export async function render(ctx) {
+  if (who !== ctx.user.id || inLeague !== ctx.id) { sel = null; tab = "tabla"; who = ctx.user.id; inLeague = ctx.id; }   // otra cuenta u otra liga: empezar de cero
   const list = await api.tournaments(ctx.id);
   const mayCreate = ctx.can("tournaments") && hasFeature(ctx.ent, "tournaments");
   if (sel && !list.some((t) => t.id === sel)) sel = null;
@@ -29,6 +31,7 @@ export async function render(ctx) {
     return head;
   }
   const t = list.find((x) => x.id === sel), data = await api.tournamentData(ctx.id, sel);
+  data.adjust = await api.adjustments(ctx.id, sel);
   const links = ctx.can("tournaments") ? (await api.leagueLinks(ctx.id)).filter((x) => x.status === "approved") : [];
   S = { ctx, t, ...data, links };
   const act = hasFeature(ctx.ent, "tournaments");
@@ -50,10 +53,10 @@ export async function render(ctx) {
 }
 
 function tabla(t, d) {
-  const rows = standings(t, d.teams, d.matches, d.events);
+  const rows = standings(t, d.teams, d.matches, d.events, d.adjust || []);
   if (!d.teams.length) return card("Posiciones", empty("Inscribe equipos para ver la tabla."));
   return card("Posiciones", `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>Equipo</th><th title="Jugados">PJ</th><th title="Ganados">G</th><th title="Empatados">E</th><th title="Perdidos">P</th><th title="Goles a favor">GF</th><th title="Goles en contra">GC</th><th title="Diferencia">DG</th><th title="Puntos">Pts</th></tr></thead><tbody>${rows.map((r) =>
-    `<tr><td>${r.pos}</td><td class="nm">${esc(r.name)}${r.withdrawn ? ' <small>(retirado)</small>' : ""}</td><td>${r.pj}</td><td>${r.g}</td><td>${r.e}</td><td>${r.p}</td><td>${r.gf}</td><td>${r.gc}</td><td>${r.dg > 0 ? "+" : ""}${r.dg}</td><td><b>${r.pts}</b></td></tr>`).join("")}</tbody></table></div>
+    `<tr><td>${r.pos}</td><td class="nm">${esc(r.name)}${r.withdrawn ? ' <small>(retirado)</small>' : ""}</td><td>${r.pj}</td><td>${r.g}</td><td>${r.e}</td><td>${r.p}</td><td>${r.gf}</td><td>${r.gc}</td><td>${r.dg > 0 ? "+" : ""}${r.dg}</td><td><b>${r.pts}</b>${r.adj ? ` <small title="Descuento por sanción">(${r.adj})</small>` : ""}</td></tr>`).join("")}</tbody></table></div>
     <p class="hint">Desempate: ${esc((t.tiebreakers || []).map((c) => TIEBREAKERS[c]).filter(Boolean).join(" → ") || "orden alfabético")}. Solo cuentan los partidos con resultado.</p>`);
 }
 
@@ -63,7 +66,7 @@ function calendario(t, d, may, closed) {
   const MS = { scheduled: "", played: "", postponed: chip("Pospuesto", "due"), canceled: chip("Cancelado", "na") };
   const mrow = (m) => row(`${tname(m.home_id)} ${m.status === "played" ? m.home_goals + " - " + m.away_goals : "vs"} ${tname(m.away_id)}`,
     [m.starts_at ? dtime(m.starts_at) : "Sin fecha", m.venue, m.notes].filter(Boolean).join(" · "),
-    MS[m.status] + (!closed && may.r && m.status !== "canceled" ? btn(m.status === "played" ? "Corregir" : "Resultado", `data-la="result" data-id="${esc(m.id)}"`) : "")
+    MS[m.status] + (S && S.ctx.can("sanctions") ? btn("Protesta", `data-la="dispute" data-id="${esc(m.id)}"`, "ghost") : "") + (!closed && may.r && m.status !== "canceled" ? btn(m.status === "played" ? "Corregir" : "Resultado", `data-la="result" data-id="${esc(m.id)}"`) : "")
     + (!closed && may.s && m.status !== "played" ? btn("Editar", `data-la="match" data-id="${esc(m.id)}"`, "ghost") : ""));
   const tools = !closed && may.s && d.teams.filter((x) => x.status === "active").length >= 2
     ? `<div class="row-acts">${btn("Agregar partido", 'data-la="match"')}${!d.matches.length ? btn("Generar calendario", 'data-la="gen"', "ghost") : ""}</div>` : "";
@@ -164,6 +167,7 @@ export const actions = {
   async match(ctx, el) { matchSheet(el.dataset.id ? find(el.dataset.id) : null); },
   async result(ctx, el) { resultSheet(find(el.dataset.id)); },
   async gen() { genSheet(); },
+  async dispute(ctx, el) { disputeFor(ctx, find(el.dataset.id), S.teams); },
   async rm(ctx, el) {
     if (!confirm("¿Quitar este equipo del torneo? Si ya jugó partidos se conserva su historial y se cancelan los pendientes; si no, se borra con su calendario.")) return;
     await api.removeTournamentTeam(ctx.id, el.dataset.id); toast("Equipo quitado"); done(ctx);
