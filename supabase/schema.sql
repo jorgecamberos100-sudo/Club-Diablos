@@ -466,3 +466,224 @@ begin
 end $$;
 
 grant execute on function public.create_team(text,int), public.add_player(text,text,text,text,text), public.team_cap() to authenticated;
+
+-- ============ Etapa 3 del producto: invitaciones, vinculación y Pro por contrato de liga ============
+-- Importante: en Supabase las tablas nuevas de "public" nacen con permisos amplios; por eso TODAS llevan RLS
+-- y solo las funciones de abajo (security definer) escriben. Los contratos los administra la plataforma
+-- (SQL Editor / servidor), nunca la app: nadie puede darse cupos de Pro.
+
+-- Bitácora de acciones administrativas (se llena solo por log_action; nadie la edita ni la borra desde la app).
+create table if not exists public.audit_log (
+  id bigint generated always as identity primary key,
+  league_id text references public.leagues(id) on delete cascade,
+  actor uuid references auth.users(id) on delete set null,
+  action text not null, detail jsonb not null default '{}',
+  at timestamptz not null default now()
+);
+create index if not exists audit_league on public.audit_log (league_id, at desc);
+alter table public.audit_log enable row level security;
+drop policy if exists audit_read on public.audit_log;
+create policy audit_read on public.audit_log for select using (is_league_admin(league_id, 'audit'));
+grant select on public.audit_log to authenticated;
+
+create or replace function public.log_action(l text, a text, d jsonb default '{}') returns void
+language sql security definer set search_path = public as $$
+  insert into audit_log (league_id, actor, action, detail) values (l, auth.uid(), a, coalesce(d, '{}')) $$;
+revoke all on function public.log_action(text,text,jsonb) from public, anon, authenticated;
+
+-- Contrato de la liga con la plataforma: cuántos equipos con Pro incluye y hasta cuándo. Sin precios aquí.
+create table if not exists public.league_contracts (
+  league_id text primary key references public.leagues(id) on delete cascade,
+  pro_slots int not null default 0 check (pro_slots >= 0),
+  pro_plan text not null default 'team-pro' references public.plans(id),
+  status text not null default 'active' check (status in ('active','paused','canceled')),
+  starts_at timestamptz not null default now(), ends_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+alter table public.league_contracts enable row level security;
+drop policy if exists contracts_read on public.league_contracts;
+create policy contracts_read on public.league_contracts for select using (is_league_admin(league_id));
+grant select on public.league_contracts to authenticated;
+
+-- Códigos de invitación. El código es largo y aleatorio (48 bits); además hay límite de intentos fallidos.
+create table if not exists public.league_invites (
+  code text primary key,
+  league_id text not null references public.leagues(id) on delete cascade,
+  label text, max_uses int check (max_uses is null or max_uses > 0), uses int not null default 0,
+  expires_at timestamptz, active boolean not null default true,
+  created_by uuid references auth.users(id), created_at timestamptz not null default now()
+);
+alter table public.league_invites enable row level security;
+drop policy if exists invites_read on public.league_invites;
+create policy invites_read on public.league_invites for select using (is_league_admin(league_id, 'teams'));
+grant select on public.league_invites to authenticated;
+
+create table if not exists public.invite_attempts (
+  user_id uuid not null, at timestamptz not null default now()
+);
+create index if not exists invite_attempts_user on public.invite_attempts (user_id, at desc);
+alter table public.invite_attempts enable row level security;   -- sin políticas: solo las funciones la usan
+
+-- Equipos vinculados a una liga. La historia se conserva (removed / left / rejected), nunca se borra.
+create table if not exists public.league_teams (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  club_id text not null, team_id text not null, team_name text not null,
+  status text not null default 'pending' check (status in ('pending','approved','rejected','removed','left')),
+  pro boolean not null default false,
+  invite_code text, requested_by uuid references auth.users(id), requested_at timestamptz not null default now(),
+  decided_by uuid references auth.users(id), decided_at timestamptz
+);
+create unique index if not exists league_teams_open on public.league_teams (league_id, club_id, team_id) where status in ('pending','approved');
+create index if not exists league_teams_team on public.league_teams (club_id, team_id);
+alter table public.league_teams enable row level security;
+drop policy if exists lteams_read on public.league_teams;
+create policy lteams_read on public.league_teams for select using (is_league_admin(league_id, 'teams') or is_admin(club_id, team_id));
+grant select on public.league_teams to authenticated;
+
+-- Equipos que hoy reciben Pro de su liga: aprobados, con Pro, contrato vigente y dentro del cupo
+-- (si el cupo baja, conservan Pro los más antiguos). Interna: no la puede llamar la app.
+create or replace function public.league_pro_teams(l text default null)
+returns table (league_id text, club_id text, team_id text)
+language sql stable security definer set search_path = public as $$
+  select r.league_id, r.club_id, r.team_id from (
+    select lt.*, row_number() over (partition by lt.league_id order by lt.decided_at, lt.id) rn
+    from league_teams lt where lt.status = 'approved' and lt.pro and (l is null or lt.league_id = l)) r
+  join league_contracts c on c.league_id = r.league_id
+  where c.status = 'active' and (c.ends_at is null or c.ends_at > now()) and c.starts_at <= now() and r.rn <= c.pro_slots $$;
+revoke all on function public.league_pro_teams(text) from public, anon, authenticated;
+
+-- El plan vigente de un equipo o liga: el de mayor nivel entre suscripción propia, Pro de liga y el plan gratuito.
+-- A igualdad de nivel gana la suscripción propia, así el Pro propio se conserva si la liga lo retira.
+create or replace function public.entitlement(st text, sid text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  with cands as (
+    select x.plan_id, x.source, x.period, x.ends_at, null::text as league_id, 0 as pri
+    from subscriptions x where x.subject_type = st and x.subject_id = sid and x.status = 'active' and (x.ends_at is null or x.ends_at > now())
+    union all
+    select c.pro_plan, 'league', null, c.ends_at, p.league_id, 1
+    from league_pro_teams() p join league_contracts c on c.league_id = p.league_id
+    where st = 'team' and p.club_id || '/' || p.team_id = sid)
+  select to_jsonb(p) || jsonb_build_object('source', coalesce(s.source, 'default'), 'period', s.period, 'ends_at', s.ends_at, 'league_id', s.league_id)
+  from plans p left join cands s on s.plan_id = p.id
+  where p.audience = st and p.active and (s.plan_id is not null or p.is_default)
+  order by (s.plan_id is not null) desc, p.tier desc, s.pri asc limit 1 $$;
+
+-- ---- Operaciones de la liga ----
+create or replace function public.create_invite(l text, lbl text, max_uses int default null, days int default null) returns text
+language plpgsql security definer set search_path = public as $$
+declare raw text; code text;
+begin
+  if not is_league_admin(l, 'teams') then raise exception 'Sin permiso'; end if;
+  if max_uses is not null and max_uses < 1 then raise exception 'Datos no válidos'; end if;
+  raw := upper(substr(md5(gen_random_uuid()::text || clock_timestamp()::text), 1, 12));
+  code := substr(raw, 1, 4) || '-' || substr(raw, 5, 4) || '-' || substr(raw, 9, 4);
+  insert into league_invites (code, league_id, label, max_uses, expires_at, created_by)
+  values (code, l, nullif(left(trim(coalesce(lbl, '')), 60), ''), max_uses, case when days is null then null else now() + make_interval(days => days) end, auth.uid());
+  perform log_action(l, 'invite.create', jsonb_build_object('code', code, 'max_uses', max_uses));
+  return code;
+end $$;
+
+create or replace function public.revoke_invite(l text, c text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_league_admin(l, 'teams') then raise exception 'Sin permiso'; end if;
+  update league_invites set active = false where league_id = l and code = c;
+  perform log_action(l, 'invite.revoke', jsonb_build_object('code', c));
+end $$;
+
+-- El delegado pide vincular su equipo con un código. Un código malo devuelve {error} (sin excepción)
+-- para que el intento quede contado; tras 8 fallos en una hora se bloquea un rato.
+create or replace function public.request_link(p_code text, c text, t text, nm text default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare inv league_invites; tname text; cid text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
+begin
+  if auth.uid() is null then raise exception 'Inicia sesión primero'; end if;
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if (select count(*) from invite_attempts where user_id = auth.uid() and at > now() - interval '1 hour') >= 8 then
+    return jsonb_build_object('error', 'throttled');
+  end if;
+  select * into inv from league_invites i
+   where i.code = substr(cid, 1, 4) || '-' || substr(cid, 5, 4) || '-' || substr(cid, 9, 4) and i.active
+     and (i.expires_at is null or i.expires_at > now()) and (i.max_uses is null or i.uses < i.max_uses);
+  if inv.code is null then
+    insert into invite_attempts (user_id) values (auth.uid());
+    return jsonb_build_object('error', 'invalid');
+  end if;
+  if exists (select 1 from league_teams where league_id = inv.league_id and club_id = c and team_id = t and status in ('pending','approved')) then
+    return jsonb_build_object('error', 'duplicate');
+  end if;
+  select club->>'name' into tname from club_docs where id = c;
+  tname := coalesce(tname, nullif(left(trim(coalesce(nm, '')), 60), ''), c);
+  insert into league_teams (league_id, club_id, team_id, team_name, invite_code, requested_by) values (inv.league_id, c, t, tname, inv.code, auth.uid());
+  update league_invites set uses = uses + 1 where code = inv.code;
+  return jsonb_build_object('ok', true, 'league', (select name from leagues where id = inv.league_id));
+end $$;
+
+-- La liga aprueba o rechaza. Al aprobar recibe Pro solo si hay cupo en un contrato vigente.
+create or replace function public.decide_link(l text, lt uuid, approve boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r league_teams; c league_contracts; v_pro boolean := false;
+begin
+  if not is_league_admin(l, 'teams') then raise exception 'Sin permiso'; end if;
+  select * into r from league_teams where id = lt and league_id = l and status = 'pending' for update;
+  if r.id is null then raise exception 'La solicitud ya no está pendiente'; end if;
+  if approve then
+    select * into c from league_contracts where league_id = l;
+    v_pro := c.league_id is not null and c.status = 'active' and (c.ends_at is null or c.ends_at > now()) and c.starts_at <= now()
+           and (select count(*) from league_teams x where x.league_id = l and x.status = 'approved' and x.pro) < c.pro_slots;
+  end if;
+  update league_teams set status = case when approve then 'approved' else 'rejected' end, pro = v_pro and approve, decided_by = auth.uid(), decided_at = now() where id = lt;
+  perform log_action(l, case when approve then 'team.approve' else 'team.reject' end, jsonb_build_object('team', r.club_id || '/' || r.team_id, 'pro', v_pro and approve));
+  return jsonb_build_object('ok', true, 'pro', v_pro and approve);
+end $$;
+
+-- Asignar o quitar el Pro de un equipo ya vinculado, dentro del cupo.
+create or replace function public.set_team_pro(l text, lt uuid, want boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare c league_contracts; r league_teams;
+begin
+  if not is_league_admin(l, 'teams') then raise exception 'Sin permiso'; end if;
+  select * into r from league_teams where id = lt and league_id = l and status = 'approved' for update;
+  if r.id is null then raise exception 'Equipo no vinculado'; end if;
+  if want and not r.pro then
+    select * into c from league_contracts where league_id = l;
+    if c.league_id is null or c.status <> 'active' or (c.ends_at is not null and c.ends_at <= now()) then raise exception 'La liga no tiene un contrato vigente'; end if;
+    if (select count(*) from league_teams x where x.league_id = l and x.status = 'approved' and x.pro) >= c.pro_slots then raise exception 'No quedan espacios de Pro en tu contrato'; end if;
+  end if;
+  update league_teams set pro = want where id = lt;
+  perform log_action(l, 'team.pro', jsonb_build_object('team', r.club_id || '/' || r.team_id, 'pro', want));
+end $$;
+
+-- Desvincular (la liga o el delegado). Solo se retira el beneficio que venía de la liga; todo lo demás se conserva.
+create or replace function public.unlink_team(lt uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare r league_teams; by_league boolean;
+begin
+  select * into r from league_teams where id = lt and status in ('pending','approved') for update;
+  if r.id is null then raise exception 'La vinculación ya no está activa'; end if;
+  by_league := is_league_admin(r.league_id, 'teams');
+  if not by_league and not is_admin(r.club_id, r.team_id) then raise exception 'Sin permiso'; end if;
+  update league_teams set status = case when by_league then 'removed' else 'left' end, decided_by = auth.uid(), decided_at = now() where id = lt;
+  perform log_action(r.league_id, 'team.unlink', jsonb_build_object('team', r.club_id || '/' || r.team_id, 'by', case when by_league then 'league' else 'team' end));
+end $$;
+
+-- Contrato y cupo de una liga (solo sus administradores).
+create or replace function public.league_contract(l text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when not is_league_admin(l) then null else coalesce(
+    (select jsonb_build_object('pro_slots', c.pro_slots, 'status', c.status, 'ends_at', c.ends_at,
+       'valid', c.status = 'active' and (c.ends_at is null or c.ends_at > now()) and c.starts_at <= now(),
+       'used', (select count(*) from league_teams x where x.league_id = l and x.status = 'approved' and x.pro)) from league_contracts c where c.league_id = l),
+    jsonb_build_object('pro_slots', 0, 'status', 'none', 'valid', false, 'used', 0)) end $$;
+
+-- Vínculos de un equipo, para su delegado.
+create or replace function public.team_links(c text, t text)
+returns table (id uuid, league_id text, league_name text, status text, pro boolean, requested_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select x.id, x.league_id, (select name from leagues where id = x.league_id), x.status, x.pro, x.requested_at
+  from league_teams x where x.club_id = c and x.team_id = t and is_admin(c, t) order by x.requested_at desc $$;
+
+grant execute on function public.create_invite(text,text,int,int), public.revoke_invite(text,text), public.request_link(text,text,text,text),
+  public.decide_link(text,uuid,boolean), public.set_team_pro(text,uuid,boolean), public.unlink_team(uuid),
+  public.league_contract(text), public.team_links(text,text) to authenticated;

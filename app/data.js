@@ -27,7 +27,12 @@ export async function loadClubs() {
   return (await getJSON("clubs.json")).clubs;
 }
 
+// Índice de los clubes que viven en archivos; todo lo demás se busca directo en la base de datos (sin pedir archivos que no existen).
+let fileIds;
+const isFile = async (clubId) => { if (!fileIds) fileIds = loadClubs().then((l) => l.map((c) => c.id)).catch(() => null); const ids = await fileIds; return !ids || ids.includes(clubId) || !on; };
+
 export async function loadClub(clubId) {
+  if (!(await isFile(clubId))) { const r = await viaDB("dbClub", clubId); if (r) return { club: r.club, players: r.players }; }
   try {
     const [club, players] = await Promise.all([getJSON(`clubs/${clubId}/club.json`), getJSON(`clubs/${clubId}/players.json`)]);
     return { club, players: players.players };
@@ -39,6 +44,7 @@ export async function loadClub(clubId) {
 }
 
 export async function loadTeam(clubId, teamId) {
+  if (!(await isFile(clubId))) { const t = await viaDB("dbTeam", clubId, teamId); if (t) return { ...t, db: true }; }
   try {
     return await getJSON(`clubs/${clubId}/teams/${teamId}.json`);
   } catch (e) {

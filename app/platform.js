@@ -8,6 +8,11 @@ import { on, init, api, friendly, mode } from "./cloud.js";
 import { openAuth, googleBtn } from "./cloudui.js";
 import { loadClubs } from "./data.js";
 import { FEATURES, can } from "./plans.js";
+import { card, chip, toast, dshort } from "./ui.js";
+import * as equipos from "./league/equipos.js";
+
+// Cada sección con módulo propio exporta render(ctx), actions y forms. Las demás muestran su descripción.
+const MODULES = { equipos };
 
 const THEME = {
   name: "Mi cuenta",
@@ -31,7 +36,6 @@ const SECTIONS = {
 const ROLE_NAME = { owner: "Superadministrador", admin: "Administrador" };
 
 const shell = (title, sub, body, extra = "") => `<header class="top"><div class="top-t"><h1>${esc(title)}</h1>${sub ? `<p>${esc(sub)}</p>` : ""}</div>${extra}</header><div id="view" class="view">${body}</div>`;
-const card = (h, body) => `<section class="s cl-card">${h ? `<h2>${esc(h)}</h2>` : ""}${body}</section>`;
 
 export async function renderPlatform(app, [kind, id, sec]) {
   applyTheme(THEME);
@@ -78,13 +82,26 @@ function roleChoices(sel) {
 
 async function teamsCard() {
   const [mine, clubs] = await Promise.all([api.myTeams(), loadClubs().catch(() => [])]);
-  const name = (c) => (clubs.find((x) => x.id === c) || {}).name || c;
+  // Los clubes de archivo salen de clubs.json; los creados en la app, de la base de datos.
+  const names = Object.fromEntries(clubs.map((x) => [x.id, x.name]));
+  await Promise.all([...new Set(mine.map((m) => m.club_id))].filter((c) => !names[c]).map(async (c) => { const r = await api.dbClub(c).catch(() => null); if (r) names[c] = r.club.name; }));
+  const name = (c) => names[c] || c;
   const ents = await Promise.all(mine.map((m) => api.entitlement("team", m.club_id + "/" + m.team_id).catch(() => null)));
-  const rows = mine.map((m, i) => `<a class="cl-row" href="#/${esc(m.club_id)}/${esc(m.team_id)}/inicio"><span><b>${esc(name(m.club_id))}</b><small>${esc(m.team_id)}</small></span><span class="chip ok">${esc(ents[i] ? ents[i].name : "")}</span></a>`).join("");
+  const links = await Promise.all(mine.map((m) => api.teamLinks(m.club_id, m.team_id).catch(() => [])));
+  const LST = { pending: ["due", "Esperando a la liga"], approved: ["ok", "Vinculado"] };
+  const rows = mine.map((m, i) => {
+    const e = ents[i], act = links[i].filter((x) => ["pending", "approved"].includes(x.status));
+    const why = e && e.source === "league" ? " · Pro de la liga" : "";
+    return `<a class="cl-row" href="#/${esc(m.club_id)}/${esc(m.team_id)}/inicio"><span><b>${esc(name(m.club_id))}</b><small>${esc(m.team_id)}${esc(why)}</small></span><span class="chip ok">${esc(e ? e.name : "")}</span></a>`
+      + act.map((x) => `<div class="cl-row static sub"><span><b>${esc(x.league_name || x.league_id)}</b><small>${x.status === "approved" && x.pro ? "Pro cubierto por la liga" : ""}</small></span><span class="acts">${chip(LST[x.status][1], LST[x.status][0])}<button type="button" class="btn sm ghost" data-cl="unlink" data-id="${esc(x.id)}">${x.status === "pending" ? "Cancelar" : "Dejar la liga"}</button></span></div>`).join("");
+  }).join("");
+  const linkForm = mine.length ? `<form data-pf="link" class="fld"><label>Vincular con una liga<input name="code" placeholder="Código de la liga" autocomplete="off" autocapitalize="characters" required></label>
+    ${mine.length > 1 ? `<label>Equipo<select name="team">${mine.map((m) => `<option value="${esc(m.club_id)}/${esc(m.team_id)}">${esc(name(m.club_id))}</option>`).join("")}</select></label>` : `<input type="hidden" name="team" value="${esc(mine[0].club_id)}/${esc(mine[0].team_id)}">`}
+    <button class="btn ghost" type="submit">Pedir vinculación</button><p class="msg" role="alert" hidden></p><p class="hint">Tu liga te da el código. Al vincularte, la liga puede darte Pro sin costo mientras su contrato siga vigente.</p></form>` : "";
   const form = `<form data-pf="team" class="fld"><label>${mine.length ? "Crear otro equipo" : "Crea tu equipo"}<input name="nm" placeholder="Nombre del equipo" maxlength="60" required></label>
     <div class="pick fmt"><label class="pick-o"><input type="radio" name="fmt" value="7" checked><span><b>Fútbol 7</b></span></label><label class="pick-o"><input type="radio" name="fmt" value="11"><span><b>Fútbol 11</b></span></label></div>
     <button class="btn" type="submit">Crear equipo</button><p class="msg" role="alert" hidden></p></form>`;
-  return card("Mis equipos", `${rows}${rows ? "" : `<p>Todavía no administras ningún equipo. Si ya existe, abre su enlace y entra con esta cuenta.</p>`}${form}<p class="hint">Los formatos de fútbol 5, 6, 8 y 9 llegan después.</p>`);
+  return card("Mis equipos", `${rows}${rows ? "" : `<p>Todavía no administras ningún equipo. Si ya existe, abre su enlace y entra con esta cuenta.</p>`}${linkForm}${form}<p class="hint">Los formatos de fútbol 5, 6, 8 y 9 llegan después.</p>`);
 }
 
 async function leaguesCard() {
@@ -94,6 +111,7 @@ async function leaguesCard() {
 }
 
 // ---------- Panel de liga ----------
+let curLeague = null;
 async function league(app, user, id, sec) {
   const [l, ent] = await Promise.all([api.league(id), api.entitlement("league", id).catch(() => null)]);
   const acc = `<a class="top-acc" href="#/cuenta" aria-label="Mi cuenta">${icon.cuenta}</a>`;
@@ -103,8 +121,12 @@ async function league(app, user, id, sec) {
   }
   document.title = l.name;
   const S = SECTIONS[sec];
+  const can2 = (perm) => l.me.role === "owner" || (l.me.perms || []).includes("*") || (l.me.perms || []).includes(perm);
+  curLeague = { id, l, ent, user, can: can2, sec, reload: () => window.__reload() };
   let body;
-  if (sec === "inicio") {
+  if (MODULES[sec]) {
+    try { body = await MODULES[sec].render(curLeague); } catch (e) { console.error(e); body = card(S.label, `<p class="hint">${esc(friendly(e))}</p>`); }
+  } else if (sec === "inicio") {
     body = card("Tu liga", `<div class="cl-who"><b>${esc(l.name)}</b><span>${esc(ROLE_NAME[l.me.role] || "")}</span></div><p class="hint">Plan: ${esc(ent ? ent.name : "—")}</p>`)
       + card("Cómo se arma", `<ol class="steps">${Object.entries(SECTIONS).filter(([k]) => k !== "inicio").map(([k, s]) => `<li><a href="#/liga/${esc(id)}/${k}"><b>${esc(s.label)}</b></a><small>${esc(s.txt)}</small></li>`).join("")}</ol>`);
   } else {
@@ -121,16 +143,29 @@ async function league(app, user, id, sec) {
 function wire(app) {
   const say = (f, t) => { const m = f.querySelector(".msg"); if (m) { m.textContent = t; m.hidden = !t; } };
   app.onclick = async (e) => {
+    const la = e.target.closest("[data-la]");
+    if (la && curLeague && MODULES[curLeague.sec]) {
+      const fn = MODULES[curLeague.sec].actions[la.dataset.la]; la.disabled = true;
+      try { if (fn) await fn(curLeague, la); } catch (err) { toast(friendly(err), true); } finally { la.disabled = false; }
+      return;
+    }
     const t = e.target.closest("[data-cl]"); if (!t) return;
     const a = t.dataset.cl;
     try {
       if (a === "auth-in") return openAuth(false);
       if (a === "google") return await api.signInGoogle();
       if (a === "out") { await api.signOut(); return window.__reload(); }
+      if (a === "unlink") { if (!confirm("¿Salir de esta liga? Tu equipo conserva todo; solo pierde el Pro que venía de la liga.")) return; await api.unlinkTeam(t.dataset.id); toast("Saliste de la liga"); return window.__reload(); }
       if (a === "add-role") { const acc = (await api.account()) || { roles: [] }; await api.setRoles([...new Set([...(acc.roles || []), t.dataset.r])]); return window.__reload(); }
-    } catch (err) { alert(friendly(err)); }
+    } catch (err) { toast(friendly(err), true); }
   };
   app.onsubmit = async (e) => {
+    const lf = e.target.closest("form[data-lf]");
+    if (lf && curLeague && MODULES[curLeague.sec]) {
+      e.preventDefault(); const b = lf.querySelector("button[type=submit]"); if (b) b.disabled = true;
+      try { await MODULES[curLeague.sec].forms[lf.dataset.lf](curLeague, lf, new FormData(lf)); } catch (err) { toast(friendly(err), true); } finally { if (b) b.disabled = false; }
+      return;
+    }
     const f = e.target.closest("form[data-pf]"); if (!f) return;
     e.preventDefault();
     const btn = f.querySelector("button[type=submit]"); btn.disabled = true;
@@ -141,6 +176,13 @@ function wire(app) {
         await api.setRoles(roles);
         // Si solo eligió liga y aún no tiene una, la pantalla siguiente le pide crearla.
         return window.__reload();
+      }
+      if (f.dataset.pf === "link") {
+        const fd = new FormData(f), [c, t] = String(fd.get("team")).split("/");
+        const r = await api.requestLink(fd.get("code"), c, t);
+        const M = { invalid: "Ese código no es válido o ya venció.", duplicate: "Ese equipo ya está vinculado o pendiente con esa liga.", throttled: "Demasiados intentos. Prueba de nuevo en una hora." };
+        if (r.error) { btn.disabled = false; return say(f, M[r.error] || "No se pudo vincular."); }
+        toast("Solicitud enviada a " + r.league + ". Te avisará cuando la apruebe."); return window.__reload();
       }
       if (f.dataset.pf === "team") {
         const fd = new FormData(f), r = await api.createTeam(fd.get("nm").trim(), +fd.get("fmt"));

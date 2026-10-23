@@ -583,3 +583,14 @@ a.cl-row { text-decoration: none; }
 .fld select { padding: 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font-size: 16px; }
 .pick.fmt { grid-template-columns: 1fr 1fr; }
 .pick.fmt .pick-o span { text-align: center; padding: 12px; }
+.btn.sm { padding: 6px 10px; font-size: 13px; }
+a.btn { text-decoration: none; display: inline-block; }
+.cl-row.static .acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.cl-row.off { opacity: 0.5; }
+.code { font-family: var(--display); letter-spacing: 0.08em; font-size: 20px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fld input[type=number], .fld textarea { padding: 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font-size: 16px; }
+.toast { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); max-width: min(92vw, 520px); padding: 12px 16px; border-radius: 8px; background: var(--raise); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 50; font-size: 14.5px; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.bad { border-color: var(--red-soft); color: var(--red-soft); }
+.cl-row.sub { margin-left: 14px; margin-top: 4px; background: transparent; border-style: dashed; }

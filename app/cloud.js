@@ -28,6 +28,12 @@ const ERR = {
   "máximo de equipos": "Tu plan ya llegó al máximo de equipos.",
   "límite de jugadores": "Tu plan llegó al límite de jugadores.",
   "Escribe el nombre del jugador": "Escribe el nombre del jugador.",
+  "Sin permiso": "No tienes permiso para hacer esto.",
+  "No quedan espacios de Pro": "No quedan espacios de Pro en el contrato de tu liga.",
+  "contrato vigente": "La liga no tiene un contrato vigente.",
+  "ya no está pendiente": "Esa solicitud ya fue atendida.",
+  "ya no está activa": "Esa vinculación ya no está activa.",
+  "Datos no válidos": "Revisa los datos e inténtalo de nuevo.",
 };
 
 // Al volver de Google se regresa a la misma sección de la app.
@@ -129,6 +135,20 @@ async function supa() {
     async createTeam(name, format) { return ok(await sb.rpc("create_team", { nm: name, fmt: format })); },
     async addPlayer(c, t, { name, number, pos }) { return ok(await sb.rpc("add_player", { c, t, nm: name, num: number || "", pos: pos || "" })); },
     async entitlement(st, sid) { return ok(await sb.rpc("entitlement", { st, sid })) || defaultPlan(st); },
+    // ----- invitaciones y vinculación -----
+    async createInvite(l, { label, maxUses, days }) { return ok(await sb.rpc("create_invite", { l, lbl: label || "", max_uses: maxUses || null, days: days || null })); },
+    async revokeInvite(l, code) { ok(await sb.rpc("revoke_invite", { l, c: code })); },
+    async invites(l) { return ok(await sb.from("league_invites").select("*").eq("league_id", l).order("created_at", { ascending: false })); },
+    async requestLink(code, c, t, name) { return ok(await sb.rpc("request_link", { p_code: code, c, t, nm: name || null })); },
+    async leagueLinks(l) { return ok(await sb.from("league_teams").select("*").eq("league_id", l).order("requested_at", { ascending: false })); },
+    async decideLink(l, id, approve) { return ok(await sb.rpc("decide_link", { l, lt: id, approve })); },
+    async setTeamPro(l, id, want) { ok(await sb.rpc("set_team_pro", { l, lt: id, want })); },
+    async unlinkTeam(id) { ok(await sb.rpc("unlink_team", { lt: id })); },
+    async leagueContract(l) { return ok(await sb.rpc("league_contract", { l })); },
+    async teamLinks(c, t) { return ok(await sb.rpc("team_links", { c, t })) || []; },
+    async auditLog(l) { return ok(await sb.from("audit_log").select("*").eq("league_id", l).order("at", { ascending: false }).limit(100)); },
+    // Solo para pruebas en modo demo; en Supabase el contrato lo administra la plataforma.
+    async demoContract() { throw new Error("Sin permiso"); },
     // ----- pagos -----
     async paid(c, t) { return ok(await sb.rpc("team_paid", { c, t })) || []; },
     async myPayments(c, t) {
@@ -164,7 +184,7 @@ async function supa() {
 function demo() {
   const K = "demo-db";
   const load = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch (e) { return {}; } };
-  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [] }, load());
+  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [], contracts: [], invites: [], lteams: [], attempts: [], audit: [] }, load());
   const dataURL = (f) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
   const save = (d) => { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ } };
   const cur = (d) => { const u = d.users.find((x) => x.id === d.session); if (!u) throw new Error("Inicia sesión primero"); return u; };
@@ -174,6 +194,12 @@ function demo() {
   const approved = (d, c, t) => { const m = mem(d, c, t); return m && m.status === "approved" ? m : null; };
   const isAdmin = (d, c, t) => { const m = approved(d, c, t); return !!m && m.role === "admin"; };
   const ensure = (v, msg) => { if (!v) throw new Error(msg || "Sin permiso"); };
+  const isLeagueAdmin = (d, l, perm) => d.ladmins.some((a) => a.league_id === l && a.user_id === d.session && a.status === "active" && (a.role === "owner" || !perm || a.perms.includes("*") || a.perms.includes(perm)));
+  const contractValid = (c) => !!c && c.status === "active" && (!c.ends_at || new Date(c.ends_at) > Date.now()) && new Date(c.starts_at) <= Date.now();
+  const log = (d, l, action, detail) => d.audit.push({ id: d.audit.length + 1, league_id: l, actor: d.session, action, detail: detail || {}, at: new Date().toISOString() });
+  // Equipos que hoy reciben Pro de su liga (mismo criterio que la base de datos: contrato vigente y dentro del cupo, los más antiguos primero).
+  const proTeams = (d) => d.contracts.filter(contractValid).flatMap((c) => d.lteams.filter((x) => x.league_id === c.league_id && x.status === "approved" && x.pro)
+    .sort((a, b) => String(a.decided_at).localeCompare(String(b.decided_at))).slice(0, c.pro_slots).map((x) => ({ ...x, plan: c.pro_plan || "team-pro" })));
   return {
     async user() { const d = db(); const u = d.users.find((x) => x.id === d.session); return u ? { id: u.id, email: u.email } : null; },
     async signUp(email, pw) {
@@ -301,9 +327,72 @@ function demo() {
       save(d); return pid;
     },
     async entitlement(st, sid) {
-      const s = db().subs.filter((x) => x.subject_type === st && x.subject_id === sid && x.status === "active")
-        .map((x) => ({ ...DEFAULTS.find((p) => p.id === x.plan_id), source: x.source })).sort((a, b) => b.tier - a.tier)[0];
-      return s || defaultPlan(st);
+      const d = db(), own = d.subs.filter((x) => x.subject_type === st && x.subject_id === sid && x.status === "active" && (!x.ends_at || new Date(x.ends_at) > Date.now()))
+        .map((x) => ({ ...DEFAULTS.find((p) => p.id === x.plan_id), source: x.source, pri: 0 }));
+      const lg = st === "team" ? proTeams(d).filter((x) => x.club_id + "/" + x.team_id === sid).map((x) => ({ ...DEFAULTS.find((p) => p.id === x.plan), source: "league", league_id: x.league_id, pri: 1 })) : [];
+      const best = [...own, ...lg].sort((a, b) => b.tier - a.tier || a.pri - b.pri)[0];
+      return best || defaultPlan(st);
+    },
+    // ----- invitaciones y vinculación (navegador) -----
+    async createInvite(l, { label, maxUses, days }) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "teams"));
+      const raw = Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
+      const code = raw.slice(0, 4) + "-" + raw.slice(4, 8) + "-" + raw.slice(8, 12);
+      d.invites.push({ code, league_id: l, label: (label || "").trim().slice(0, 60) || null, max_uses: maxUses || null, uses: 0, active: true,
+        expires_at: days ? new Date(Date.now() + days * 864e5).toISOString() : null, created_by: d.session, created_at: new Date().toISOString() });
+      log(d, l, "invite.create", { code, max_uses: maxUses || null }); save(d); return code;
+    },
+    async revokeInvite(l, code) { const d = db(); ensure(isLeagueAdmin(d, l, "teams")); const i = d.invites.find((x) => x.league_id === l && x.code === code); if (i) i.active = false; log(d, l, "invite.revoke", { code }); save(d); },
+    async invites(l) { const d = db(); return isLeagueAdmin(d, l, "teams") ? d.invites.filter((x) => x.league_id === l).slice().reverse() : []; },
+    async requestLink(code, c, t, name) {
+      const d = db(); const u = cur(d); ensure(isAdmin(d, c, t));
+      const now = Date.now(), recent = d.attempts.filter((a) => a.user_id === u.id && now - a.at < 36e5).length;
+      if (recent >= 8) return { error: "throttled" };
+      const cid = String(code || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase(), key = cid.slice(0, 4) + "-" + cid.slice(4, 8) + "-" + cid.slice(8, 12);
+      const inv = d.invites.find((i) => i.code === key && i.active && (!i.expires_at || new Date(i.expires_at) > now) && (!i.max_uses || i.uses < i.max_uses));
+      if (!inv) { d.attempts.push({ user_id: u.id, at: now }); save(d); return { error: "invalid" }; }
+      if (d.lteams.some((x) => x.league_id === inv.league_id && x.club_id === c && x.team_id === t && ["pending", "approved"].includes(x.status))) return { error: "duplicate" };
+      const cd = d.clubdocs.find((x) => x.id === c);
+      d.lteams.push({ id: "lt" + now + Math.random().toString(36).slice(2, 6), league_id: inv.league_id, club_id: c, team_id: t, team_name: (cd && cd.club.name) || (name || "").trim().slice(0, 60) || c,
+        status: "pending", pro: false, invite_code: inv.code, requested_by: u.id, requested_at: new Date().toISOString(), decided_by: null, decided_at: null });
+      inv.uses++; save(d); return { ok: true, league: (d.leagues.find((x) => x.id === inv.league_id) || {}).name };
+    },
+    async leagueLinks(l) { const d = db(); return isLeagueAdmin(d, l, "teams") ? d.lteams.filter((x) => x.league_id === l).slice().reverse() : []; },
+    async decideLink(l, id, approve) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "teams")); const r = d.lteams.find((x) => x.id === id && x.league_id === l && x.status === "pending"); ensure(r, "ya no está pendiente");
+      const c = d.contracts.find((x) => x.league_id === l);
+      const pro = !!approve && contractValid(c) && d.lteams.filter((x) => x.league_id === l && x.status === "approved" && x.pro).length < c.pro_slots;
+      Object.assign(r, { status: approve ? "approved" : "rejected", pro, decided_by: d.session, decided_at: new Date().toISOString() });
+      log(d, l, approve ? "team.approve" : "team.reject", { team: r.club_id + "/" + r.team_id, pro }); save(d); return { ok: true, pro };
+    },
+    async setTeamPro(l, id, want) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "teams")); const r = d.lteams.find((x) => x.id === id && x.league_id === l && x.status === "approved"); ensure(r, "Equipo no vinculado");
+      if (want && !r.pro) {
+        const c = d.contracts.find((x) => x.league_id === l); ensure(contractValid(c), "contrato vigente");
+        ensure(d.lteams.filter((x) => x.league_id === l && x.status === "approved" && x.pro).length < c.pro_slots, "No quedan espacios de Pro");
+      }
+      r.pro = !!want; log(d, l, "team.pro", { team: r.club_id + "/" + r.team_id, pro: !!want }); save(d);
+    },
+    async unlinkTeam(id) {
+      const d = db(); const r = d.lteams.find((x) => x.id === id && ["pending", "approved"].includes(x.status)); ensure(r, "ya no está activa");
+      const byLeague = isLeagueAdmin(d, r.league_id, "teams"); ensure(byLeague || isAdmin(d, r.club_id, r.team_id));
+      Object.assign(r, { status: byLeague ? "removed" : "left", decided_by: d.session, decided_at: new Date().toISOString() });
+      log(d, r.league_id, "team.unlink", { team: r.club_id + "/" + r.team_id, by: byLeague ? "league" : "team" }); save(d);
+    },
+    async leagueContract(l) {
+      const d = db(); if (!isLeagueAdmin(d, l)) return null; const c = d.contracts.find((x) => x.league_id === l);
+      const used = d.lteams.filter((x) => x.league_id === l && x.status === "approved" && x.pro).length;
+      return c ? { pro_slots: c.pro_slots, status: c.status, ends_at: c.ends_at, valid: contractValid(c), used } : { pro_slots: 0, status: "none", valid: false, used };
+    },
+    async teamLinks(c, t) {
+      const d = db(); if (!isAdmin(d, c, t)) return [];
+      return d.lteams.filter((x) => x.club_id === c && x.team_id === t).map((x) => ({ id: x.id, league_id: x.league_id, league_name: (d.leagues.find((l) => l.id === x.league_id) || {}).name, status: x.status, pro: x.pro, requested_at: x.requested_at })).reverse();
+    },
+    async auditLog(l) { const d = db(); return isLeagueAdmin(d, l, "audit") ? d.audit.filter((x) => x.league_id === l).slice().reverse().slice(0, 100) : []; },
+    // Solo demo: simula el contrato que en Supabase administra la plataforma.
+    async demoContract(l, slots, days) {
+      const d = db(); ensure(isLeagueAdmin(d, l)); d.contracts = d.contracts.filter((x) => x.league_id !== l);
+      d.contracts.push({ league_id: l, pro_slots: slots, status: "active", starts_at: new Date().toISOString(), ends_at: days ? new Date(Date.now() + days * 864e5).toISOString() : null }); save(d);
     },
     // ----- pagos -----
     async paid(c, t) { return db().pays.filter((p) => same(c, t)(p) && p.status === "approved").map(({ kind, item, player_id, amount, detail, decided_at }) => ({ kind, item, player_id, amount, detail, decided_at })); },
