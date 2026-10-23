@@ -56,7 +56,7 @@ export async function render(ctx) {
 
   const rulesCard = card("Reglas de registro", canSet ? `<form data-lf="rules" class="fld"><div class="two"><label>Foto<select name="photo">${Object.entries(LEVEL).map(([k, v]) => `<option value="${k}"${k === rules.photo ? " selected" : ""}>${v}</option>`).join("")}</select></label>
     <label>Documento de identidad<select name="doc">${Object.entries(LEVEL).map(([k, v]) => `<option value="${k}"${k === rules.doc ? " selected" : ""}>${v}</option>`).join("")}</select></label></div>
-    <label class="opt"><input type="checkbox" name="appr"${rules.delegate_approval ? " checked" : ""}><span>Lo que mandan los delegados y los enlaces espera mi aprobación</span></label><button class="btn" type="submit">Guardar reglas</button></form>
+    <p class="hint">Todo lo que mandan los delegados y los enlaces espera tu aprobación antes de entrar a un equipo.</p><button class="btn" type="submit">Guardar reglas</button></form>
     <p class="hint">Si pides foto o documento, no se puede activar a un jugador que no lo tenga.</p>`
     : `<p>Foto: ${LEVEL[rules.photo]} · Documento: ${LEVEL[rules.doc]}</p>`);
   return top + pendCard + padron + linkCard + credCard + rulesCard;
@@ -109,7 +109,7 @@ async function printSel(regs) {
 }
 
 export const forms = {
-  async rules(ctx, f, fd) { await api.setRegistrationRules(ctx.id, { photo: fd.get("photo"), doc: fd.get("doc"), delegate_approval: !!fd.get("appr") }); toast("Reglas guardadas"); done(ctx); },
+  async rules(ctx, f, fd) { await api.setRegistrationRules(ctx.id, { photo: fd.get("photo"), doc: fd.get("doc"), delegate_approval: true }); toast("Reglas guardadas"); done(ctx); },
   async mklink(ctx, f, fd) { const c = await api.createRegLink(ctx.id, fd.get("team"), +fd.get("max") || 30, +fd.get("days") || 14); toast("Enlace creado: " + c); done(ctx); },
 };
 

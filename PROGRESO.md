@@ -11,9 +11,11 @@ Importante: todo lo de Supabase se probó contra un PostgreSQL local con un simu
 | 3. Torneos, inscripción, calendario, resultados, tabla, goleo | Hecho y probado | Ver detalle abajo. |
 | 4. Administradores con permisos, sanciones, objeciones y protestas, finanzas de liga, bitácora, reportes | Hecho y probado | Ver detalle abajo. Los reportes salen como CSV (abre en Excel); falta PDF. |
 | 5. Registro de jugadores, padrón central, credenciales | Hecho y probado | Ver detalle abajo. `match_events.player_id` sigue sin enlazarse al padrón (los goleadores se escriben a mano). |
-| 6. Página pública y componente incrustable | Pendiente | El estado "Publicado" del torneo ya existe; aún no hay lectura pública. |
-| 7. Acta por foto (OCR) y chatbot por liga | Pendiente | |
-| 8. Pulido, guía de activación, informe final | En curso | |
+| 6. Página pública y componente incrustable | Hecho y probado (demo + SQL local) | Ver detalle abajo. |
+| 7a. Acta por foto con confirmación humana | Hecho y probado salvo el OCR real | Captura a mano e intérprete de texto probados; OCR en el celular y servicio propio **sin probar** (ver `docs/ACTAS.md`). |
+| 7b. Asistente por liga | Motor local hecho y probado; servicio con modelo **no desplegado** | Cupo diario en base de datos probado. Ver `docs/ASISTENTE.md`. |
+| 7c. WhatsApp oficial | Solo documentado, no implementado | `docs/WHATSAPP.md`. |
+| 8. Pulido móvil, guía de activación, revisión independiente | Hecho | `supabase/LEEME.md`; prueba móvil a 360 px; revisión por un agente aparte (abajo). |
 
 ## Etapa 3 en detalle
 - Base de datos (`supabase/schema.sql`, sección "Etapa 5 del producto"): `tournaments`, `tournament_teams`, `league_matches`, `match_events`; todas con RLS (solo lectura para administradores de la liga) y escritura únicamente por funciones con permiso (`tournaments`, `schedule`, `results`).
@@ -37,7 +39,8 @@ Importante: todo lo de Supabase se probó contra un PostgreSQL local con un simu
 - Datos expuestos (funciones SQL `public_league` y `public_tournament`, únicas lecturas para visitantes sin cuenta): nombre y marca de la liga, equipos, partidos con marcador, goles/tarjetas y descuentos de puntos. No salen notas de partido, documentos, fotos, finanzas, sanciones ni correos. Los nombres de goleadores se pueden ocultar.
 - Rutas: `#/p/<liga>[/<torneo>/<tabla|calendario|goleo>]` y `#/embed/<liga>/<torneo>/<parte>` (sin encabezado ni barra, para iframe). Ajustes entrega el enlace, botón de WhatsApp y el código `<iframe>` por torneo.
 - Colores y logo de la liga se aplican con el mismo tema que las credenciales.
-- Pruebas: 17 de base de datos nuevas (apagada por defecto, anon sin acceso a tablas, borradores ocultos, goleadores ocultos, plan requerido) y 15 de navegador.
+- Los goleadores salen visibles por omisión (la liga lo apaga en Ajustes); hay ligas con menores: decídelo antes de publicar. El calendario público incluye los descuentos de puntos (sin su motivo), no el reglamento escrito.
+- Pruebas: base de datos (apagada por defecto, anon sin acceso a tablas, borradores ocultos, goleadores ocultos, plan requerido) y 19 de navegador (incluye asistente).
 
 ## Límites conocidos de la etapa 6
 - Se probó el modo demo en navegador y las funciones SQL en PostgreSQL local; falta probar contra un proyecto de Supabase real y desde un dominio externo con el iframe.
@@ -70,3 +73,36 @@ Importante: todo lo de Supabase se probó contra un PostgreSQL local con un simu
 - Eliminatorias y grupos no existen todavía: solo liguilla todos contra todos (el calendario manual permite armar cualquier cruce).
 - La tarjeta amarilla/roja alimenta el desempate de juego limpio, pero aún no genera sanciones automáticas.
 - Los nombres de jugadores en el acta son texto libre hasta que exista el padrón de la etapa 5.
+
+## Etapa 7 en detalle (actas, asistente)
+- Actas: foto original en el almacén privado `actas` (sin borrar ni reemplazar); borrador a mano, por texto interpretado, por OCR del celular o por servicio propio; **solo `confirm_acta` vuelve oficial el resultado**, usando `record_result` (mismas reglas, bitácora). Límite de 5 actas pendientes por partido.
+- Asistente: reglas locales sobre datos públicos, sin costo. Para un modelo de lenguaje hay un adaptador y un cupo diario (`chat_take`), pero el servicio debe llamar al cupo; ese servicio no existe en el repositorio.
+- Pruebas: 21 unitarias del intérprete/adaptadores de OCR, 23 del asistente, 15 de navegador de actas, 33 de la revisión móvil.
+
+## Endurecimiento y revisión independiente (23 oct 2026)
+Un agente aparte, sin haber visto el trabajo, revisó el repositorio y encontró fallas reales. Corregidas y con prueba:
+- **XSS almacenado** en la revisión de actas (marcador con HTML): ahora la base valida enteros 0–99 y el cliente escapa.
+- **Escritura directa a `leagues`** por un administrador de ajustes (saltaba topes y reglas): eliminada la política y el permiso de escritura.
+- **Códigos de invitación completos en la bitácora** (quien solo ve la bitácora podía usarlos): ahora solo se guardan los últimos 4 caracteres.
+- Código `<iframe>` con atributos sin escapar; etiqueta de partido cancelado; reglamento completo en la API pública; reabrir un torneo saltaba el límite del plan; quitar un equipo con cobros o jugadores daba un error de llave foránea (ahora se retira conservando el historial).
+- La opción «aprobación de delegados» **no se aplicaba** (todo lo que llega por delegado o enlace siempre espera aprobación). Se quitó la casilla y se dejó el texto honesto; no se automatiza porque un enlace abierto no debe activar jugadores sin revisión.
+- El simulador de pruebas ahora imita los privilegios por omisión de Supabase; así dos pruebas que pasaban "por falta de permisos" se reescribieron para comprobar que los datos no cambian.
+
+## Límites conocidos que quedan (de la revisión, sin corregir)
+- `register_by_link` (sin cuenta) deja sondear si una persona ya está inscrita en otro equipo, sin límite de intentos.
+- El logo de liga acepta cualquier dominio con la forma de una URL de Storage; los almacenes `actas` y `player-photos` no limitan tamaño/tipo ni revisan el plan al subir.
+- Cualquier visitante puede agotar el cupo diario del asistente; el día cuenta en UTC.
+- Reaplicar `schema.sql` vuelve a agregar `actas` al plan base aunque se haya quitado; las funciones nuevas no se agregan solas a planes ya existentes.
+- Paridad demo/SQL con diferencias menores (formato del marcador de actas, validación de ruta, marca de liga con `data:`); el demo no simula el cupo del asistente.
+- Pruebas con checks constantes (`True`) en `test_public.py` y `test_actas.py`; no hay prueba de navegador con HTML en nombres.
+- Tesseract.js se carga desde un CDN sin integridad, y no se verificó de dónde descarga el idioma.
+- Google Fonts se carga también en la página pública.
+
+## Lista priorizada de pendientes
+1. **Activar Supabase real y hacer la lista de comprobación de `supabase/LEEME.md` §6** (nada de esto corrió contra un proyecto real).
+2. Probar OCR con actas reales y decidir si vale un servicio de pago.
+3. Aviso de privacidad y consentimiento de menores (la liga lo gestiona fuera de la app).
+4. Límite de intentos y topes de subida en registro por enlace y almacenes.
+5. Precios y planes reales (hoy configurables y vacíos).
+6. Reportes en PDF; eliminatorias y grupos; sanciones que bloqueen alineaciones.
+7. Avisos por WhatsApp oficial (`docs/WHATSAPP.md`) si la liga lo quiere y acepta el costo por mensaje.

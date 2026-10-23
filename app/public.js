@@ -24,7 +24,7 @@ export function calendarioHTML(d) {
   const groups = new Map(); ms.forEach((m) => { const k = m.round || "Partidos"; (groups.get(k) || groups.set(k, []).get(k)).push(m); });
   return [...groups].map(([r, list]) => `<h3>${esc(r)}</h3>` + list.map((m) => {
     const played = m.status === "played", sc = played ? `<b class="sc">${m.home_goals} - ${m.away_goals}</b>` : `<span class="sc">vs</span>`;
-    const sub = [m.starts_at ? dtime(m.starts_at) : "", m.venue || "", m.status === "postponed" ? "Pospuesto" : m.status === "cancelled" ? "Cancelado" : ""].filter(Boolean).join(" · ");
+    const sub = [m.starts_at ? dtime(m.starts_at) : "", m.venue || "", m.status === "postponed" ? "Pospuesto" : m.status === "canceled" ? "Cancelado" : ""].filter(Boolean).join(" · ");
     return `<div class="cl-row static pm"><span><b>${esc(name.get(m.home_id) || "—")} ${sc} ${esc(name.get(m.away_id) || "—")}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span></div>`;
   }).join("")).join("");
 }

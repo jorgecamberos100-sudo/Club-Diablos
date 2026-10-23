@@ -372,14 +372,13 @@ create policy subs_read on public.subscriptions for select using (
   or (subject_type = 'team' and is_admin(split_part(subject_id, '/', 1), split_part(subject_id, '/', 2))));
 drop policy if exists leagues_read on public.leagues;
 create policy leagues_read on public.leagues for select using (is_league_admin(id));
-drop policy if exists leagues_edit on public.leagues;
-create policy leagues_edit on public.leagues for update using (is_league_admin(id, 'settings')) with check (is_league_admin(id, 'settings'));
+drop policy if exists leagues_edit on public.leagues;   -- ya no hay escritura directa: todo cambio pasa por funciones que validan (hallazgo de la revisión)
 drop policy if exists ladm_read on public.league_admins;
 create policy ladm_read on public.league_admins for select using (user_id = auth.uid() or is_league_admin(league_id, 'admins'));
 
 -- Altas solo por funciones; suscripciones solo desde el servidor (nadie se da Pro solo).
 grant select on public.accounts, public.subscriptions, public.leagues, public.league_admins to authenticated;
-grant update (name, settings) on public.leagues to authenticated;
+revoke update, insert, delete on public.leagues from authenticated, anon;
 grant select on public.plans to anon, authenticated;
 grant execute on function public.set_roles(text[]), public.create_league(text), public.my_teams(), public.my_leagues(),
   public.entitlement(text,text), public.is_league_admin(text,text) to authenticated;
@@ -580,7 +579,7 @@ begin
   code := substr(raw, 1, 4) || '-' || substr(raw, 5, 4) || '-' || substr(raw, 9, 4);
   insert into league_invites (code, league_id, label, max_uses, expires_at, created_by)
   values (code, l, nullif(left(trim(coalesce(lbl, '')), 60), ''), max_uses, case when days is null then null else now() + make_interval(days => days) end, auth.uid());
-  perform log_action(l, 'invite.create', jsonb_build_object('code', code, 'max_uses', max_uses));
+  perform log_action(l, 'invite.create', jsonb_build_object('code_end', right(code, 4), 'max_uses', max_uses));
   return code;
 end $$;
 
@@ -589,7 +588,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if not is_league_admin(l, 'teams') then raise exception 'Sin permiso'; end if;
   update league_invites set active = false where league_id = l and code = c;
-  perform log_action(l, 'invite.revoke', jsonb_build_object('code', c));
+  perform log_action(l, 'invite.revoke', jsonb_build_object('code_end', right(c, 4)));
 end $$;
 
 -- El delegado pide vincular su equipo con un código. Un código malo devuelve {error} (sin excepción)
@@ -1056,13 +1055,18 @@ end $$;
 
 create or replace function public.set_tournament_status(l text, tid uuid, st text) returns void
 language plpgsql security definer set search_path = public as $$
-declare cur tournaments;
+declare cur tournaments; lim int; n int;
 begin
   if not is_league_admin(l, 'tournaments') then raise exception 'Sin permiso'; end if;
   if st not in ('draft','published','paused','finished') then raise exception 'Datos no válidos'; end if;
   select * into cur from tournaments where id = tid and league_id = l for update;
   if cur.id is null then raise exception 'Torneo no encontrado'; end if;
   if cur.status = 'finished' and st <> 'published' then raise exception 'El torneo ya terminó'; end if;   -- solo se puede reabrir publicándolo de nuevo
+  if cur.status = 'finished' then   -- reabrir cuenta como torneo activo: respeta el mismo límite del plan
+    lim := (entitlement('league', l)->'limits'->>'tournaments')::int;
+    select count(*) into n from tournaments where league_id = l and status <> 'finished';
+    if lim is not null and n >= lim then raise exception 'Tu plan llegó al límite de torneos'; end if;
+  end if;
   update tournaments set status = st, updated_at = now() where id = tid;
   perform log_action(l, 'tournament.status', jsonb_build_object('tournament', tid, 'from', cur.status, 'to', st));
 end $$;
@@ -1093,8 +1097,9 @@ begin
   if not is_league_admin(l, 'tournaments') then raise exception 'Sin permiso'; end if;
   select * into r from tournament_teams where id = ttid and league_id = l and status = 'active' for update;
   if r.id is null then raise exception 'Equipo no encontrado'; end if;
-  if exists (select 1 from league_matches where status = 'played' and (home_id = ttid or away_id = ttid)) then
-    update tournament_teams set status = 'withdrawn' where id = ttid;       -- con partidos jugados no se borra: se retira y se conserva el historial
+  if exists (select 1 from league_matches where status = 'played' and (home_id = ttid or away_id = ttid))
+     or exists (select 1 from league_charges where team_id = ttid) or exists (select 1 from league_movements where team_id = ttid) or exists (select 1 from player_registrations where team_id = ttid) then
+    update tournament_teams set status = 'withdrawn' where id = ttid;       -- con partidos jugados, cobros o jugadores registrados no se borra: se retira y se conserva el historial
     update league_matches set status = 'canceled', notes = coalesce(notes || ' · ', '') || 'Equipo retirado' where status in ('scheduled','postponed') and (home_id = ttid or away_id = ttid);
   else
     delete from league_matches where home_id = ttid or away_id = ttid;
@@ -1237,7 +1242,7 @@ begin
   raw := upper(substr(md5(gen_random_uuid()::text || clock_timestamp()::text), 1, 12));
   c := substr(raw, 1, 4) || '-' || substr(raw, 5, 4) || '-' || substr(raw, 9, 4);
   insert into admin_invites (code, league_id, perms, label, expires_at, created_by) values (c, l, p, nullif(left(trim(coalesce(lbl, '')), 60), ''), now() + make_interval(days => days), auth.uid());
-  perform log_action(l, 'admin.invite', jsonb_build_object('code', c, 'perms', p));
+  perform log_action(l, 'admin.invite', jsonb_build_object('code_end', right(c, 4), 'perms', p));
   return c;
 end $$;
 
@@ -1246,7 +1251,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if not is_league_admin(l, 'admins') then raise exception 'Sin permiso'; end if;
   update admin_invites set active = false where code = c and league_id = l;
-  perform log_action(l, 'admin.invite_revoke', jsonb_build_object('code', c));
+  perform log_action(l, 'admin.invite_revoke', jsonb_build_object('code_end', right(c, 4)));
 end $$;
 
 -- Un código sirve una sola vez. Comparte el límite de intentos fallidos con las invitaciones de equipos.
@@ -1754,7 +1759,7 @@ begin
   raw := upper(substr(md5(gen_random_uuid()::text || clock_timestamp()::text), 1, 12));
   c := substr(raw, 1, 4) || '-' || substr(raw, 5, 4) || '-' || substr(raw, 9, 4);
   insert into registration_links (code, league_id, team_id, max_uses, expires_at, created_by) values (c, l, ttid, max_uses, now() + make_interval(days => days), auth.uid());
-  perform log_action(l, 'reglink.create', jsonb_build_object('code', c, 'team', ttid, 'max_uses', max_uses));
+  perform log_action(l, 'reglink.create', jsonb_build_object('code_end', right(c, 4), 'team', ttid, 'max_uses', max_uses));
   return c;
 end $$;
 
@@ -1763,7 +1768,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if not is_league_admin(l, 'registration') then raise exception 'Sin permiso'; end if;
   update registration_links set active = false where code = c and league_id = l;
-  perform log_action(l, 'reglink.revoke', jsonb_build_object('code', c));
+  perform log_action(l, 'reglink.revoke', jsonb_build_object('code_end', right(c, 4)));
 end $$;
 
 create or replace function public.reg_link_info(p_code text) returns jsonb
@@ -1787,7 +1792,7 @@ begin
   pid := upsert_player(rl.league_id, p, 'pending');
   rid := add_registration(rl.league_id, tt, pid, null, 'pending', 'link');
   update registration_links set uses = uses + 1 where code = rl.code;
-  perform log_action(rl.league_id, 'player.submit', jsonb_build_object('player', pid, 'registration', rid, 'team', tt.id, 'via', 'link', 'code', rl.code));
+  perform log_action(rl.league_id, 'player.submit', jsonb_build_object('player', pid, 'registration', rid, 'team', tt.id, 'via', 'link', 'code_end', right(rl.code, 4)));
   return jsonb_build_object('ok', true, 'team', tt.name);
 end $$;
 
@@ -1914,7 +1919,7 @@ begin
   if t.id is null or not (ps->>'enabled')::boolean or not league_feature(l, 'public_page') then return jsonb_build_object('error', 'not_found'); end if;
   sc := (ps->>'scorers')::boolean;
   return jsonb_build_object(
-    'tournament', jsonb_build_object('id', t.id, 'name', t.name, 'season', t.season, 'category', t.category, 'modality', t.modality, 'status', t.status, 'pts_win', t.pts_win, 'pts_draw', t.pts_draw, 'pts_loss', t.pts_loss, 'tiebreakers', t.tiebreakers, 'rules', t.rules),
+    'tournament', jsonb_build_object('id', t.id, 'name', t.name, 'season', t.season, 'category', t.category, 'modality', t.modality, 'status', t.status, 'pts_win', t.pts_win, 'pts_draw', t.pts_draw, 'pts_loss', t.pts_loss, 'tiebreakers', t.tiebreakers),
     'teams', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'name', x.name, 'status', x.status) order by x.name) from tournament_teams x where x.tournament_id = tid), '[]'),
     'matches', coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'round', m.round, 'starts_at', m.starts_at, 'venue', m.venue, 'home_id', m.home_id, 'away_id', m.away_id, 'status', m.status, 'home_goals', m.home_goals, 'away_goals', m.away_goals) order by m.starts_at nulls last, m.round)
       from league_matches m where m.tournament_id = tid), '[]'),
@@ -1988,6 +1993,8 @@ begin
   if a.id is null then raise exception 'Acta no encontrada'; end if;
   if jsonb_typeof(p_draft) <> 'object' or length(p_draft::text) > 20000 or p_engine not in ('manual','browser','server') then raise exception 'Datos no válidos'; end if;
   if p_draft ? 'events' and (jsonb_typeof(p_draft->'events') <> 'array' or jsonb_array_length(p_draft->'events') > 100) then raise exception 'Datos no válidos'; end if;
+  if (p_draft ? 'hg' and jsonb_typeof(p_draft->'hg') <> 'null' and (jsonb_typeof(p_draft->'hg') <> 'number' or (p_draft->>'hg') !~ '^[0-9]{1,2}$'))
+     or (p_draft ? 'ag' and jsonb_typeof(p_draft->'ag') <> 'null' and (jsonb_typeof(p_draft->'ag') <> 'number' or (p_draft->>'ag') !~ '^[0-9]{1,2}$')) then raise exception 'Datos no válidos'; end if;
   update acta_uploads set draft = p_draft, engine = p_engine, ocr_text = left(p_text, 8000) where id = aid;
 end $$;
 

@@ -29,7 +29,7 @@ export async function render(ctx) {
   let pubCard = "";
   if (ctx.can("settings") && hasFeature(ctx.ent, "public_page")) {
     const ps = await api.publicState(ctx.id), ts = (await api.tournaments(ctx.id)).filter((t) => ["published", "paused", "finished"].includes(t.status));
-    const link = appURL() + "#/p/" + ctx.id, snip = (t) => `<iframe src="${appURL()}#/embed/${ctx.id}/${t.id}/tabla" title="${ctx.l.name} - ${t.name}" width="100%" height="520" style="border:0" loading="lazy"></iframe>`;
+    const link = appURL() + "#/p/" + ctx.id, snip = (t) => `<iframe src="${appURL()}#/embed/${ctx.id}/${t.id}/tabla" title="${esc(ctx.l.name + " - " + t.name)}" width="100%" height="520" style="border:0" loading="lazy"></iframe>`;
     pubCard = card("Página pública", `<p>Cualquiera con el enlace puede ver la tabla, el calendario y, si lo permites, el goleo. Solo se muestran torneos publicados. No aparecen notas, documentos, fotos, finanzas ni sanciones.</p>
       <form data-lf="pub" class="fld"><label class="opt"><input type="checkbox" name="enabled"${ps.enabled ? " checked" : ""}><span>Página pública activa</span></label>
       <label class="opt"><input type="checkbox" name="scorers"${ps.scorers ? " checked" : ""}><span>Mostrar nombres de goleadores</span></label>

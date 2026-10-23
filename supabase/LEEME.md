@@ -66,7 +66,7 @@ Funciones que puede ejecutar un visitante sin cuenta (`anon`): `claimed`, `team_
 
 ## 8. Privacidad y menores (léelo antes de registrar jugadores)
 - Se guardan datos personales: nombre, fecha de nacimiento, documento (opcional), foto, número. La liga es responsable de tener un **aviso de privacidad** y, para **menores de edad**, el consentimiento del padre, madre o tutor; la app marca a los menores pero no gestiona ese consentimiento.
-- Las credenciales impresas no llevan documento ni fecha de nacimiento. La página pública no muestra jugadores salvo el nombre de goleadores, y la liga puede ocultarlo. Las fotos de jugadores y las actas están en almacenes privados.
+- Las credenciales impresas no llevan documento ni fecha de nacimiento. La página pública no muestra jugadores salvo el nombre de goleadores, y la liga puede ocultarlo (por omisión se muestran: apágalo en Ajustes si hay menores). Las fotos de jugadores y las actas están en almacenes privados.
 - Quien se registra por enlace público no sube foto (evita abuso); la agrega la liga al aprobar.
 - La bitácora de cambios no se puede borrar desde la app.
 

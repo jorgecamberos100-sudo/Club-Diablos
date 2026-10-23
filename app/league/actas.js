@@ -33,7 +33,7 @@ async function review(a) {
     <label>Texto del acta (opcional: pégalo o escríbelo, o aparece al leer la foto)<textarea name="text" form="actaform" rows="4" maxlength="8000" placeholder="Marcador: 2 - 1&#10;Gol: Pepe (${esc(M.home.name)})&#10;Amarilla: Tito (${esc(M.away.name)})">${esc(a.ocr_text || "")}</textarea></label>
     <div class="row-acts">${btn("Interpretar texto", 'data-kj="parse"', "ghost")}</div>
     <p class="msg warn" id="warns" hidden></p>
-    <form id="actaform" data-kform="draft" class="fld"><div class="two"><label>${esc(M.home.name)}<input name="hg" type="number" min="0" max="99" required value="${d.hg ?? ""}"></label><label>${esc(M.away.name)}<input name="ag" type="number" min="0" max="99" required value="${d.ag ?? ""}"></label></div>
+    <form id="actaform" data-kform="draft" class="fld"><div class="two"><label>${esc(M.home.name)}<input name="hg" type="number" min="0" max="99" required value="${esc(d.hg ?? "")}"></label><label>${esc(M.away.name)}<input name="ag" type="number" min="0" max="99" required value="${esc(d.ag ?? "")}"></label></div>
       <h3>Goles y tarjetas</h3><div id="evs">${(d.events || []).map(evRow).join("")}</div><button type="button" class="btn sm ghost" data-kj="evadd">+ Agregar gol o tarjeta</button>
       <label>Nota<input name="notes" maxlength="500" value="${esc(d.note || "")}"></label>
       <p class="hint">Lo que ves aquí es un borrador. Al confirmar se registra como resultado oficial y queda en la bitácora con la foto de respaldo.</p>
