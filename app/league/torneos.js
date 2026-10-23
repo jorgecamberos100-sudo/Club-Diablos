@@ -10,6 +10,9 @@ import { disputeFor } from "./sanciones.js";
 import { standings, scorers, roundRobin, TIEBREAKERS } from "./standings.js";
 import { FORMATS, GROUPS, hasGroups, hasKO, drawGroups, groupFixtures, groupTables, groupsDone, qualifiers, firstRound, nextRound, koRounds, roundName } from "./bracket.js";
 import { tableHTML, bracketHTML, score } from "./views.js";
+import { printDoc, standingsReport, scheduleReport, scorersReport } from "./printout.js";
+import { toCSV } from "./report.js";
+import { saveFile } from "../ui.js";
 
 const ST = { draft: ["due", "Borrador"], published: ["ok", "Publicado"], paused: ["due", "En pausa"], finished: ["na", "Terminado"] };
 const TABS = [["tabla", "Tabla"], ["calendario", "Calendario"], ["equipos", "Equipos"], ["goleo", "Goleo"], ["reglas", "Reglas"]];
@@ -44,7 +47,8 @@ export async function render(ctx) {
   const top = card("", `<div class="row-acts"><button type="button" class="btn sm ghost" data-la="back">← Torneos</button></div>
     <div class="cl-who"><b>${esc(t.name)}</b><span>${chip(ST[t.status][1], ST[t.status][0])}</span></div>
     <p class="hint">${esc([t.season, t.category, "Fútbol " + t.modality, t.day && t.day + (t.shift ? " " + t.shift : "")].filter(Boolean).join(" · "))}</p>
-    ${may.t ? `<div class="row-acts">${btn(next[0], `data-la="status" data-v="${next[1]}"`)}${t.status !== "finished" ? btn("Terminar", 'data-la="status" data-v="finished"', "ghost") + btn("Editar", 'data-la="edit"', "ghost") : ""}</div>` : ""}`);
+    ${may.t ? `<div class="row-acts">${btn(next[0], `data-la="status" data-v="${next[1]}"`)}${t.status !== "finished" ? btn("Terminar", 'data-la="status" data-v="finished"', "ghost") + btn("Editar", 'data-la="edit"', "ghost") : ""}</div>` : ""}
+    <div class="row-acts">${btn("Imprimir / PDF", 'data-la="print"', "ghost")}${btn("Exportar CSV", 'data-la="csvt"', "ghost")}</div>`);
   const tabs = `<div class="seg-tabs" role="tablist">${TABS.map(([k, v]) => `<button type="button" role="tab" aria-selected="${k === tab}" data-la="tab" data-v="${k}">${v}</button>`).join("")}</div>`;
   let body = "";
   if (tab === "tabla") body = tabla(t, data);
@@ -73,7 +77,7 @@ function calendario(t, d, may, closed) {
   // Se agrupa por jornada; la eliminatoria va al final, ronda por ronda.
   const by = {}, label = {};
   d.matches.forEach((m) => { const k = m.stage === "knockout" ? "~" + String(m.ko_round).padStart(2, "0") : m.round || "Sin jornada"; (by[k] ||= []).push(m); label[k] = m.stage === "knockout" ? m.round || "Eliminatoria" : k; });
-  const rounds = Object.keys(by).sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
+  const rounds = Object.keys(by).sort((a, b) => (a.startsWith("~") - b.startsWith("~")) || a.localeCompare(b, "es", { numeric: true }));
   const MS = { scheduled: "", played: "", postponed: chip("Pospuesto", "due"), canceled: chip("Cancelado", "na") };
   const mrow = (m) => row(`${m.stage === "group" ? m.group_label + " · " : ""}${tname(m.home_id)} ${score(m)} ${tname(m.away_id)}`,
     [m.starts_at ? dtime(m.starts_at) : "Sin fecha", m.venue, m.notes].filter(Boolean).join(" · "),
@@ -200,6 +204,23 @@ function koSheet(next) {
     <label>Fecha y hora (opcional)<input name="start" type="datetime-local"></label><button class="btn" type="submit">Crear partidos</button></form>`);
 }
 
+// ---------- Reportes ----------
+async function printTournament(what) {
+  const brand = await api.leagueBrand(S.ctx.id).catch(() => ({})), parts = { tabla: ["Tabla", standingsReport(S.t, S)], calendario: ["Calendario", scheduleReport(S)], goleo: ["Goleo", scorersReport(S)] };
+  const pick = what === "todo" ? Object.values(parts) : [parts[what]], sub = [S.t.season, S.t.category].filter(Boolean).join(" · ");
+  sheet.close(); await printDoc({ league: S.ctx.l.name, title: (what === "todo" ? "Torneo " : pick[0][0] + " · ") + S.t.name, sub, logo: brand.logo, body: pick.map(([h, b]) => (what === "todo" ? `<h2>${esc(h)}</h2>` : "") + b).join("") });
+}
+function exportTournament(what) {
+  const slug = S.t.name.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  if (what === "tabla") {
+    const rows = hasGroups(S.t) ? groupTables(S.t, S.teams, S.matches, S.events, S.adjust || []).flatMap((g) => g.rows.map((r) => ({ ...r, grupo: g.group }))) : standings(S.t, S.teams, S.matches.filter((m) => (m.stage || "league") === "league"), S.events, S.adjust || []);
+    saveFile(`tabla-${slug}.csv`, toCSV([...(hasGroups(S.t) ? [["grupo", "Grupo"]] : []), ["pos", "Pos"], ["name", "Equipo"], ["pj", "PJ"], ["g", "G"], ["e", "E"], ["p", "P"], ["gf", "GF"], ["gc", "GC"], ["dg", "DG"], ["pts", "Pts"]], rows));
+  } else if (what === "calendario") {
+    saveFile(`calendario-${slug}.csv`, toCSV([[(m) => (m.group_label ? m.group_label + " · " : "") + (m.round || ""), "Jornada"], [(m) => m.starts_at || "", "Fecha"], [(m) => tname(m.home_id), "Local"], [(m) => (m.status === "played" ? m.home_goals : ""), "Goles local"], [(m) => (m.status === "played" ? m.away_goals : ""), "Goles visitante"], [(m) => (m.home_pens != null ? m.home_pens + "-" + m.away_pens : ""), "Penales"], [(m) => tname(m.away_id), "Visitante"], ["venue", "Cancha"], ["status", "Estado"]], S.matches));
+  } else saveFile(`goleo-${slug}.csv`, toCSV([["player", "Jugador"], ["team", "Equipo"], ["goals", "Goles"]], scorers(S.teams, S.matches, S.events)));
+  sheet.close(); toast("Archivo generado");
+}
+
 // ---------- Acciones ----------
 const done = (ctx) => (ctx.reload(), undefined);
 const find = (id) => S && S.matches.find((m) => m.id === id);
@@ -217,6 +238,12 @@ export const actions = {
   async result(ctx, el) { resultSheet(find(el.dataset.id)); },
   async acta(ctx, el) { const m = find(el.dataset.id); await openActas(ctx, m, { id: m.home_id, name: tname(m.home_id) }, { id: m.away_id, name: tname(m.away_id) }); },
   async gen() { genSheet(); },
+  async print() {
+    sheet.open("Imprimir o guardar como PDF", S.t.name, `<p>Elige qué imprimir. En el diálogo de impresión puedes elegir «Guardar como PDF».</p><div class="row-acts">${[["tabla", "Tabla"], ["calendario", "Calendario"], ["goleo", "Goleo"], ["todo", "Todo"]].map(([k, v]) => btn(v, `data-tj="pr" data-v="${k}"`)).join("")}</div>`);
+  },
+  async csvt() {
+    sheet.open("Exportar a CSV (Excel)", S.t.name, `<div class="row-acts">${[["tabla", "Tabla"], ["calendario", "Calendario"], ["goleo", "Goleo"]].map(([k, v]) => btn(v, `data-tj="csv" data-v="${k}"`)).join("")}</div>`);
+  },
   async genko() { koSheet(false); },
   async nextko() { koSheet(true); },
   async drawgroups() {
@@ -250,6 +277,8 @@ export function wireSheets(getCtx) {
     const t = e.target.closest("[data-tj]"); if (!t) return;
     const ctx = getCtx(), a = t.dataset.tj;
     if (a === "evadd") { const m = find(t.dataset.id); sh.querySelector("#evs").insertAdjacentHTML("beforeend", evRow(m)); return; }
+    if (a === "pr") return sheet.guard(() => printTournament(t.dataset.v));
+    if (a === "csv") return exportTournament(t.dataset.v);
     sheet.guard(async () => {
       if (a === "delmatch") { if (!confirm("¿Eliminar este partido?")) return; await api.leagueDeleteMatch(ctx.id, t.dataset.id); }
       else if (a === "clear") { if (!confirm("¿Borrar el resultado? El partido vuelve a quedar pendiente y se quitan sus goles y tarjetas.")) return; await api.clearResult(ctx.id, t.dataset.id); }

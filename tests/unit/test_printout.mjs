@@ -1,0 +1,26 @@
+import { standingsReport, scheduleReport, scorersReport, financeReport, rosterSheet, docHTML } from "../../app/league/printout.js";
+let ok = 0, bad = 0;
+const check = (n, c, i) => { if (c) ok++; else { bad++; console.log("  FALLA", n, i ?? ""); } };
+const T = { name: "Apertura", format: "league", pts_win: 3, pts_draw: 1, pts_loss: 0, tiebreakers: ["dg"] };
+const teams = [{ id: "r", name: "Rayos <b>", status: "active" }, { id: "l", name: "Lobos", status: "active" }];
+const D = { teams, matches: [{ id: "m1", round: "J1", starts_at: "2026-11-01T17:00:00Z", venue: "Cancha 1", home_id: "r", away_id: "l", status: "played", home_goals: 2, away_goals: 0, stage: "league" }],
+  events: [{ match_id: "m1", team_id: "r", kind: "goal", n: 2, player: "Pepe" }], adjust: [] };
+const st = standingsReport(T, D);
+check("tabla: escapa nombres y ordena", st.includes("Rayos &lt;b&gt;") && !st.includes("Rayos <b>") && st.indexOf("Rayos") < st.indexOf("Lobos"));
+const sc = scheduleReport(D);
+check("calendario: marcador y cancha", sc.includes("2 - 0") && sc.includes("Cancha 1"));
+check("calendario con fecha sin hora (página pública)", scheduleReport({ ...D, matches: [{ ...D.matches[0], starts_at: "2026-11-01" }] }).includes("nov"));
+check("goleo", scorersReport(D).includes("Pepe") && scorersReport(D).includes("<td>2</td>"));
+const fin = financeReport(teams, [{ team_id: "r", amount: 500, status: "active" }, { team_id: "l", amount: 500, status: "void" }], [{ team_id: "r", kind: "payment", amount: 200, status: "active" }, { kind: "expense", amount: 50, status: "active" }]);
+check("finanzas: saldos sin anulados y caja", fin.includes("Debe $300") && fin.includes("Al corriente") && fin.includes("Caja neta <b>$150</b>"), fin);
+const players = [{ id: "p1", name: "Juan Pérez", birth_date: "2000-05-01", doc_id: "AB123" }, { id: "p2", name: "Ana", birth_date: "2012-01-01" }];
+const regs = [{ team_id: "r", player_id: "p1", status: "active", number: 9 }, { team_id: "r", player_id: "p2", status: "pending", number: null }];
+const ro = rosterSheet(teams[0], players, regs);
+check("planilla: solo activos, sin fecha de nacimiento ni documento", ro.includes("Juan Pérez") && ro.includes("<td>9</td>") && !ro.includes("Ana") && !ro.includes("2000") && !ro.includes("AB123"));
+const doc = docHTML({ league: "Liga <x>", title: "Tabla", sub: "Apertura", body: "<p>ok</p>" });
+check("documento: encabezado escapado y fecha de generación", doc.includes("Liga &lt;x&gt;") && doc.includes("Generado el"));
+const G = { ...T, format: "groups_knockout", groups: 2, advance: 1 };
+const gteams = [{ id: "a", name: "A1", group_label: "A", status: "active" }, { id: "b", name: "B1", group_label: "B", status: "active" }];
+const gr = standingsReport(G, { teams: gteams, matches: [{ id: "k", stage: "knockout", ko_round: 1, ko_slot: 1, home_id: "a", away_id: "b", status: "played", home_goals: 1, away_goals: 1, home_pens: 5, away_pens: 4 }], events: [], adjust: [] });
+check("grupos y llaves en el reporte", gr.includes("Grupo A") && gr.includes("Grupo B") && gr.includes("Eliminatoria") && gr.includes("(5-4 pen.)") && gr.includes("Campeón"), gr.slice(0, 300));
+console.log(`${ok} pruebas pasaron, ${bad} fallaron`); process.exit(bad ? 1 : 0);

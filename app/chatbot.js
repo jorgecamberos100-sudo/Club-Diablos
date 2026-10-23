@@ -22,7 +22,7 @@ export function view(d) {
   const rows = hasGroups(t) ? groupTables(t, d.teams, d.matches, d.events, d.adjust || []).flatMap((g) => g.rows.map((r) => ({ ...r, name: r.name, grp: g.group })))
     : t.format === "knockout" ? [] : standings(t, d.teams, d.matches, d.events, d.adjust || []);
   const played = d.matches.filter((m) => m.status === "played").sort((a, b) => (b.starts_at || "").localeCompare(a.starts_at || ""));
-  const next = d.matches.filter((m) => m.status === "scheduled").sort((a, b) => (a.starts_at || "~").localeCompare(b.starts_at || "~"));
+  const next = d.matches.filter((m) => m.status === "scheduled").sort((a, b) => (a.starts_at || "9999").localeCompare(b.starts_at || "9999"));
   return { t, name, rows, played, next, sc: d.scorers ? scorers(d.teams, d.matches, d.events) : null };
 }
 

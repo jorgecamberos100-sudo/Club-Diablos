@@ -6,6 +6,7 @@ import { card, chip, row, btn, empty, dshort, toast, copyText, waLink, appURL, s
 import * as sheet from "../sheet.js";
 import { printCredentials, credId } from "./credentials.js";
 import { consentFields, consentFrom } from "../consent.js";
+import { printDoc, rosterSheet } from "./printout.js";
 
 const VIA = { office: "Oficina", delegate: "Delegado", link: "Enlace" };
 const ST = { pending: ["due", "Pendiente"], active: ["ok", "Activo"], inactive: ["na", "Inactivo"], rejected: ["na", "Rechazado"], removed: ["na", "Baja"] };
@@ -55,7 +56,7 @@ export async function render(ctx) {
   const inT = teams.filter((t) => t.tournament_id === tid);
   const credCard = card("Credenciales", tours.length ? `<label class="fld-inline">Torneo<select data-la-change="jtour">${tours.map((t) => `<option value="${esc(t.id)}"${t.id === tid ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
     <p class="hint">Se imprimen con los colores y el logo de tu liga (en Ajustes). Llevan nombre, número, equipo, torneo, foto y un código; no llevan documento ni fecha de nacimiento.</p>
-    <div class="row-acts">${inT.map((t) => btn("Hoja: " + t.name, `data-la="credTeam" data-id="${esc(t.id)}"`, "ghost")).join("")}${inT.length ? btn("Todo el torneo", 'data-la="credAll"') : ""}</div>` : empty("Aún no hay torneos."));
+    <div class="row-acts">${inT.map((t) => btn("Hoja: " + t.name, `data-la="credTeam" data-id="${esc(t.id)}"`, "ghost")).join("")}${inT.length ? btn("Todo el torneo", 'data-la="credAll"') + btn("Planillas para el partido (PDF)", 'data-la="rosters"', "ghost") : ""}</div>` : empty("Aún no hay torneos."));
 
   const rulesCard = card("Reglas de registro", canSet ? `<form data-lf="rules" class="fld"><div class="two"><label>Foto<select name="photo">${Object.entries(LEVEL).map(([k, v]) => `<option value="${k}"${k === rules.photo ? " selected" : ""}>${v}</option>`).join("")}</select></label>
     <label>Documento de identidad<select name="doc">${Object.entries(LEVEL).map(([k, v]) => `<option value="${k}"${k === rules.doc ? " selected" : ""}>${v}</option>`).join("")}</select></label></div>
@@ -105,6 +106,10 @@ export const actions = {
   async cred1(ctx, el) { await printSel([S.regs.find((x) => x.id === el.dataset.id)]); },
   async credTeam(ctx, el) { await printSel(S.regs.filter((r) => r.status === "active" && r.team_id === el.dataset.id)); },
   async credAll() { await printSel(S.regs.filter((r) => r.status === "active" && r.tournament_id === tid)); },
+  async rosters(ctx) {
+    const t = tour(tid), ts = S.teams.filter((x) => x.tournament_id === tid);
+    await printDoc({ league: ctx.l.name, title: "Planillas de equipos", sub: t.name || "", logo: S.brand && S.brand.logo, body: ts.map((x) => `<section class="rep-page">${rosterSheet(x, S.players, S.regs)}</section>`).join("") });
+  },
 };
 
 async function printSel(regs) {

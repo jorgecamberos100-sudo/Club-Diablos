@@ -4,6 +4,7 @@ import { api } from "../cloud.js";
 import { can as hasFeature } from "../plans.js";
 import { card, chip, row, btn, empty, dshort, dtime, toast, saveFile } from "../ui.js";
 import { toCSV } from "./report.js";
+import { printDoc } from "./printout.js";
 import * as sheet from "../sheet.js";
 import { actionLabel, detailText } from "./audit.js";
 
@@ -30,7 +31,7 @@ export async function render(ctx) {
     chip(DST[x.status][1], DST[x.status][0]) + btn(["accepted", "rejected", "withdrawn"].includes(x.status) ? "Cambiar" : "Resolver", `data-la="resolve" data-id="${esc(x.id)}"`)
     + (ctx.can("audit") ? btn("Historial", `data-la="hist" data-id="${esc(x.id)}"`, "ghost") : ""));
   const sBody = (list.length ? list.map(srow).join("") : empty(show === "activas" ? "No hay sanciones vigentes." : "Todavía no hay sanciones."))
-    + `<div class="row-acts">${enabled ? btn("Nueva sanción", 'data-la="new"') : ""}${btn(show === "activas" ? "Ver todas" : "Ver solo vigentes", 'data-la="toggle"', "ghost")}${sanctions.length ? btn("Exportar CSV", 'data-la="csv"', "ghost") : ""}</div>`
+    + `<div class="row-acts">${enabled ? btn("Nueva sanción", 'data-la="new"') : ""}${btn(show === "activas" ? "Ver todas" : "Ver solo vigentes", 'data-la="toggle"', "ghost")}${sanctions.length ? btn("Exportar CSV", 'data-la="csv"', "ghost") + btn("Imprimir / PDF", 'data-la="print"', "ghost") : ""}</div>`
     + (enabled ? "" : `<p class="hint">Tu plan no incluye sanciones.</p>`);
   const dBody = (disputes.length ? disputes.map(drow).join("") : empty("No hay objeciones ni protestas."))
     + (enabled ? `<div class="row-acts">${btn("Registrar objeción o protesta", 'data-la="newd"')}</div>` : "")
@@ -52,6 +53,14 @@ export const actions = {
     await api.setSanctionStatus(ctx.id, el.dataset.id, "revoked", why); toast("Sanción revocada"); done(ctx);
   },
   async hist(ctx, el) { await historySheet(el.dataset.id); },
+  async print(ctx) {
+    const brand = await api.leagueBrand(ctx.id).catch(() => ({})), list = S.sanctions.filter((x) => show === "todas" || x.status === "active");
+    const body = `<h2>Sanciones${show === "activas" ? " vigentes" : ""}</h2><table class="rep-t"><thead><tr><th>Tipo</th><th>Equipo</th><th>Jugador</th><th>Motivo</th><th>Detalle</th><th>Estado</th></tr></thead><tbody>${list.map((x) =>
+      `<tr><td>${esc(KIND[x.kind])}</td><td>${esc(tname(x.team_id))}</td><td>${esc(x.player || "")}</td><td>${esc(x.reason)}</td><td>${esc([x.matches && x.matches + " partido(s)", x.points && "-" + x.points + " pts", x.amount != null && "$" + x.amount, x.ends_on && "hasta " + dshort(x.ends_on)].filter(Boolean).join(" · "))}</td><td>${esc(SST[x.status][1])}</td></tr>`).join("")}</tbody></table>
+      <h2>Objeciones y protestas</h2><table class="rep-t"><thead><tr><th>Tipo</th><th>Asunto</th><th>Equipo</th><th>Estado</th><th>Resolución</th></tr></thead><tbody>${S.disputes.map((x) =>
+      `<tr><td>${esc(DK[x.kind])}</td><td>${esc(x.subject)}</td><td>${esc(tname(x.team_id))}</td><td>${esc(DST[x.status][1])}</td><td>${esc(x.resolution || "")}</td></tr>`).join("")}</tbody></table>`;
+    await printDoc({ league: ctx.l.name, title: "Sanciones y protestas", sub: "", logo: brand.logo, body });
+  },
   async csv() {
     const csv = toCSV([[(r) => KIND[r.kind], "Tipo"], ["player", "Jugador"], [(r) => tname(r.team_id), "Equipo"], ["reason", "Motivo"], ["matches", "Partidos"], ["points", "Puntos"], ["amount", "Monto"], ["starts_on", "Desde"], ["ends_on", "Hasta"], [(r) => SST[r.status][1], "Estado"], ["evidence", "Evidencia"]], S.sanctions);
     saveFile("sanciones.csv", csv); toast("Archivo generado");

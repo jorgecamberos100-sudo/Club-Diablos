@@ -5,6 +5,7 @@ import { api } from "../cloud.js";
 import { can as hasFeature } from "../plans.js";
 import { card, chip, row, btn, empty, dshort, toast, saveFile } from "../ui.js";
 import { balances, cash, toCSV } from "./report.js";
+import { printDoc, financeReport } from "./printout.js";
 import * as sheet from "../sheet.js";
 
 const money = (n) => "$" + (+n).toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -29,7 +30,7 @@ export async function render(ctx) {
     chip(b.balance > 0 ? "Debe " + money(b.balance) : b.balance < 0 ? "A favor " + money(-b.balance) : "Al corriente", b.balance > 0 ? "due" : "ok")
     + (enabled ? btn("Pago", `data-la="pay" data-id="${esc(b.team_id)}"`) + btn("Cargo", `data-la="charge1" data-id="${esc(b.team_id)}"`, "ghost") : "")
     + btn("Detalle", `data-la="detail" data-id="${esc(b.team_id)}"`, "ghost"))).join("") : empty(tours.length ? "Inscribe equipos en el torneo para cobrarles." : "Primero crea un torneo.");
-  const teamCard = card("Equipos", teamRows + `<div class="row-acts">${enabled && inT.length ? btn("Cargar a todos los equipos", 'data-la="chargeall"') : ""}${bal.length ? btn("Exportar saldos", 'data-la="csv-bal"', "ghost") : ""}</div>${enabled ? "" : '<p class="hint">Tu plan no incluye finanzas de la liga.</p>'}`);
+  const teamCard = card("Equipos", teamRows + `<div class="row-acts">${enabled && inT.length ? btn("Cargar a todos los equipos", 'data-la="chargeall"') : ""}${bal.length ? btn("Exportar saldos", 'data-la="csv-bal"', "ghost") + btn("Imprimir / PDF", 'data-la="print"', "ghost") : ""}</div>${enabled ? "" : '<p class="hint">Tu plan no incluye finanzas de la liga.</p>'}`);
   const mv = fin.movements.filter((m) => !m.tournament_id || m.tournament_id === tid || !tid);
   const mvCard = card("Movimientos", (mv.length ? mv.slice(0, 40).map((m) => row(`${m.concept}${m.status === "void" ? " (anulado)" : ""}`, [KIND[m.kind], m.team_id && (teams.find((t) => t.id === m.team_id) || {}).name, METHOD[m.method], dshort(m.paid_on), m.note, m.void_reason && "Anulado: " + m.void_reason].filter(Boolean).join(" · "),
     chip((m.kind === "expense" ? "-" : "+") + money(m.amount), m.status === "void" ? "na" : m.kind === "expense" ? "due" : "ok") + (m.status === "active" && enabled ? btn("Anular", `data-la="voidm" data-id="${esc(m.id)}"`, "ghost") : ""))).join("") : empty("Todavía no hay movimientos."))
@@ -54,6 +55,10 @@ export const actions = {
   async voidm(ctx, el) {
     const why = prompt("Motivo para anular este movimiento (queda en el historial):"); if (why === null) return;
     await api.voidMovement(ctx.id, el.dataset.id, why); toast("Movimiento anulado"); done(ctx);
+  },
+  async print(ctx) {
+    const inT = S.teams.filter((t) => t.tournament_id === tid), t = (S.tours || []).find((x) => x.id === tid) || {}, brand = await api.leagueBrand(ctx.id).catch(() => ({}));
+    await printDoc({ league: ctx.l.name, title: "Saldos de los equipos", sub: t.name || "", logo: brand.logo, body: financeReport(inT, S.charges, S.movements.filter((m) => !m.tournament_id || m.tournament_id === tid || m.kind !== "payment")) });
   },
   async "csv-bal"() {
     const inT = S.teams.filter((t) => t.tournament_id === tid), bal = balances(inT, S.charges, S.movements);

@@ -1012,7 +1012,7 @@ function demo() {
     async leagueTeams(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return d.ttems.filter((x) => x.league_id === l && x.status === "active"); },
     async tournamentData(l, tid) {
       const d = db(); ensure(isLeagueAdmin(d, l)); const ms = d.lmatches.filter((m) => m.tournament_id === tid);
-      return { teams: d.ttems.filter((x) => x.tournament_id === tid), matches: ms.slice().sort((a, b) => String(a.starts_at || "~").localeCompare(String(b.starts_at || "~"))), events: d.mevents.filter((e) => ms.some((m) => m.id === e.match_id)) };
+      return { teams: d.ttems.filter((x) => x.tournament_id === tid), matches: ms.slice().sort((a, b) => String(a.starts_at || "9999").localeCompare(String(b.starts_at || "9999"))), events: d.mevents.filter((e) => ms.some((m) => m.id === e.match_id)) };
     },
     async createTournament(l, t) {
       const d = db(); ensure(isLeagueAdmin(d, l, "tournaments")); const e = await api.entitlement("league", l);

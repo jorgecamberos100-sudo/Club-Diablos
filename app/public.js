@@ -27,7 +27,7 @@ export function llavesHTML(d) { const name = new Map(d.teams.map((x) => [x.id, x
 // Con "solo fecha" la base manda AAAA-MM-DD: se muestra sin hora y sin cambiar de día por la zona horaria.
 const when = (v) => { const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(v); return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" }) : dtime(v); };
 export function calendarioHTML(d) {
-  const name = new Map(d.teams.map((x) => [x.id, x.name])), ms = d.matches.slice().sort((a, b) => (a.starts_at || "~").localeCompare(b.starts_at || "~"));
+  const name = new Map(d.teams.map((x) => [x.id, x.name])), ms = d.matches.slice().sort((a, b) => (a.starts_at || "9999").localeCompare(b.starts_at || "9999"));
   if (!ms.length) return `<p class="hint">El calendario todavía no está publicado.</p>`;
   const groups = new Map(); ms.forEach((m) => { const k = (m.stage === "group" ? "Grupo " + m.group_label + " · " : "") + (m.round || "Partidos"); (groups.get(k) || groups.set(k, []).get(k)).push(m); });
   return [...groups].map(([r, list]) => `<h3>${esc(r)}</h3>` + list.map((m) => {
