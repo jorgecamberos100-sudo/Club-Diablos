@@ -641,3 +641,11 @@ a.btn { text-decoration: none; display: inline-block; }
 .fld-inline input, .fld-inline select { padding: 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font-size: 16px; }
 .perms { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; } .perms legend { font: 600 14px var(--cond); color: var(--muted); padding: 0 6px; }
 .tabbar[style*="--n:7"] a { font-size: 11px; padding-left: 0; padding-right: 0; }
+
+/* Página pública e integrable */
+.pub .cl-row.pm b { font-weight: 600; }
+.pub .sc { margin: 0 6px; font-variant-numeric: tabular-nums; }
+.pub-foot { text-align: center; }
+body.embed .view { padding-bottom: 12px; }
+body.embed .tabbar { display: none; }
+.snip { width: 100%; font: 12px monospace; background: var(--ink); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }

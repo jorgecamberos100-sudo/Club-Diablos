@@ -207,6 +207,11 @@ async function supa() {
       if (blob) { const u = await uid(), path = `${u}/league-${l}-${Date.now()}.png`; ok(await sb.storage.from("photos").upload(path, blob, { upsert: true, contentType: blob.type || "image/png" })); logo = sb.storage.from("photos").getPublicUrl(path).data.publicUrl; }
       ok(await sb.rpc("set_league_brand", { l, color, logo }));
     },
+    // ----- página pública (lectura sin cuenta; solo datos públicos) -----
+    async publicLeague(l) { return ok(await sb.rpc("public_league", { l })); },
+    async publicTournament(l, tid) { return ok(await sb.rpc("public_tournament", { l, tid })); },
+    async publicState(l) { return ok(await sb.rpc("public_page_state", { l })); },
+    async setPublicPage(l, enabled, scorers, chat, chatDaily) { ok(await sb.rpc("set_public_page", { l, enabled, scorers, chat: !!chat, chat_daily: chatDaily ?? 100 })); },
     // ----- registro de jugadores, padrón y credenciales -----
     async registrationRules(l) { return ok(await sb.rpc("registration_rules", { l })); },
     async setRegistrationRules(l, r) { ok(await sb.rpc("set_registration_rules", { l, r })); },
@@ -355,6 +360,7 @@ function demo() {
     const r = { id: uuid(), league_id: l, player_id: pl.id, tournament_id: t.tournament_id, team_id: t.id, number: num, status: st, via, requested_by: d.session, decided_by: st === "active" ? d.session : null, decided_at: st === "active" ? new Date().toISOString() : null, note: null, created_at: new Date().toISOString() };
     d.lregs.push(r); if (st === "active") pl.status = "active"; return r;
   };
+  const pubSettings = (d, l) => ({ enabled: false, scorers: true, chat: false, chat_daily: 100, ...((d.leagues.find((x) => x.id === l) || {}).settings || {}).public });
   const PERMS = ["teams", "tournaments", "schedule", "results", "sanctions", "finance", "registration", "audit", "settings"];
   const validPerms = (p) => Array.isArray(p) && p.every((x) => PERMS.includes(x));
   // Mismas restricciones que las columnas de la tabla sanctions.
@@ -628,6 +634,30 @@ function demo() {
     async setLeagueBrand(l, color, blob) {
       const d = db(); ensure(isLeagueAdmin(d, l, "settings")); ensure(/^#[0-9a-fA-F]{6}$/.test(color || ""), "Datos no válidos"); const lg = d.leagues.find((x) => x.id === l), cur = (lg.settings || {}).brand || {};
       lg.settings = { ...(lg.settings || {}), brand: { color: color.toLowerCase(), logo: blob ? await dataURL(blob) : cur.logo || null } }; log(d, l, "league.brand", { color: color.toLowerCase(), logo_changed: !!blob }); save(d);
+    },
+    async publicState(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return pubSettings(d, l); },
+    async setPublicPage(l, enabled, scorers, chat, chatDaily) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "settings")); chatDaily = chatDaily ?? 100; ensure(typeof enabled === "boolean" && typeof scorers === "boolean" && chatDaily >= 0 && chatDaily <= 5000, "Datos no válidos");
+      if (enabled) await lneed(l, "public_page"); const lg = d.leagues.find((x) => x.id === l); lg.settings = { ...(lg.settings || {}), public: { enabled, scorers, chat: !!chat, chat_daily: chatDaily } };
+      log(d, l, "public.settings", { enabled, scorers, chat: !!chat, chat_daily: chatDaily }); save(d);
+    },
+    async publicLeague(l) {
+      const d = db(), lg = d.leagues.find((x) => x.id === l), ps = lg && pubSettings(d, l), e = lg && (await api.entitlement("league", l));
+      if (!lg || !ps.enabled || !(e.features || []).includes("public_page")) return { error: "not_found" };
+      const b = (lg.settings || {}).brand || {};
+      return { league: { id: lg.id, name: lg.name, brand: { color: b.color || "#c8102e", logo: b.logo || null } }, chat: !!ps.chat,
+        tournaments: d.tourn.filter((t) => t.league_id === l && ["published", "paused", "finished"].includes(t.status)).slice().reverse().map((t) => ({ id: t.id, name: t.name, season: t.season, category: t.category, modality: t.modality, status: t.status })) };
+    },
+    async publicTournament(l, tid) {
+      const d = db(), lg = d.leagues.find((x) => x.id === l), t = d.tourn.find((x) => x.id === tid && x.league_id === l && ["published", "paused", "finished"].includes(x.status)), e = lg && (await api.entitlement("league", l));
+      if (!t || !pubSettings(d, l).enabled || !(e.features || []).includes("public_page")) return { error: "not_found" };
+      const sc = pubSettings(d, l).scorers, ms = d.lmatches.filter((m) => m.tournament_id === tid), ids = new Set(ms.map((m) => m.id)), by = {};
+      d.sanc.filter((x) => x.tournament_id === tid && x.kind === "puntos" && x.status !== "revoked").forEach((x) => (by[x.team_id] = (by[x.team_id] || 0) + x.points));
+      return { tournament: { id: t.id, name: t.name, season: t.season, category: t.category, modality: t.modality, status: t.status, pts_win: t.pts_win, pts_draw: t.pts_draw, pts_loss: t.pts_loss, tiebreakers: t.tiebreakers, rules: t.rules },
+        teams: d.ttems.filter((x) => x.tournament_id === tid).map((x) => ({ id: x.id, name: x.name, status: x.status })).sort((a, b) => a.name.localeCompare(b.name, "es")),
+        matches: ms.map((m) => ({ id: m.id, round: m.round, starts_at: m.starts_at, venue: m.venue, home_id: m.home_id, away_id: m.away_id, status: m.status, home_goals: m.home_goals, away_goals: m.away_goals })),
+        events: d.mevents.filter((x) => ids.has(x.match_id) && ["goal", "yellow", "red"].includes(x.kind)).map((x) => ({ match_id: x.match_id, team_id: x.team_id, kind: x.kind, n: x.n, player: x.kind === "goal" && sc ? x.player : "" })),
+        adjust: Object.entries(by).map(([team_id, points]) => ({ team_id, points })), scorers: sc };
     },
     // ----- registro de jugadores, padrón y credenciales (mismas reglas que las funciones SQL) -----
     async registrationRules(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return regRules(d, l); },

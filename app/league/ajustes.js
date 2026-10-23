@@ -18,13 +18,26 @@ export async function render(ctx) {
   S = { ctx, admins };
   const info = card("Tu liga", `<div class="cl-who"><b>${esc(ctx.l.name)}</b><span>${esc(ROLE[ctx.l.me.role] || "")}</span></div><p class="hint">Plan: ${esc(ctx.ent ? ctx.ent.name : "—")}</p>
     <ul class="feat">${["public_page"].map((f) => `<li><span>${esc(FEATURES[f])}</span><span class="chip ${hasFeature(ctx.ent, f) ? "ok" : "due"}">${hasFeature(ctx.ent, f) ? "En tu plan" : "No incluido"}</span></li>`).join("")}</ul>
-    <p class="hint">Reglamento, marca de la liga y página pública llegan en las siguientes etapas.</p>`);
+    <p class="hint">Reglamento y precios llegan en una etapa posterior.</p>`);
   let brandCard = "";
   if (ctx.can("settings")) {
     const b = await api.leagueBrand(ctx.id);
-    brandCard = card("Marca de la liga", `<p>Los colores y el logo se usan en las credenciales y, más adelante, en la página pública.</p>
+    brandCard = card("Marca de la liga", `<p>Los colores y el logo se usan en las credenciales y en la página pública.</p>
       <form data-lf="brand" class="fld"><div class="crest-prev">${b.logo ? `<img src="${esc(b.logo)}" alt="Logo actual" width="56" height="56">` : ""}<label>Logo<input type="file" name="logo" accept="image/*"></label></div>
       <label>Color principal<input type="color" name="color" value="${esc(b.color)}"></label><button class="btn" type="submit">Guardar marca</button></form>`);
+  }
+  let pubCard = "";
+  if (ctx.can("settings") && hasFeature(ctx.ent, "public_page")) {
+    const ps = await api.publicState(ctx.id), ts = (await api.tournaments(ctx.id)).filter((t) => ["published", "paused", "finished"].includes(t.status));
+    const link = appURL() + "#/p/" + ctx.id, snip = (t) => `<iframe src="${appURL()}#/embed/${ctx.id}/${t.id}/tabla" title="${ctx.l.name} - ${t.name}" width="100%" height="520" style="border:0" loading="lazy"></iframe>`;
+    pubCard = card("Página pública", `<p>Cualquiera con el enlace puede ver la tabla, el calendario y, si lo permites, el goleo. Solo se muestran torneos publicados. No aparecen notas, documentos, fotos, finanzas ni sanciones.</p>
+      <form data-lf="pub" class="fld"><label class="opt"><input type="checkbox" name="enabled"${ps.enabled ? " checked" : ""}><span>Página pública activa</span></label>
+      <label class="opt"><input type="checkbox" name="scorers"${ps.scorers ? " checked" : ""}><span>Mostrar nombres de goleadores</span></label>
+      <label class="opt"><input type="checkbox" name="chat"${ps.chat ? " checked" : ""}><span>Asistente de preguntas en la página</span></label>
+      <label>Preguntas al asistente por día (máximo)<input name="daily" type="number" min="0" max="5000" value="${ps.chat_daily}"></label><button class="btn" type="submit">Guardar</button></form>`
+      + (ps.enabled ? `<h3>Enlace</h3><div class="cl-row static"><span><b class="code" style="font-size:14px">${esc(link)}</b></span><span class="acts">${btn("Copiar", `data-la="copy" data-v="${esc(link)}"`, "ghost")}<a class="btn sm ghost" href="${esc(waLink("Tabla y calendario de " + ctx.l.name + ": " + link))}" target="_blank" rel="noopener">WhatsApp</a></span></div>
+        <h3>Para tu sitio web</h3>${ts.length ? ts.map((t) => `<p class="hint">${esc(t.name)}</p><textarea readonly rows="3" class="snip" aria-label="Código para ${esc(t.name)}">${esc(snip(t))}</textarea>${btn("Copiar código", `data-la="copy" data-v="${esc(snip(t))}"`, "ghost")}`).join("") : `<p class="hint">Publica un torneo para obtener su código.</p>`}
+        <p class="hint">Cambia «tabla» por «calendario» o «goleo» en el código para mostrar otra parte.</p>` : ""));
   }
   let adm = "";
   if (mine) {
@@ -43,7 +56,7 @@ export async function render(ctx) {
   const aud = log ? card("Bitácora", (log.length ? log.map((a) => row(actionLabel(a.action), `${a.actor || "—"} · ${dtime(a.at)}${detailText(a) ? " · " + detailText(a) : ""}`)).join("") : empty("Todavía no hay movimientos."))
     + (log.length >= auditN ? `<div class="row-acts">${btn("Ver más", 'data-la="more"', "ghost")}</div>` : "")
     + `<p class="hint">Cada cambio importante queda con quién lo hizo, cuándo y, en las correcciones, el valor anterior. No se puede borrar desde la app.</p>`) : "";
-  return info + brandCard + adm + aud;
+  return info + brandCard + pubCard + adm + aud;
 }
 
 const done = (ctx) => (ctx.reload(), undefined);
@@ -63,6 +76,9 @@ export const actions = {
 export const forms = {
   async brand(ctx, f, fd) {
     const file = fd.get("logo"); await api.setLeagueBrand(ctx.id, fd.get("color"), file && file.size ? await shrinkImage(file, 400, 0.9, "image/png") : null); toast("Marca guardada"); done(ctx);
+  },
+  async pub(ctx, f, fd) {
+    await api.setPublicPage(ctx.id, fd.get("enabled") === "on", fd.get("scorers") === "on", fd.get("chat") === "on", Math.max(0, Math.min(5000, +fd.get("daily") || 0))); toast("Página pública guardada"); done(ctx);
   },
   async adminvite(ctx, f, fd) {
     const perms = fd.getAll("perm"); if (!perms.length) return toast("Marca al menos un permiso.", true);

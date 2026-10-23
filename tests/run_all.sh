@@ -10,6 +10,6 @@ run "Formaciones" node tests/unit/test_forms.mjs
 run "Posiciones y goleo" node tests/unit/test_standings.mjs
 run "Saldos y CSV" node tests/unit/test_report.mjs
 (sh tests/e2e/serve.sh >/dev/null 2>&1 &) ; sleep 1
-for t in test_links test_regress test_team test_tournaments test_league_admin test_players; do run "Navegador: $t" python3 tests/e2e/$t.py; done
+for t in test_links test_regress test_team test_tournaments test_league_admin test_players test_public; do run "Navegador: $t" python3 tests/e2e/$t.py; done
 pkill -f "http.server 8765" 2>/dev/null
 [ $fail = 0 ] && echo "TODO EN VERDE" || echo "HAY FALLAS"; exit $fail

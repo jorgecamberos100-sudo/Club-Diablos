@@ -1868,3 +1868,60 @@ begin
   return jsonb_build_object('color', '#c8102e', 'logo', null) || coalesce((select settings->'brand' from leagues where id = l), '{}');
 end $$;
 grant execute on function public.set_league_brand(text,text,text), public.league_brand(text) to authenticated;
+
+-- ============ Etapa 8 del producto: página pública, acta por foto y chatbot ============
+-- Página pública: opcional (apagada por omisión). Las funciones públicas solo devuelven lo que ya es público en cualquier liga:
+-- nombres de equipos, calendario, marcadores, tabla y (si la liga lo permite) goleadores. Nunca contactos, documentos, fotos, fechas de nacimiento,
+-- finanzas, sanciones ni notas internas. Los nombres de quien recibe tarjetas no salen.
+create or replace function public.public_settings(l text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('enabled', false, 'scorers', true, 'chat', false, 'chat_daily', 100) || coalesce((select settings->'public' from leagues where id = l), '{}') $$;
+revoke all on function public.public_settings(text) from public, anon, authenticated;
+
+create or replace function public.set_public_page(l text, enabled boolean, scorers boolean, chat boolean default false, chat_daily int default 100) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_league_admin(l, 'settings') then raise exception 'Sin permiso'; end if;
+  if enabled is null or scorers is null or chat is null or chat_daily is null or chat_daily < 0 or chat_daily > 5000 then raise exception 'Datos no válidos'; end if;
+  if enabled and not league_feature(l, 'public_page') then raise exception 'Tu plan no incluye esa función'; end if;
+  update leagues set settings = jsonb_set(settings, '{public}', jsonb_build_object('enabled', enabled, 'scorers', scorers, 'chat', chat, 'chat_daily', chat_daily)) where id = l;
+  perform log_action(l, 'public.settings', jsonb_build_object('enabled', enabled, 'scorers', scorers, 'chat', chat, 'chat_daily', chat_daily));
+end $$;
+create or replace function public.public_page_state(l text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_league_admin(l) then raise exception 'Sin permiso'; end if;
+  return public_settings(l);
+end $$;
+
+create or replace function public.public_league(l text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare ps jsonb := public_settings(l); lg leagues;
+begin
+  select * into lg from leagues where id = l;
+  if lg.id is null or not (ps->>'enabled')::boolean or not league_feature(l, 'public_page') then return jsonb_build_object('error', 'not_found'); end if;
+  return jsonb_build_object('league', jsonb_build_object('id', lg.id, 'name', lg.name, 'brand', jsonb_build_object('color', coalesce(lg.settings->'brand'->>'color', '#c8102e'), 'logo', lg.settings->'brand'->>'logo')),
+    'chat', (ps->>'chat')::boolean,
+    'tournaments', coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'season', t.season, 'category', t.category, 'modality', t.modality, 'status', t.status) order by t.created_at desc)
+      from tournaments t where t.league_id = l and t.status in ('published','paused','finished')), '[]'));
+end $$;
+
+create or replace function public.public_tournament(l text, tid uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare ps jsonb := public_settings(l); t tournaments; sc boolean;
+begin
+  select * into t from tournaments where id = tid and league_id = l and status in ('published','paused','finished');
+  if t.id is null or not (ps->>'enabled')::boolean or not league_feature(l, 'public_page') then return jsonb_build_object('error', 'not_found'); end if;
+  sc := (ps->>'scorers')::boolean;
+  return jsonb_build_object(
+    'tournament', jsonb_build_object('id', t.id, 'name', t.name, 'season', t.season, 'category', t.category, 'modality', t.modality, 'status', t.status, 'pts_win', t.pts_win, 'pts_draw', t.pts_draw, 'pts_loss', t.pts_loss, 'tiebreakers', t.tiebreakers, 'rules', t.rules),
+    'teams', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'name', x.name, 'status', x.status) order by x.name) from tournament_teams x where x.tournament_id = tid), '[]'),
+    'matches', coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'round', m.round, 'starts_at', m.starts_at, 'venue', m.venue, 'home_id', m.home_id, 'away_id', m.away_id, 'status', m.status, 'home_goals', m.home_goals, 'away_goals', m.away_goals) order by m.starts_at nulls last, m.round)
+      from league_matches m where m.tournament_id = tid), '[]'),
+    'events', coalesce((select jsonb_agg(jsonb_build_object('match_id', e.match_id, 'team_id', e.team_id, 'kind', e.kind, 'n', e.n, 'player', case when e.kind = 'goal' and sc then e.player else '' end))
+      from match_events e join league_matches m on m.id = e.match_id where m.tournament_id = tid and (e.kind in ('yellow','red') or (e.kind = 'goal'))), '[]'),
+    'adjust', coalesce((select jsonb_agg(jsonb_build_object('team_id', team_id, 'points', pts)) from (select team_id, sum(points)::int as pts from sanctions where tournament_id = tid and kind = 'puntos' and status <> 'revoked' group by team_id) s), '[]'),
+    'scorers', sc);
+end $$;
+grant execute on function public.set_public_page(text,boolean,boolean,boolean,int), public.public_page_state(text) to authenticated;
+grant execute on function public.public_league(text), public.public_tournament(text,uuid) to anon, authenticated;

@@ -31,6 +31,19 @@ Importante: todo lo de Supabase se probó contra un PostgreSQL local con un simu
 - Reportes: saldos por equipo, movimientos y sanciones en CSV con acentos correctos y protegidos contra fórmulas.
 - Pruebas: 187 de base de datos (permisos, planes, RLS, anulaciones, bitácora), 19 de posiciones, 9 de saldos/CSV, 19 de navegador para esta etapa.
 
+## Etapa 6 en detalle (página pública e integrable)
+- Apagada por defecto. Se activa en Ajustes → Página pública (requiere la función `public_page` del plan y el permiso de ajustes). Se puede pausar en cualquier momento y se oculta al instante.
+- Solo se publican torneos en estado publicado, en pausa o terminado. Los borradores nunca salen.
+- Datos expuestos (funciones SQL `public_league` y `public_tournament`, únicas lecturas para visitantes sin cuenta): nombre y marca de la liga, equipos, partidos con marcador, goles/tarjetas y descuentos de puntos. No salen notas de partido, documentos, fotos, finanzas, sanciones ni correos. Los nombres de goleadores se pueden ocultar.
+- Rutas: `#/p/<liga>[/<torneo>/<tabla|calendario|goleo>]` y `#/embed/<liga>/<torneo>/<parte>` (sin encabezado ni barra, para iframe). Ajustes entrega el enlace, botón de WhatsApp y el código `<iframe>` por torneo.
+- Colores y logo de la liga se aplican con el mismo tema que las credenciales.
+- Pruebas: 17 de base de datos nuevas (apagada por defecto, anon sin acceso a tablas, borradores ocultos, goleadores ocultos, plan requerido) y 15 de navegador.
+
+## Límites conocidos de la etapa 6
+- Se probó el modo demo en navegador y las funciones SQL en PostgreSQL local; falta probar contra un proyecto de Supabase real y desde un dominio externo con el iframe.
+- No hay datos en tiempo real: la página lee al abrirse (recargar para ver cambios).
+- El código QR de credenciales que apunte a esta página sigue pendiente.
+
 ## Etapa 5 en detalle
 - Padrón central por liga (`league_players`): una persona existe una sola vez (mismo documento, o mismo nombre sin acentos/mayúsculas y misma fecha de nacimiento; garantizado por índices únicos en la base). Un jugador solo puede estar activo o pendiente en un equipo por torneo; la baja se conserva como historial y permite el traspaso.
 - Método 1 (delegado o enlace): el delegado del equipo vinculado registra desde «Mi cuenta → Registrar jugadores»; o la liga crea un enlace con tope de usos y vigencia que cualquiera abre sin cuenta (`#/registro/<código>`). Todo llega como pendiente; la liga aprueba o rechaza con motivo.

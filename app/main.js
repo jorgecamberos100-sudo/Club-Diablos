@@ -12,6 +12,7 @@ import { enrich } from "./live.js";
 import { mount, wireSheet } from "./cloudui.js";
 import { restoreRoute, on } from "./cloud.js";
 import { renderPlatform } from "./platform.js";
+import { renderPublic } from "./public.js";
 
 // Orden de la barra inferior. Finanzas va al final: lo primero es el juego.
 const VIEWS = {
@@ -69,6 +70,13 @@ async function route() {
   let { club, team, view } = parse();
   try {
     // Mi cuenta y panel de liga: rutas propias, fuera de los equipos.
+    if (club === "p" || club === "embed") {
+      current = null;
+      await renderPublic(app, location.hash.replace(/^#\/?/, "").split("/"));
+      window.scrollTo(0, 0);
+      return;
+    }
+    document.body.classList.remove("embed");
     if (club === "cuenta" || club === "liga" || club === "registro") {
       current = null;
       await renderPlatform(app, location.hash.replace(/^#\/?/, "").split("/"));
