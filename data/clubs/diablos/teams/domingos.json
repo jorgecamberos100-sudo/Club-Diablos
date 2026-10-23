@@ -88,7 +88,7 @@
     },
     {
       "player": "angel",
-      "number": ""
+      "number": "18"
     },
     {
       "player": "jordy",
@@ -101,7 +101,7 @@
     }
   ],
   "finance": {
-    "updated": "2026-10-20T03:50:00Z",
+    "updated": "2026-10-23T04:20:00Z",
     "cuota": 300,
     "multa": {
       "total": 1450,
@@ -319,6 +319,13 @@
           "items": "#98 · S · manga larga",
           "costo": 530,
           "pagado": 530,
+          "estado": "En el pedido nuevo"
+        },
+        {
+          "n": "Ángel",
+          "items": "#18 · M",
+          "costo": 480,
+          "pagado": 480,
           "estado": "En el pedido nuevo"
         },
         {
