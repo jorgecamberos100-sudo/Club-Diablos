@@ -108,5 +108,10 @@ async def main():
     # regreso al plan gratis: lo guardado se conserva, el administrador ya no registra
     await set_plan(pg, None); await pg.reload(); await pg.wait_for_selector(".tabbar")
     check("al volver a gratis las finanzas guardadas se conservan", await pg.locator(".tabbar >> text=Finanzas").count() == 1)
+    # finanzas privadas: quien abre el enlace sin cuenta no las ve; el administrador puede abrirlas
+    await signout(pg); await go(pg, "inicio")
+    check("sin cuenta no se ven las finanzas de un equipo de la app", await pg.locator(".tabbar >> text=Finanzas").count() == 0 and await pg.locator(".tabbar >> text=Plantel").count() == 1)
+    await pg.goto(B + "#/los-halcones/principal/finanzas"); await pg.wait_for_selector(".tabbar")
+    check("y tampoco entrando directo a la dirección de Finanzas", await pg.locator("#caja").count() == 0 and "/inicio" in pg.url)
     ok = summary(pg); await br.close(); await p.stop(); sys.exit(0 if ok else 1)
 asyncio.run(main())

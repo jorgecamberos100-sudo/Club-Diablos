@@ -405,7 +405,8 @@ drop policy if exists club_docs_read on public.club_docs;
 create policy club_docs_read on public.club_docs for select using (true);
 drop policy if exists team_docs_read on public.team_docs;
 create policy team_docs_read on public.team_docs for select using (true);
-grant select on public.club_docs, public.team_docs to anon, authenticated;   -- escribir solo por funciones
+grant select on public.club_docs to anon, authenticated;   -- escribir solo por funciones
+revoke select, insert, update, delete on public.team_docs from anon, authenticated;   -- el equipo se lee con team_doc(): las finanzas no son públicas por omisión
 
 create or replace function public.slugify(s text) returns text language sql immutable as $$
   select trim(both '-' from regexp_replace(lower(translate(trim(s), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunaeiouun')), '[^a-z0-9]+', '-', 'g')) $$;
@@ -930,14 +931,15 @@ create table if not exists public.rate_limits (bucket text not null, k text not 
 alter table public.rate_limits enable row level security;
 revoke all on public.rate_limits from anon, authenticated;
 
--- Huella de quien llama: la IP que Supabase pasa en las cabeceras, mezclada con el secreto (la IP nunca se guarda).
+-- Huella de quien llama: la IP que Supabase pasa en X-Forwarded-For, mezclada con el secreto (la IP nunca se guarda).
+-- Los topes por enlace, por liga y por cuenta no dependen de la IP: aunque alguien falsifique la cabecera, esos siguen aplicando.
 -- Si no hay cabeceras (por ejemplo, en pruebas), se usa la cuenta o "sin-ip": el límite se vuelve común y más estricto, nunca más laxo.
 create or replace function public.client_key() returns text
 language plpgsql stable security definer set search_path = public as $$
 declare h json; ip text;
 begin
   begin h := nullif(current_setting('request.headers', true), '')::json; exception when others then h := null; end;
-  ip := nullif(trim(coalesce(h->>'cf-connecting-ip', split_part(coalesce(h->>'x-forwarded-for', ''), ',', 1), h->>'x-real-ip', '')), '');
+  ip := nullif(trim(split_part(coalesce(h->>'x-forwarded-for', ''), ',', 1)), '');   -- como indica la guía de Supabase (Securing your API)
   if ip is null then return coalesce(auth.uid()::text, 'sin-ip'); end if;
   return encode(sha256(convert_to((select salt from app_secret where id = 1) || ip, 'UTF8')), 'hex');
 end $$;
@@ -2272,6 +2274,36 @@ begin
 end $$;
 grant execute on function public.set_privacy(text,jsonb), public.privacy_state(text), public.forget_player(text,uuid) to authenticated;
 
+-- Finanzas de los equipos creados en la app: privadas por omisión (solo miembros aprobados). El administrador puede abrirlas a quien tenga el enlace.
+-- Los equipos de archivo (Diablos y el ejemplo) siguen como siempre: su dueño publica sus propios archivos.
+create or replace function public.finance_public(c text, t text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select case when not exists (select 1 from team_docs where club_id = c and team_id = t) then true
+              else coalesce((select (data->>'finance_public')::boolean from team_docs where club_id = c and team_id = t), false) end $$;
+revoke all on function public.finance_public(text,text) from public, anon, authenticated;
+
+create or replace function public.team_doc(c text, t text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when finance_public(c, t) or is_member(c, t) or is_admin(c, t) then data else data - 'finance' end
+  from team_docs where club_id = c and team_id = t $$;
+revoke all on function public.team_doc(text,text) from public;
+grant execute on function public.team_doc(text,text) to anon, authenticated;
+
+create or replace function public.team_paid(c text, t text)
+returns table (kind text, item text, player_id text, amount numeric, detail text, decided_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select kind, item, player_id, amount, detail, decided_at from payments
+  where club_id = c and team_id = t and status = 'approved' and (finance_public(c, t) or is_member(c, t) or is_admin(c, t)) order by decided_at $$;
+
+create or replace function public.set_finance_public(c text, t text, p_on boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if not exists (select 1 from team_docs where club_id = c and team_id = t) then raise exception 'Este equipo se administra desde archivos'; end if;
+  update team_docs set data = data || jsonb_build_object('finance_public', coalesce(p_on, false)) where club_id = c and team_id = t;
+end $$;
+grant execute on function public.set_finance_public(text,text,boolean) to authenticated;
+
 -- =====================================================================================================
 -- Endurecimiento: los visitantes sin cuenta (anon) solo pueden ejecutar las funciones públicas de abajo.
 -- (En Postgres toda función nueva es ejecutable por PUBLIC y Supabase además la abre a anon; cada función ya valida
@@ -2291,5 +2323,5 @@ begin
     if f.oid = any(keep) then execute format('grant execute on function %s to authenticated', f.sig); end if;
   end loop;
 end $$;
-grant execute on function public.claimed(text,text), public.team_paid(text,text), public.reg_link_info(text), public.register_by_link(text,jsonb),
+grant execute on function public.claimed(text,text), public.team_paid(text,text), public.team_doc(text,text), public.reg_link_info(text), public.register_by_link(text,jsonb),
   public.public_league(text), public.public_tournament(text,uuid), public.chat_take(text) to anon;

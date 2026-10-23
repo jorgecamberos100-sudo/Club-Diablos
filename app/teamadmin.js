@@ -127,6 +127,7 @@ function finSheet(ctx) {
     <label>Multa total (opcional)<input name="multa" type="number" min="0" max="50000" inputmode="numeric" value="${f.multa ? esc(f.multa.total) : ""}"></label>
     <span class="lbl">Quiénes la pagan (se reparte entre los marcados)</span>
     <div class="pickgrid">${ctx.team.roster.filter((r) => r.status !== "congelado" && ctx.playersById[r.player]).map((r) => `<label class="opt"><input type="checkbox" name="pm" value="${esc(r.player)}"${flagged.has(r.player) ? " checked" : ""}><span>${esc(nameOf(ctx, r.player))}</span></label>`).join("")}</div>
+    <label class="opt"><input type="checkbox" name="pub"${f.finance_public || ctx.team.finance_public ? " checked" : ""}><span>Cualquiera con el enlace del equipo puede ver las finanzas (si no, solo los jugadores aprobados en la app)</span></label>
     <button class="btn" type="submit">Guardar finanzas</button>
     <p class="hint">Lo ya pagado se conserva: sale de los pagos aprobados, no de este formulario.</p></form>`);
 }
@@ -167,6 +168,7 @@ export function handle(ctx, a, el) {
     const f = new FormData(el);
     await api.saveFinance(c, t, { cuota: +f.get("cuota") || 0, cuotaNota: (f.get("nota") || "").trim(), liga: gather(f, "liga"), gastos: gather(f, "gastos"),
       multaTotal: +f.get("multa") || 0, multas: f.getAll("pm").map((player) => ({ player, why: "" })) });
+    if (!!f.get("pub") !== !!ctx.team.finance_public) await api.setFinancePublic(c, t, !!f.get("pub"));
     close(); toast("Finanzas guardadas"); reload();
   }), true;
   return false;

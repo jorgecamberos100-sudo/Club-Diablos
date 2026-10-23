@@ -1,77 +1,92 @@
-# Activar Club Diablos como plataforma (guía de activación)
+# Activar Club Diablos con Supabase real (guía de activación)
 
-**Estado honesto:** todo el código y el SQL se probaron contra una base PostgreSQL local con un simulador de Supabase y contra el modo demo del navegador. **Nunca se ha activado contra un proyecto real de Supabase.** Esta guía es el camino para hacerlo; el punto 6 es una lista de comprobación para confirmar que todo funciona de verdad.
+**Estado honesto:** el código y el SQL se probaron contra PostgreSQL 16 local con un simulador de Supabase (que imita sus permisos por omisión) y contra el modo demo del navegador. **Nunca se ha activado contra un proyecto real de Supabase.** No declares la app lista para producción hasta completar el punto 6.
 
-Mientras `app/config.js` esté vacío, la app funciona como siempre (Diablos y el club de ejemplo desde sus archivos, sin cuentas). Para probar las cuentas, ligas y torneos sin servidor: agrega `?demo` antes del `#` del enlace (por ejemplo `.../Club-Diablos/?demo#/cuenta`). En demo todo se guarda solo en ese navegador.
+Mientras `app/config.js` esté vacío, la app funciona como siempre (Diablos y el club de ejemplo desde sus archivos, sin cuentas). Para probar cuentas, ligas y torneos sin servidor: agrega `?demo` antes del `#` del enlace (por ejemplo `.../Club-Diablos/?demo#/cuenta`). En demo todo se guarda solo en ese navegador.
 
-## 1. Crear el proyecto en Supabase (plan gratis alcanza para empezar)
-1. Entra a https://supabase.com y crea un proyecto nuevo. Guarda la contraseña de la base de datos.
-2. **SQL Editor > New query**: pega todo `supabase/schema.sql` y toca **Run**.
-   - Es **un solo archivo, seguro de repetir**: se puede correr de nuevo completo cada vez que cambie, sin borrar datos (las pruebas lo aplican dos veces para comprobarlo). Esas son las "migraciones": no hay carpeta de migraciones aparte.
-   - Crea tablas, permisos por fila, funciones, planes, y los cuatro almacenes de archivos (ver punto 5).
-3. **Authentication > URL Configuration**:
-   - Site URL: `https://jorgecamberos100-sudo.github.io/Club-Diablos/`
-   - Redirect URLs: agrega `https://jorgecamberos100-sudo.github.io/Club-Diablos/**`
-4. **Authentication > Sign In / Providers > Email**: apaga **Confirm email** si quieres que quien entre con correo no tenga que confirmarlo.
+## Pasos, en este orden (unos 30 minutos)
 
-## 2. Entrar con Google (opcional, recomendado)
-1. https://console.cloud.google.com: crea un proyecto ("Club Diablos").
-2. **APIs y servicios > Pantalla de consentimiento de OAuth**: tipo **Externo**, nombre, tu correo. Publica la app.
-3. **Credenciales > Crear credenciales > ID de cliente de OAuth**: tipo **Aplicación web**. En **URI de redireccionamiento autorizados** pega la que muestra Supabase en **Authentication > Sign In / Providers > Google** (termina en `/auth/v1/callback`).
-4. Copia el **ID de cliente** y el **Secreto**, pégalos en Supabase (Google) y activa el proveedor.
+### 1. Crear el proyecto
+1. Entra a https://supabase.com y crea un proyecto nuevo. Guarda la contraseña de la base de datos en tu gestor de contraseñas.
+2. **SQL Editor > New query**: pega **todo** `supabase/schema.sql` y toca **Run**. Debe terminar sin error.
+   - Es un solo archivo **seguro de repetir**: cada vez que cambie, se vuelve a correr completo y no borra datos. Los cambios de datos de una sola vez quedan anotados en la tabla `schema_migrations` y no se repiten. Las pruebas lo reaplican con datos y comprueban que no cambia ninguna fila.
+3. **SQL Editor > New query**: pega `supabase/verificar.sql` y toca **Run**. Las 10 filas deben decir **OK**. Si alguna dice REVISAR, vuelve a correr `schema.sql` y repite; si sigue, no actives la app.
 
-## 3. Conectar la app
-En Supabase, **Project Settings > API**: copia **Project URL** y la clave **anon public** y ponlas en `app/config.js`:
+### 2. Cuentas con correo
+1. **Authentication > URL Configuration**:
+   - **Site URL**: `https://jorgecamberos100-sudo.github.io/Club-Diablos/`
+   - **Redirect URLs**: agrega `https://jorgecamberos100-sudo.github.io/Club-Diablos/**`
+2. **Authentication > Sign In / Providers > Email**: deja **Confirm email** encendido (recomendado). La app avisa que hay que abrir el correo de confirmación. Si lo apagas, cualquiera puede crear cuentas con correos que no son suyos.
+3. Para producción, configura un **servidor de correo propio (SMTP)** en la sección de correos de Authentication: Supabase indica que su correo incluido es para pruebas y tiene un límite bajo de envíos. (No verificado aquí: revisa la página de Supabase al hacerlo.)
 
-```
-export const CLOUD = { url: "https://xxxx.supabase.co", key: "<clave anon public>" };
-```
+### 3. Entrar con Google (opcional, recomendado)
+Guía oficial: https://supabase.com/docs/guides/auth/social-login/auth-google
+1. En https://console.cloud.google.com, en **Google Auth Platform > Clients**, crea un cliente OAuth de tipo **Web application**.
+2. **Authorized JavaScript origins**: `https://jorgecamberos100-sudo.github.io` (solo el dominio, sin ruta).
+3. **Authorized redirect URIs**: la URL de callback que muestra Supabase en la página del proveedor Google (termina en `/auth/v1/callback`).
+4. En **Data Access (Scopes)** confirma `openid`, `userinfo.email` y `userinfo.profile`. No pidas más permisos.
+5. Copia **Client ID** y **Client Secret** en Supabase (**Authentication > Sign In / Providers > Google**) y actívalo. El secreto de Google se queda en Supabase: nunca en el repositorio.
 
-La clave anon es pública y es segura ahí (las reglas de acceso están en la base de datos). **Nunca** pongas ni compartas la clave `service_role`, ni claves de proveedores de OCR o de modelos de lenguaje: no hay secretos en este repositorio.
+### 4. Conectar la app
+1. En Supabase, **Settings > API Keys** (o el botón **Connect**): copia la **Project URL** y la **clave publicable** (`sb_publishable_...`). Si tu proyecto todavía muestra la clave **anon** (legacy), también sirve; Supabase anunció que las claves legacy se retiran hacia finales de 2026, así que usa la publicable.
+2. Ponlas en `app/config.js`:
 
-## 4. Primer uso
-1. Entra tú primero. En `#/cuenta` elige "Liga", crea tu liga: quedas como **superadministrador**. Para Diablos, entra y elige tu nombre: la primera cuenta queda como administrador del equipo.
-2. En la liga: **Equipos** (crea un código de invitación para los delegados), **Torneos** (crea, inscribe equipos, genera el calendario), **Jugadores**, **Sanciones**, **Finanzas**, **Ajustes** (marca, página pública, administradores, bitácora).
-3. Planes: tabla `plans`. Las funciones (`features`) y límites (`limits`) se cambian ahí **sin tocar código**. Los precios quedan vacíos: la app no cobra ni fija precios. Toda liga recibe el plan `league-base` (marcado `is_default`).
-4. Dar Pro a un equipo a mano: fila en `subscriptions` con `subject_type` = team, `subject_id` = `club/equipo` (ej. `diablos/domingos`) y `plan_id` = `team-pro`. Nadie puede darse Pro desde la app.
-5. Si ya tenías el proyecto activado antes de estas etapas, solo vuelve a correr `schema.sql` completo.
+   `export const CLOUD = { url: "https://TU-PROYECTO.supabase.co", key: "sb_publishable_..." };`
 
-## 5. Almacenes de archivos (Storage)
-Los crea `schema.sql`. Comprueba que existan en **Storage**:
+3. **Nunca** pongas la clave **secret** (`sb_secret_...`) ni la **service_role**: saltan todas las reglas de seguridad. La prueba `tests/check_secrets.sh` falla si aparece alguna en el repositorio o en su historial.
+4. Sube el cambio a `main` (GitHub Pages lo publica solo).
 
-| Almacén | Público | Qué guarda | Quién lo ve |
-|---|---|---|---|
-| `photos` | sí | escudos, logo de la liga y las fotos de perfil que los jugadores de un equipo suben a su propia tarjeta | cualquiera con el enlace |
-| `receipts` | no | comprobantes de pago | quien lo subió y el administrador |
-| `player-photos` | **no** | fotos de jugadores del padrón de la liga | administradores con permiso de registro, con enlaces firmados temporales |
-| `actas` | **no** | foto original de las actas | administradores con permiso de resultados; **no se puede borrar ni reemplazar** desde la app |
+### 5. Primer uso
+1. Entra tú primero. En `#/cuenta` elige «Liga» y crea tu liga: quedas como **superadministrador**. Para Diablos, entra y elige tu nombre: la primera cuenta queda como administrador del equipo.
+2. En **Ajustes** de la liga, antes de registrar jugadores: **Privacidad** (aviso de privacidad, contacto, y si hay menores). Sin aviso publicado la app no deja registrar a nadie.
+3. Planes: tabla `plans`. Funciones (`features`) y límites (`limits`) se cambian ahí sin tocar código. Los precios quedan vacíos: la app no cobra.
+4. Dar Pro a un equipo a mano: fila en `subscriptions` con `subject_type` = team, `subject_id` = `club/equipo` y `plan_id` = `team-pro`. Nadie puede darse Pro desde la app.
 
-## 6. Lista de comprobación después de activar (hazla una vez, 20 minutos)
-Esto es lo que **no** se pudo probar sin un proyecto real. Marca cada punto:
-- [ ] Entrar con correo y con Google; cerrar sesión.
-- [ ] Crear liga, torneo, inscribir equipos, generar calendario, capturar un resultado, ver la tabla.
-- [ ] Una segunda cuenta (otro navegador) con un código de invitación de administrador con solo "calendario": confirmar que **no puede** capturar resultados ni ver finanzas (el error debe decir que no tiene permiso).
-- [ ] Registro de un jugador con foto; abrirla (enlace firmado); confirmar que con una cuenta sin permiso **no** se abre.
-- [ ] Activar la página pública, publicar el torneo, abrir `#/p/<liga>` **sin sesión** (ventana privada) y comprobar que solo se ven tabla, calendario y goleo.
-- [ ] Subir la foto de un acta, confirmarla, y comprobar que en Storage > `actas` el archivo sigue ahí aunque descartes otra.
-- [ ] Pegar el código `<iframe>` de Ajustes en una página de prueba y confirmar que carga.
-- [ ] En **Advisors** (Security) de Supabase: revisar que no haya tablas sin RLS. Las funciones del esquema validan el permiso dentro de la base de datos; si el Advisor señala funciones ejecutables por `anon`, revisa que sean solo las públicas de la lista siguiente.
+### 6. Prueba integral en el proyecto real (obligatoria, unos 30 minutos)
+Esto **no** se pudo probar sin un proyecto real. Usa dos navegadores (o uno normal y una ventana privada) y marca cada punto:
+- [ ] Crear cuenta con correo (llega el correo de confirmación), entrar, salir. Entrar con Google.
+- [ ] Crear liga, publicar el aviso de privacidad, crear un código de invitación para equipos; con otra cuenta crear un equipo y vincularlo; aprobarlo.
+- [ ] Pro: con contrato de liga el equipo vinculado recibe Pro; un equipo con su propia fila en `subscriptions` lo conserva al desvincularse.
+- [ ] Registrar un jugador en oficina con foto; abrir su foto (enlace temporal); con una cuenta sin permiso de registro, comprobar que **no** se abre.
+- [ ] Crear un enlace de registro; abrirlo en ventana privada; registrarse como adulto y como menor (pide tutor). Repetir con alguien ya inscrito: debe decir lo mismo que un registro nuevo.
+- [ ] Imprimir credenciales.
+- [ ] Crear torneo, inscribir equipos, generar calendario, capturar un resultado con goleadores; revisar tabla y goleo.
+- [ ] Registrar una sanción, una objeción y un pago de la liga.
+- [ ] Activar la página pública, publicar el torneo, abrir `#/p/<liga>` en ventana privada: solo tabla, calendario y (si lo activaste) goleo. Pegar el `<iframe>` en una página de prueba.
+- [ ] Subir la foto de un acta, revisar y confirmar; en **Storage > actas** el archivo sigue ahí.
+- [ ] Con una cuenta administradora que solo tenga «calendario»: no puede capturar resultados, ver finanzas ni el padrón.
+- [ ] Intentar subir un archivo que no sea foto (por ejemplo un PDF) como foto o acta: se rechaza. (Las fotos grandes la app las reduce antes de subir.)
+- [ ] Topes por IP: abrir muchas veces seguidas un enlace de registro falso desde la misma conexión; después de unos 30 intentos debe decir «Espera un momento». Si **nunca** lo dice, Supabase no está pasando la IP (`X-Forwarded-For`) y solo quedan los topes por enlace y por liga: anótalo.
+- [ ] **Advisors** (seguridad) en el panel de Supabase: sin errores de tablas sin RLS. Si marca funciones `SECURITY DEFINER` ejecutables, deben ser solo las de la lista de abajo.
+- [ ] Volver a correr `verificar.sql`: todo OK.
 
-Funciones que puede ejecutar un visitante sin cuenta (`anon`): `claimed`, `team_paid`, `reg_link_info`, `register_by_link`, `public_league`, `public_tournament`, `chat_take`. Al final de `schema.sql` un bloque de endurecimiento le quita a `anon` y a `public` el permiso de ejecutar todas las demás (se reaplica en cada corrida), y además cada función valida el permiso por dentro. La prueba de base de datos comprueba esa lista exacta.
+Funciones que puede ejecutar un visitante sin cuenta: `claimed`, `team_paid`, `team_doc`, `reg_link_info`, `register_by_link`, `public_league`, `public_tournament`, `chat_take`. Al final de `schema.sql` un bloque de endurecimiento le quita a `anon` todas las demás en cada corrida; cada función además valida el permiso por dentro.
 
-## 7. Servicios opcionales que NO vienen desplegados
-- **Lectura automática de actas** (OCR con servicio propio): `docs/ACTAS.md`. Sin él, se captura a mano o se lee en el celular.
-- **Asistente con modelo de lenguaje**: `docs/ASISTENTE.md`. Sin él, el asistente responde con reglas locales sin costo.
-- **WhatsApp oficial** (Cloud API): `docs/WHATSAPP.md`, solo diseño y requisitos. Hoy la app solo crea enlaces `wa.me` que una persona envía desde su WhatsApp.
+## Almacenes de archivos (Storage)
+Los crea `schema.sql` con tope de tamaño y solo imágenes JPG, PNG o WEBP (nada de SVG, HTML ni PDF):
 
-## 8. Privacidad y menores (léelo antes de registrar jugadores)
-- Se guardan datos personales: nombre, fecha de nacimiento, documento (opcional), foto, número. La liga es responsable de tener un **aviso de privacidad** y, para **menores de edad**, el consentimiento del padre, madre o tutor; la app marca a los menores pero no gestiona ese consentimiento.
-- Las credenciales impresas no llevan documento ni fecha de nacimiento. La página pública no muestra jugadores salvo el nombre de goleadores, y la liga puede ocultarlo (por omisión se muestran: apágalo en Ajustes si hay menores). Las fotos de jugadores y las actas están en almacenes privados.
-- Quien se registra por enlace público no sube foto (evita abuso); la agrega la liga al aprobar.
-- La bitácora de cambios no se puede borrar desde la app.
+| Almacén | Público | Tope | Qué guarda | Quién lo ve |
+|---|---|---|---|---|
+| `photos` | sí (por URL) | 2 MB | escudos, logo de la liga, fotos de perfil que los jugadores suben a su tarjeta | cualquiera con la URL; nadie puede listarlo |
+| `receipts` | no | 5 MB | comprobantes de pago | quien lo subió y el administrador del equipo |
+| `player-photos` | **no** | 1 MB | fotos del padrón de la liga | administradores con permiso de registro, con enlaces temporales |
+| `actas` | **no** | 5 MB | foto original de las actas | administradores con permiso de resultados; **no se puede borrar ni reemplazar** |
 
-## 9. Probar el código (para quien lo mantenga)
-`sh tests/run_all.sh` corre todo: sintaxis de módulos, base de datos (PostgreSQL 16 temporal con un simulador de Supabase), pruebas unitarias y pruebas de navegador en modo demo (Playwright, servidor en el puerto 8765). Requiere PostgreSQL 16, Node y Python con Playwright.
+## Privacidad y menores
+- **Privado por omisión:** la página pública no muestra nombres de jugadores; la liga puede activar «nombre e inicial» o «nombre completo». Si marca que hay menores, los nombres no se publican nunca (la base lo impide). Hora y cancha de los partidos se pueden ocultar. Fotos, documentos, fechas de nacimiento, contactos, notas, finanzas y motivos de sanciones nunca son públicos.
+- **Aviso de privacidad y consentimiento:** cada liga publica su aviso (Ajustes > Privacidad). Quien se registra por enlace lo acepta; el delegado o la liga declaran que el jugador lo aceptó. Para menores se pide el nombre y la autorización de madre, padre o tutor. Se guarda con la versión del aviso; si el aviso cambia, se vuelve a pedir.
+- **La plantilla del aviso no es asesoría legal.** Tiene partes entre [corchetes] que la liga completa y revisa con quien la asesore. La app no garantiza el cumplimiento de ninguna ley (por ejemplo, la de protección de datos de tu país).
+- **Documento de identidad:** no se pide por omisión; la liga lo activa solo si de verdad lo necesita.
+- **Derecho a borrar:** en Jugadores > Editar > «Borrar sus datos personales». Quedan los resultados históricos sin datos personales.
+- **Finanzas de equipos de la app:** solo las ven los jugadores aprobados del equipo, salvo que el administrador las abra. Diablos y el ejemplo siguen como siempre (sus datos salen de los archivos del repositorio).
+
+## Servicios opcionales que NO vienen desplegados
+- Lectura automática de actas con servicio propio: `docs/ACTAS.md`.
+- Asistente con modelo de lenguaje: `docs/ASISTENTE.md`.
+- WhatsApp oficial (Cloud API): `docs/WHATSAPP.md`.
+
+## Probar el código (para quien lo mantenga)
+`sh tests/run_all.sh` corre todo: sintaxis, búsqueda de secretos, base de datos (PostgreSQL 16 temporal), pruebas unitarias y de navegador en modo demo. Requiere PostgreSQL 16, Node y Python con Playwright.
 
 ## Pagos del equipo (Diablos)
 - El jugador, en **Finanzas > Mi cuenta**, toca **Ya pagué**, pone la cantidad y la foto del comprobante. Queda en revisión; al aprobar se actualizan su cuenta, la caja y lo que falta.

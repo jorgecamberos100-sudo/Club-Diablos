@@ -17,6 +17,8 @@ export const api = new Proxy({}, { get: (_, k) => (...a) => B[k](...a) });
 const ERR = {
   "members_one_claim": "Ese nombre ya lo tiene otra cuenta. Si eres tú, pídele a Metra que lo libere.",
   "Invalid login credentials": "Correo o contraseña incorrectos.",
+  "confirmar_correo": "Te enviamos un correo para confirmar tu cuenta. Ábrelo, toca el enlace y vuelve a entrar con tu correo y contraseña.",
+  "Email not confirmed": "Tu correo aún no está confirmado. Busca el correo de confirmación (revisa también spam) y toca el enlace.",
   "User already registered": "Ese correo ya tiene cuenta. Toca «Ya tengo cuenta».",
   "Password should be at least": "La contraseña debe tener al menos 6 caracteres.",
   "Unable to validate email": "Escribe un correo válido.",
@@ -130,8 +132,10 @@ async function supa() {
   return {
     async user() { const { data } = await sb.auth.getSession(); const u = data.session && data.session.user; return u ? { id: u.id, email: u.email } : null; },
     async signUp(email, pw) {
-      const { data, error } = await sb.auth.signUp({ email, password: pw }); if (error) throw error;
-      if (!data.session) throw new Error("Unable to validate email: la cuenta necesita confirmar correo; desactiva «Confirm email» en Supabase.");
+      // Con «Confirm email» encendido en Supabase (recomendado) no hay sesión todavía: se avisa que revise su correo.
+      try { localStorage.setItem(BACK, location.hash); } catch (e) { /* sin almacenamiento */ }
+      const { data, error } = await sb.auth.signUp({ email, password: pw, options: { emailRedirectTo: location.origin + location.pathname } }); if (error) throw error;
+      if (!data.session) throw new Error("confirmar_correo");
     },
     async signIn(email, pw) { ok(await sb.auth.signInWithPassword({ email, password: pw })); },
     async signInGoogle() {
@@ -194,7 +198,8 @@ async function supa() {
     async plans() { return ok(await sb.from("plans").select("*").order("tier")); },
     // ----- equipos en la base de datos -----
     async dbClub(id) { const r = ok(await sb.from("club_docs").select("club, players").eq("id", id).maybeSingle()); return r ? { club: r.club, players: r.players } : null; },
-    async dbTeam(c, t) { const r = ok(await sb.from("team_docs").select("data").eq("club_id", c).eq("team_id", t).maybeSingle()); return r ? r.data : null; },
+    async dbTeam(c, t) { return ok(await sb.rpc("team_doc", { c, t })) || null; },   // sin las finanzas si no eres del equipo (salvo que el equipo las haga públicas)
+    async setFinancePublic(c, t, on) { ok(await sb.rpc("set_finance_public", { c, t, p_on: !!on })); },
     async createTeam(name, format) { return ok(await sb.rpc("create_team", { nm: name, fmt: format })); },
     async addPlayer(c, t, { name, number, pos }) { return ok(await sb.rpc("add_player", { c, t, nm: name, num: number || "", pos: pos || "" })); },
     async entitlement(st, sid) { return ok(await sb.rpc("entitlement", { st, sid })) || defaultPlan(st); },
@@ -554,7 +559,12 @@ function demo() {
     async plans() { return DEFAULTS; },
     // ----- equipos en la base de datos (navegador) -----
     async dbClub(id) { const r = db().clubdocs.find((x) => x.id === id); return r ? { club: r.club, players: r.players } : null; },
-    async dbTeam(c, t) { const r = db().teamdocs.find((x) => x.club_id === c && x.team_id === t); return r ? r.data : null; },
+    async dbTeam(c, t) {
+      const d = db(), r = d.teamdocs.find((x) => x.club_id === c && x.team_id === t); if (!r) return null;
+      if (r.data.finance_public || approved(d, c, t) || isAdmin(d, c, t)) return r.data;
+      const { finance, ...rest } = r.data; return rest;
+    },
+    async setFinancePublic(c, t, on) { const d = db(); ensure(isAdmin(d, c, t)); const r = d.teamdocs.find((x) => x.club_id === c && x.team_id === t); ensure(r, "Este equipo se administra desde archivos"); r.data.finance_public = !!on; save(d); },
     async createTeam(name, format) {
       const d = db(); const u = cur(d);
       ensure(name && name.trim().length > 1, "Escribe el nombre del equipo"); ensure(FMTS.includes(format), "Elige el formato");
@@ -1050,7 +1060,7 @@ function demo() {
       Object.assign(r, { status: "scheduled", home_goals: null, away_goals: null, updated_at: new Date().toISOString() }); save(d);
     },
     // ----- pagos -----
-    async paid(c, t) { return db().pays.filter((p) => same(c, t)(p) && p.status === "approved").map(({ kind, item, player_id, amount, detail, decided_at }) => ({ kind, item, player_id, amount, detail, decided_at })); },
+    async paid(c, t) { const d = db(), r = d.teamdocs.find((x) => x.club_id === c && x.team_id === t); if (r && !r.data.finance_public && !approved(d, c, t) && !isAdmin(d, c, t)) return []; return db().pays.filter((p) => same(c, t)(p) && p.status === "approved").map(({ kind, item, player_id, amount, detail, decided_at }) => ({ kind, item, player_id, amount, detail, decided_at })); },
     async myPayments(c, t) { const d = db(); return d.pays.filter((p) => same(c, t)(p) && p.user_id === d.session && p.kind !== "salida").reverse().slice(0, 20); },
     async pendingPayments(c, t) { const d = db(); ensure(isAdmin(d, c, t)); return d.pays.filter((p) => same(c, t)(p) && p.status === "pending").map((p) => ({ ...p, receipt_url: p.receipt })); },
     async reportPayment(c, t, { kind, amount, detail, file }) {

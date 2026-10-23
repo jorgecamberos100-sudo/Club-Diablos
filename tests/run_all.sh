@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.." || exit 1
 fail=0
 run() { echo "== $1"; shift; "$@" > /tmp/run_all.out 2>&1 || { fail=1; tail -15 /tmp/run_all.out; }; tail -1 /tmp/run_all.out; }
 run "Sintaxis de módulos" sh tests/check_syntax.sh
+run "Sin secretos" sh tests/check_secrets.sh
 run "Base de datos" python3 tests/db/test_db.py
 run "Formaciones" node tests/unit/test_forms.mjs
 run "Posiciones y goleo" node tests/unit/test_standings.mjs
