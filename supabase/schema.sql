@@ -904,3 +904,301 @@ end $$;
 grant execute on function public.has_feature(text,text,text), public.update_team(text,text,text,text,int), public.set_crest(text,text),
   public.set_theme(text,text,jsonb,text,text), public.update_player(text,text,text,text,text,text), public.set_player_status(text,text,text,text),
   public.save_match(text,text,jsonb), public.delete_match(text,text,text), public.save_finance(text,text,jsonb) to authenticated;
+
+-- ============ Etapa 5 del producto: torneos, calendario, resultados ============
+-- Todas las tablas llevan RLS (lectura solo para administradores de la liga) y se escriben únicamente por funciones.
+-- La lectura pública llega en la etapa de página pública, por funciones que no exponen datos privados.
+
+create or replace function public.league_feature(l text, f text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select f = any (array(select jsonb_array_elements_text(entitlement('league', l)->'features'))) $$;
+revoke all on function public.league_feature(text,text) from public, anon, authenticated;
+
+create table if not exists public.tournaments (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  name text not null check (length(trim(name)) between 2 and 80),
+  season text check (season is null or length(season) <= 40),
+  category text check (category is null or length(category) <= 40),
+  modality smallint not null default 7 check (modality in (5,6,7,8,9,11)),
+  day text check (day is null or length(day) <= 20), shift text check (shift is null or length(shift) <= 20),
+  fee numeric(10,2) check (fee is null or (fee >= 0 and fee <= 100000)), fee_note text check (fee_note is null or length(fee_note) <= 200),
+  rules text check (rules is null or length(rules) <= 8000),
+  pts_win smallint not null default 3 check (pts_win between 0 and 10),
+  pts_draw smallint not null default 1 check (pts_draw between 0 and 10),
+  pts_loss smallint not null default 0 check (pts_loss between 0 and 10),
+  tiebreakers text[] not null default '{dg,gf,h2h,fairplay}' check (tiebreakers <@ array['dg','gf','wins','gc_low','h2h','fairplay','alpha']::text[]),
+  status text not null default 'draft' check (status in ('draft','published','paused','finished')),
+  created_by uuid references auth.users(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create index if not exists tournaments_league on public.tournaments (league_id, created_at desc);
+
+create table if not exists public.tournament_teams (
+  id uuid primary key default gen_random_uuid(),
+  tournament_id uuid not null references public.tournaments(id) on delete cascade,
+  league_id text not null references public.leagues(id) on delete cascade,
+  name text not null check (length(trim(name)) between 2 and 60),
+  link_id uuid references public.league_teams(id) on delete set null,   -- equipo de la app, si lo tiene
+  contact text check (contact is null or length(contact) <= 120),        -- PRIVADO: nunca sale en páginas públicas
+  status text not null default 'active' check (status in ('active','withdrawn')),
+  created_at timestamptz not null default now()
+);
+create unique index if not exists tt_name on public.tournament_teams (tournament_id, lower(name)) where status = 'active';
+create unique index if not exists tt_link on public.tournament_teams (tournament_id, link_id) where status = 'active' and link_id is not null;
+
+create table if not exists public.league_matches (
+  id uuid primary key default gen_random_uuid(),
+  tournament_id uuid not null references public.tournaments(id) on delete cascade,
+  league_id text not null references public.leagues(id) on delete cascade,
+  round text check (round is null or length(round) <= 20), starts_at timestamptz, venue text check (venue is null or length(venue) <= 40),
+  home_id uuid not null references public.tournament_teams(id), away_id uuid not null references public.tournament_teams(id),
+  status text not null default 'scheduled' check (status in ('scheduled','played','postponed','canceled')),
+  home_goals smallint check (home_goals between 0 and 99), away_goals smallint check (away_goals between 0 and 99),
+  notes text check (notes is null or length(notes) <= 500),
+  updated_by uuid references auth.users(id), updated_at timestamptz not null default now(),
+  check (home_id <> away_id),
+  check ((status = 'played') = (home_goals is not null and away_goals is not null))
+);
+create index if not exists lm_tournament on public.league_matches (tournament_id, starts_at);
+create unique index if not exists lm_pair on public.league_matches (tournament_id, coalesce(round, ''), home_id, away_id);
+
+create table if not exists public.match_events (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.league_matches(id) on delete cascade,
+  league_id text not null references public.leagues(id) on delete cascade,
+  team_id uuid not null references public.tournament_teams(id),
+  player text not null check (length(trim(player)) between 1 and 60), player_id uuid,   -- player_id se enlaza con el registro de jugadores (etapa 7)
+  kind text not null check (kind in ('goal','own_goal','yellow','red')),
+  n smallint not null default 1 check (n between 1 and 20)
+);
+create index if not exists me_match on public.match_events (match_id);
+
+alter table public.tournaments enable row level security;
+alter table public.tournament_teams enable row level security;
+alter table public.league_matches enable row level security;
+alter table public.match_events enable row level security;
+drop policy if exists tournaments_read on public.tournaments;
+create policy tournaments_read on public.tournaments for select using (is_league_admin(league_id));
+drop policy if exists tt_read on public.tournament_teams;
+create policy tt_read on public.tournament_teams for select using (is_league_admin(league_id));
+drop policy if exists lm_read on public.league_matches;
+create policy lm_read on public.league_matches for select using (is_league_admin(league_id));
+drop policy if exists me_read on public.match_events;
+create policy me_read on public.match_events for select using (is_league_admin(league_id));
+grant select on public.tournaments, public.tournament_teams, public.league_matches, public.match_events to authenticated;
+
+-- Un equipo no juega dos veces en la misma jornada; los equipos son del torneo y están activos; un torneo terminado no se modifica.
+create or replace function public.lm_guard() returns trigger language plpgsql as $$
+declare st text;
+begin
+  select status into st from tournaments where id = new.tournament_id;
+  if st = 'finished' then raise exception 'El torneo ya terminó'; end if;
+  if tg_op = 'INSERT' or new.home_id is distinct from old.home_id or new.away_id is distinct from old.away_id then
+    if (select count(*) from tournament_teams where tournament_id = new.tournament_id and status = 'active' and id in (new.home_id, new.away_id)) <> 2 then
+      raise exception 'Los equipos deben estar inscritos y activos en el torneo'; end if;
+  end if;
+  if new.round is not null and new.status <> 'canceled' and exists (
+      select 1 from league_matches m where m.tournament_id = new.tournament_id and m.round = new.round and m.status <> 'canceled' and m.id <> new.id
+        and (m.home_id in (new.home_id, new.away_id) or m.away_id in (new.home_id, new.away_id))) then
+    raise exception 'Un equipo ya juega en esa jornada'; end if;
+  return new;
+end $$;
+drop trigger if exists lm_guard on public.league_matches;
+create trigger lm_guard before insert or update on public.league_matches for each row execute function public.lm_guard();
+
+-- ---- Torneos ----
+create or replace function public.create_tournament(l text, t jsonb) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare tid uuid; lim int; n int; tb text[] := '{dg,gf,h2h,fairplay}';
+begin
+  if not is_league_admin(l, 'tournaments') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'tournaments') then raise exception 'Tu plan no incluye esa función'; end if;
+  lim := (entitlement('league', l)->'limits'->>'tournaments')::int;
+  select count(*) into n from tournaments where league_id = l and status <> 'finished';
+  if lim is not null and n >= lim then raise exception 'Tu plan llegó al límite de torneos'; end if;
+  if t ? 'tiebreakers' then select coalesce(array_agg(x), '{}') into tb from jsonb_array_elements_text(t->'tiebreakers') x; end if;
+  insert into tournaments (league_id, name, season, category, modality, day, shift, fee, fee_note, rules, pts_win, pts_draw, pts_loss, tiebreakers, created_by)
+  values (l, left(trim(coalesce(t->>'name', '')), 80), nullif(left(trim(coalesce(t->>'season', '')), 40), ''), nullif(left(trim(coalesce(t->>'category', '')), 40), ''),
+    coalesce((t->>'modality')::int, 7), nullif(left(trim(coalesce(t->>'day', '')), 20), ''), nullif(left(trim(coalesce(t->>'shift', '')), 20), ''),
+    nullif(t->>'fee', '')::numeric, nullif(left(trim(coalesce(t->>'fee_note', '')), 200), ''), nullif(left(coalesce(t->>'rules', ''), 8000), ''),
+    coalesce((t->>'pts_win')::int, 3), coalesce((t->>'pts_draw')::int, 1), coalesce((t->>'pts_loss')::int, 0), tb, auth.uid())
+  returning id into tid;
+  perform log_action(l, 'tournament.create', jsonb_build_object('tournament', tid, 'name', t->>'name'));
+  return tid;
+end $$;
+
+create or replace function public.update_tournament(l text, tid uuid, t jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare tb text[]; cur tournaments;
+begin
+  if not is_league_admin(l, 'tournaments') then raise exception 'Sin permiso'; end if;
+  select * into cur from tournaments where id = tid and league_id = l for update;
+  if cur.id is null then raise exception 'Torneo no encontrado'; end if;
+  if cur.status = 'finished' then raise exception 'El torneo ya terminó'; end if;
+  tb := cur.tiebreakers; if t ? 'tiebreakers' then select coalesce(array_agg(x), '{}') into tb from jsonb_array_elements_text(t->'tiebreakers') x; end if;
+  update tournaments set
+    name = case when t ? 'name' then left(trim(t->>'name'), 80) else name end,
+    season = case when t ? 'season' then nullif(left(trim(coalesce(t->>'season', '')), 40), '') else season end,
+    category = case when t ? 'category' then nullif(left(trim(coalesce(t->>'category', '')), 40), '') else category end,
+    modality = case when t ? 'modality' then (t->>'modality')::int else modality end,
+    day = case when t ? 'day' then nullif(left(trim(coalesce(t->>'day', '')), 20), '') else day end,
+    shift = case when t ? 'shift' then nullif(left(trim(coalesce(t->>'shift', '')), 20), '') else shift end,
+    fee = case when t ? 'fee' then nullif(t->>'fee', '')::numeric else fee end,
+    fee_note = case when t ? 'fee_note' then nullif(left(trim(coalesce(t->>'fee_note', '')), 200), '') else fee_note end,
+    rules = case when t ? 'rules' then nullif(left(coalesce(t->>'rules', ''), 8000), '') else rules end,
+    pts_win = case when t ? 'pts_win' then (t->>'pts_win')::int else pts_win end,
+    pts_draw = case when t ? 'pts_draw' then (t->>'pts_draw')::int else pts_draw end,
+    pts_loss = case when t ? 'pts_loss' then (t->>'pts_loss')::int else pts_loss end,
+    tiebreakers = tb, updated_at = now()
+  where id = tid;
+  perform log_action(l, 'tournament.update', jsonb_build_object('tournament', tid, 'fields', (select jsonb_agg(k) from jsonb_object_keys(t) k)));
+end $$;
+
+create or replace function public.set_tournament_status(l text, tid uuid, st text) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur tournaments;
+begin
+  if not is_league_admin(l, 'tournaments') then raise exception 'Sin permiso'; end if;
+  if st not in ('draft','published','paused','finished') then raise exception 'Datos no válidos'; end if;
+  select * into cur from tournaments where id = tid and league_id = l for update;
+  if cur.id is null then raise exception 'Torneo no encontrado'; end if;
+  if cur.status = 'finished' and st <> 'published' then raise exception 'El torneo ya terminó'; end if;   -- solo se puede reabrir publicándolo de nuevo
+  update tournaments set status = st, updated_at = now() where id = tid;
+  perform log_action(l, 'tournament.status', jsonb_build_object('tournament', tid, 'from', cur.status, 'to', st));
+end $$;
+
+-- ---- Inscripción de equipos ----
+create or replace function public.add_tournament_team(l text, tid uuid, nm text, link uuid default null, contact text default null) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare ttid uuid; nm2 text := left(trim(coalesce(nm, '')), 60); lt league_teams;
+begin
+  if not is_league_admin(l, 'tournaments') then raise exception 'Sin permiso'; end if;
+  if not exists (select 1 from tournaments where id = tid and league_id = l and status <> 'finished') then raise exception 'Torneo no encontrado'; end if;
+  if link is not null then
+    select * into lt from league_teams where id = link and league_id = l and status = 'approved';
+    if lt.id is null then raise exception 'Ese equipo no está vinculado a la liga'; end if;
+    nm2 := coalesce(nullif(nm2, ''), lt.team_name);
+  end if;
+  if length(nm2) < 2 then raise exception 'Escribe el nombre del equipo'; end if;
+  if exists (select 1 from tournament_teams where tournament_id = tid and status = 'active' and (lower(name) = lower(nm2) or (link is not null and link_id = link))) then raise exception 'Ese equipo ya está inscrito'; end if;
+  insert into tournament_teams (tournament_id, league_id, name, link_id, contact) values (tid, l, nm2, link, nullif(left(trim(coalesce(contact, '')), 120), '')) returning id into ttid;
+  perform log_action(l, 'tournament.team_add', jsonb_build_object('tournament', tid, 'team', nm2));
+  return ttid;
+end $$;
+
+create or replace function public.remove_tournament_team(l text, ttid uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare r tournament_teams;
+begin
+  if not is_league_admin(l, 'tournaments') then raise exception 'Sin permiso'; end if;
+  select * into r from tournament_teams where id = ttid and league_id = l and status = 'active' for update;
+  if r.id is null then raise exception 'Equipo no encontrado'; end if;
+  if exists (select 1 from league_matches where status = 'played' and (home_id = ttid or away_id = ttid)) then
+    update tournament_teams set status = 'withdrawn' where id = ttid;       -- con partidos jugados no se borra: se retira y se conserva el historial
+    update league_matches set status = 'canceled', notes = coalesce(notes || ' · ', '') || 'Equipo retirado' where status in ('scheduled','postponed') and (home_id = ttid or away_id = ttid);
+  else
+    delete from league_matches where home_id = ttid or away_id = ttid;
+    delete from tournament_teams where id = ttid;
+  end if;
+  perform log_action(l, 'tournament.team_remove', jsonb_build_object('tournament', r.tournament_id, 'team', r.name));
+end $$;
+
+-- ---- Calendario ----
+create or replace function public.league_save_match(l text, m jsonb) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare mid uuid := nullif(m->>'id', '')::uuid; tid uuid := (m->>'tournament')::uuid; cur league_matches; st text := coalesce(m->>'status', 'scheduled');
+begin
+  if not is_league_admin(l, 'schedule') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'schedule') then raise exception 'Tu plan no incluye esa función'; end if;
+  if st not in ('scheduled','postponed','canceled') then raise exception 'Datos no válidos'; end if;
+  if mid is null then
+    if not exists (select 1 from tournaments where id = tid and league_id = l) then raise exception 'Torneo no encontrado'; end if;
+    insert into league_matches (tournament_id, league_id, round, starts_at, venue, home_id, away_id, status, notes, updated_by)
+    values (tid, l, nullif(left(trim(coalesce(m->>'round', '')), 20), ''), nullif(m->>'starts_at', '')::timestamptz, nullif(left(trim(coalesce(m->>'venue', '')), 40), ''),
+      (m->>'home')::uuid, (m->>'away')::uuid, st, nullif(left(trim(coalesce(m->>'notes', '')), 500), ''), auth.uid()) returning id into mid;
+    perform log_action(l, 'match.create', jsonb_build_object('match', mid));
+  else
+    select * into cur from league_matches where id = mid and league_id = l for update;
+    if cur.id is null then raise exception 'Partido no encontrado'; end if;
+    if cur.status = 'played' then raise exception 'Ese partido ya tiene resultado'; end if;
+    update league_matches set round = nullif(left(trim(coalesce(m->>'round', '')), 20), ''), starts_at = nullif(m->>'starts_at', '')::timestamptz,
+      venue = nullif(left(trim(coalesce(m->>'venue', '')), 40), ''), status = st, notes = nullif(left(trim(coalesce(m->>'notes', '')), 500), ''),
+      home_id = coalesce(nullif(m->>'home', '')::uuid, home_id), away_id = coalesce(nullif(m->>'away', '')::uuid, away_id), updated_by = auth.uid(), updated_at = now() where id = mid;
+    perform log_action(l, case when cur.starts_at is distinct from nullif(m->>'starts_at', '')::timestamptz or cur.venue is distinct from nullif(m->>'venue', '') then 'match.reschedule' else 'match.update' end,
+      jsonb_build_object('match', mid, 'from', jsonb_build_object('starts_at', cur.starts_at, 'venue', cur.venue, 'status', cur.status), 'to', jsonb_build_object('starts_at', m->>'starts_at', 'venue', m->>'venue', 'status', st)));
+  end if;
+  return mid;
+end $$;
+
+create or replace function public.league_create_matches(l text, tid uuid, ms jsonb) returns int
+language plpgsql security definer set search_path = public as $$
+declare m jsonb; n int := 0;
+begin
+  if not is_league_admin(l, 'schedule') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'schedule') then raise exception 'Tu plan no incluye esa función'; end if;
+  if jsonb_typeof(ms) <> 'array' or jsonb_array_length(ms) > 400 then raise exception 'Datos no válidos'; end if;
+  if not exists (select 1 from tournaments where id = tid and league_id = l) then raise exception 'Torneo no encontrado'; end if;
+  for m in select * from jsonb_array_elements(ms) loop
+    insert into league_matches (tournament_id, league_id, round, starts_at, venue, home_id, away_id, updated_by)
+    values (tid, l, nullif(left(trim(coalesce(m->>'round', '')), 20), ''), nullif(m->>'starts_at', '')::timestamptz, nullif(left(trim(coalesce(m->>'venue', '')), 40), ''), (m->>'home')::uuid, (m->>'away')::uuid, auth.uid());
+    n := n + 1;
+  end loop;
+  perform log_action(l, 'match.generate', jsonb_build_object('tournament', tid, 'count', n));
+  return n;
+end $$;
+
+create or replace function public.league_delete_match(l text, mid uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur league_matches;
+begin
+  if not is_league_admin(l, 'schedule') then raise exception 'Sin permiso'; end if;
+  select * into cur from league_matches where id = mid and league_id = l for update;
+  if cur.id is null then raise exception 'Partido no encontrado'; end if;
+  if cur.status = 'played' then raise exception 'Ese partido ya tiene resultado'; end if;
+  delete from league_matches where id = mid;
+  perform log_action(l, 'match.delete', jsonb_build_object('match', mid, 'round', cur.round));
+end $$;
+
+-- ---- Resultados oficiales (solo administradores con permiso; todo cambio queda en la bitácora con el antes y el después) ----
+create or replace function public.record_result(l text, mid uuid, hg int, ag int, events jsonb default '[]', note text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur league_matches; e jsonb; k text; tm uuid; gh int := 0; ga int := 0; cnt int;
+begin
+  if not is_league_admin(l, 'results') then raise exception 'Sin permiso'; end if;
+  select * into cur from league_matches where id = mid and league_id = l for update;
+  if cur.id is null then raise exception 'Partido no encontrado'; end if;
+  if hg is null or ag is null or hg < 0 or ag < 0 or hg > 99 or ag > 99 then raise exception 'Datos no válidos'; end if;
+  if jsonb_typeof(coalesce(events, '[]')) <> 'array' or jsonb_array_length(coalesce(events, '[]')) > 100 then raise exception 'Datos no válidos'; end if;
+  for e in select * from jsonb_array_elements(coalesce(events, '[]')) loop
+    tm := (e->>'team')::uuid; k := e->>'kind';
+    if tm not in (cur.home_id, cur.away_id) or k not in ('goal','own_goal','yellow','red') or length(trim(coalesce(e->>'player', ''))) < 1 then raise exception 'Datos no válidos'; end if;
+    if k = 'goal' then if tm = cur.home_id then gh := gh + coalesce((e->>'n')::int, 1); else ga := ga + coalesce((e->>'n')::int, 1); end if;
+    elsif k = 'own_goal' then if tm = cur.home_id then ga := ga + coalesce((e->>'n')::int, 1); else gh := gh + coalesce((e->>'n')::int, 1); end if; end if;
+  end loop;
+  if gh > hg or ga > ag then raise exception 'Los goles de los jugadores superan el marcador'; end if;
+  select count(*) into cnt from match_events where match_id = mid;
+  delete from match_events where match_id = mid;
+  for e in select * from jsonb_array_elements(coalesce(events, '[]')) loop
+    insert into match_events (match_id, league_id, team_id, player, kind, n) values (mid, l, (e->>'team')::uuid, left(trim(e->>'player'), 60), e->>'kind', coalesce((e->>'n')::int, 1));
+  end loop;
+  update league_matches set status = 'played', home_goals = hg, away_goals = ag, notes = nullif(left(trim(coalesce(note, '')), 500), ''), updated_by = auth.uid(), updated_at = now() where id = mid;
+  perform log_action(l, case when cur.status = 'played' then 'result.correct' else 'result.record' end, jsonb_build_object('match', mid,
+    'before', jsonb_build_object('status', cur.status, 'home', cur.home_goals, 'away', cur.away_goals, 'events', cnt), 'after', jsonb_build_object('home', hg, 'away', ag, 'events', jsonb_array_length(coalesce(events, '[]')))));
+end $$;
+
+create or replace function public.clear_result(l text, mid uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur league_matches;
+begin
+  if not is_league_admin(l, 'results') then raise exception 'Sin permiso'; end if;
+  select * into cur from league_matches where id = mid and league_id = l and status = 'played' for update;
+  if cur.id is null then raise exception 'Partido no encontrado'; end if;
+  delete from match_events where match_id = mid;
+  update league_matches set status = 'scheduled', home_goals = null, away_goals = null, updated_by = auth.uid(), updated_at = now() where id = mid;
+  perform log_action(l, 'result.clear', jsonb_build_object('match', mid, 'before', jsonb_build_object('home', cur.home_goals, 'away', cur.away_goals)));
+end $$;
+
+grant execute on function public.create_tournament(text,jsonb), public.update_tournament(text,uuid,jsonb), public.set_tournament_status(text,uuid,text),
+  public.add_tournament_team(text,uuid,text,uuid,text), public.remove_tournament_team(text,uuid), public.league_save_match(text,jsonb),
+  public.league_create_matches(text,uuid,jsonb), public.league_delete_match(text,uuid), public.record_result(text,uuid,int,int,jsonb,text),
+  public.clear_result(text,uuid) to authenticated;

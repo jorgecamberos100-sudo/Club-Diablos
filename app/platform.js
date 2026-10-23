@@ -10,9 +10,10 @@ import { loadClubs } from "./data.js";
 import { FEATURES, can } from "./plans.js";
 import { card, chip, toast, dshort } from "./ui.js";
 import * as equipos from "./league/equipos.js";
+import * as torneos from "./league/torneos.js";
 
 // Cada sección con módulo propio exporta render(ctx), actions y forms. Las demás muestran su descripción.
-const MODULES = { equipos };
+const MODULES = { equipos, torneos };
 
 const THEME = {
   name: "Mi cuenta",
@@ -123,6 +124,7 @@ async function league(app, user, id, sec) {
   const S = SECTIONS[sec];
   const can2 = (perm) => l.me.role === "owner" || (l.me.perms || []).includes("*") || (l.me.perms || []).includes(perm);
   curLeague = { id, l, ent, user, can: can2, sec, reload: () => window.__reload() };
+  torneos.wireSheets(() => curLeague);
   let body;
   if (MODULES[sec]) {
     try { body = await MODULES[sec].render(curLeague); } catch (e) { console.error(e); body = card(S.label, `<p class="hint">${esc(friendly(e))}</p>`); }

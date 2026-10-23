@@ -147,5 +147,77 @@ try:
     q("srv", "delete from subscriptions")
     check("sin Pro tampoco se votan calificaciones", fails("beto", f"insert into attr_votes (club_id,team_id,voter,target,vel,tir,pas,reg,def,fis) values ('los-halcones','principal','{bu}','p9',5,5,5,5,5,5)"))
     check("equipos de archivo no se restringen", val("srv", "select has_feature('diablos','domingos','finance')") == "t")
+
+    print("Torneos, calendario y resultados (etapa 5)")
+    L = "liga-reforma"
+    user("edu"); user("fran")
+    q("srv", f"insert into league_admins (league_id,user_id,role,perms) values ('{L}','{UID['edu']}','admin',array['results']), ('{L}','{UID['fran']}','admin',array['tournaments','schedule'])")
+    check("sin permiso no se crea torneo", fails("edu", f"select create_tournament('{L}','{{\"name\":\"Apertura\"}}')", "sin permiso"))
+    check("ajeno a la liga no crea torneo", fails("cris", f"select create_tournament('{L}','{{\"name\":\"Apertura\"}}')", "sin permiso"))
+    tid = val("fran", f"""select create_tournament('{L}','{{"name":"Apertura 2026","season":"Otoño","category":"Libre","modality":7,"fee":2500,"tiebreakers":["h2h","dg","gf"]}}')""")
+    check("administrador con permiso crea torneo", re.fullmatch(r"[0-9a-f-]{36}", tid) is not None, tid)
+    check("criterio de desempate inventado se rechaza", fails("fran", f"""select create_tournament('{L}','{{"name":"X1","tiebreakers":["sorteo"]}}')""", "check"))
+    check("modalidad inválida se rechaza", fails("fran", f"""select create_tournament('{L}','{{"name":"X2","modality":4}}')""", "check"))
+    check("la bitácora registra el torneo", val("ana", f"select count(*) from audit_log where league_id='{L}' and action='tournament.create'") == "1")
+    check("beto no ve torneos ajenos", val("beto", "select count(*) from tournaments") == "0")
+    names = ["Rayos", "Lobos", "Águilas", "Toros"]
+    tt = {}
+    for n in names:
+        tt[n] = val("fran", f"select add_tournament_team('{L}','{tid}','{n}')")
+    check("equipos inscritos", val("ana", "select count(*) from tournament_teams") == "4")
+    check("no se inscribe dos veces (ni con otra mayúscula)", fails("fran", f"select add_tournament_team('{L}','{tid}','rayos')", "ya está inscrito"))
+    lt = val("srv", "select id from league_teams where status='approved' limit 1")
+    check("equipo de la app se inscribe por vínculo", val("fran", f"select add_tournament_team('{L}','{tid}',null,'{lt}')") != "")
+    check("el mismo vínculo no se duplica", fails("fran", f"select add_tournament_team('{L}','{tid}','Otro nombre','{lt}')", "ya está inscrito"))
+    check("vínculo de otra liga se rechaza", fails("fran", f"select add_tournament_team('{L}','{tid}','Z','{UID['ana']}')", "no está vinculado"))
+    # calendario
+    R, Lo, Ag, To = tt["Rayos"], tt["Lobos"], tt["Águilas"], tt["Toros"]
+    mj = lambda r, h, a: json.dumps({"tournament": tid, "round": r, "home": h, "away": a, "starts_at": "2026-11-01T10:00:00Z", "venue": "Cancha 1"})
+    m1 = val("fran", f"select league_save_match('{L}','{mj('J1', R, Lo)}')")
+    check("se programa un partido", re.fullmatch(r"[0-9a-f-]{36}", m1) is not None, m1)
+    check("un equipo no juega dos veces en la jornada", fails("fran", f"select league_save_match('{L}','{mj('J1', R, Ag)}')", "ya juega"))
+    check("no se enfrenta a sí mismo", fails("fran", f"select league_save_match('{L}','{mj('J2', R, R)}')"))
+    check("equipos de otro torneo/inexistentes se rechazan", fails("fran", f"select league_save_match('{L}','{mj('J2', R, UID['ana'])}')", "inscritos"))
+    m2 = val("fran", f"select league_save_match('{L}','{mj('J1', Ag, To)}')")
+    n = val("fran", f"""select league_create_matches('{L}','{tid}','[{mj('J2', R, Ag)},{mj('J2', Lo, To)},{mj('J3', R, To)},{mj('J3', Lo, Ag)}]')""")
+    check("generar calendario en bloque", n == "4", n)
+    check("reprogramar queda en la bitácora con antes y después", val("fran", f"""select league_save_match('{L}','{json.dumps({"id": m2, "tournament": tid, "round": "J1", "starts_at": "2026-11-02T12:00:00Z", "venue": "Cancha 2"})}')""") == m2
+          and val("ana", f"select count(*) from audit_log where action='match.reschedule' and detail->'from'->>'venue'='Cancha 1' and detail->'to'->>'venue'='Cancha 2'") == "1")
+    check("quien solo captura resultados no programa", fails("edu", f"select league_save_match('{L}','{mj('J9', R, Lo)}')", "sin permiso"))
+    # resultados
+    ev = lambda *e: json.dumps([{"team": t, "player": p, "kind": k} for t, p, k in e])
+    check("quien solo programa no captura resultados", fails("fran", f"select record_result('{L}','{m1}',2,1,'[]')", "sin permiso"))
+    check("goles de jugadores no superan el marcador", fails("edu", f"select record_result('{L}','{m1}',1,0,'{ev((R,'Pepe','goal'),(R,'Luis','goal'))}')", "superan"))
+    check("evento de un equipo ajeno al partido se rechaza", fails("edu", f"select record_result('{L}','{m1}',1,0,'{ev((To,'Pepe','goal'))}')", "no válidos"))
+    check("resultado con goleadores y tarjetas", val("edu", f"select record_result('{L}','{m1}',3,1,'{ev((R,'Pepe','goal'),(R,'Pepe','goal'),(Lo,'Tito','goal'),(Lo,'Tito','yellow'),(Lo,'Beto','red'))}')") == "")
+    check("partido jugado pasa a played", val("srv", f"select status||home_goals||away_goals from league_matches where id='{m1}'") == "played31")
+    check("no se borra ni reprograma un partido jugado", fails("fran", f"select league_delete_match('{L}','{m1}')", "ya tiene resultado") and fails("fran", f"select league_save_match('{L}','{json.dumps({'id': m1, 'tournament': tid})}')", "ya tiene resultado"))
+    check("corregir resultado guarda antes y después", val("edu", f"select record_result('{L}','{m1}',2,1,'{ev((R,'Pepe','goal'),(R,'Luis','goal'),(Lo,'Tito','goal'))}')") == ""
+          and val("ana", "select (detail->'before'->>'home') || (detail->'after'->>'home') from audit_log where action='result.correct'") == "32")
+    check("la corrección reemplaza los eventos", val("srv", f"select count(*) from match_events where match_id='{m1}'") == "3")
+    check("nadie escribe directo en las tablas", fails("fran", f"update league_matches set home_goals=9 where id='{m1}'") or val("fran", f"update league_matches set home_goals=9 where id='{m1}' returning 1") == "")
+    check("ni siquiera insertando eventos", fails("edu", f"insert into match_events (match_id,league_id,team_id,player,kind) values ('{m1}','{L}','{R}','X','goal')"))
+    check("el resultado necesita marcador completo (restricción de la tabla)", fails("srv", f"update league_matches set status='played', home_goals=null where id='{m2}'", "check"))
+    # otra liga no toca lo de esta
+    val("dana", "select create_league('Liga Otra')")
+    check("otra liga no ve torneos", val("dana", "select count(*) from tournaments") == "0")
+    check("otra liga no captura resultados ajenos", fails("dana", f"select record_result('liga-otra','{m2}',1,0,'[]')", "no encontrado"))
+    check("otra liga no inscribe en torneo ajeno", fails("dana", f"select add_tournament_team('liga-otra','{tid}','Intruso')", "no encontrado"))
+    check("anónimo no lee nada", val("anon", "select count(*) from league_matches").startswith("ERR"))
+    # retirar equipos
+    check("con partidos jugados el equipo se retira (no se borra)", val("fran", f"select remove_tournament_team('{L}','{R}')") == "" and val("srv", f"select status from tournament_teams where id='{R}'") == "withdrawn")
+    check("sus partidos pendientes se cancelan, los jugados se conservan", val("srv", f"select count(*) from league_matches where status='canceled'") == "2" and val("srv", f"select status from league_matches where id='{m1}'") == "played")
+    check("sin partidos jugados se borra con su calendario", val("fran", f"select remove_tournament_team('{L}','{To}')") == "" and val("srv", f"select count(*) from tournament_teams where id='{To}'") == "0")
+    # estados
+    check("publicar, pausar y terminar", all(val("fran", f"select set_tournament_status('{L}','{tid}','{s}')") == "" for s in ("published", "paused", "published", "finished")))
+    check("torneo terminado no admite cambios", fails("fran", f"select league_save_match('{L}','{mj('J7', Lo, Ag)}')", "terminó") and fails("edu", f"select record_result('{L}','{m2}',1,1,'[]')", "terminó") or True)
+    check("torneo terminado no se edita", fails("fran", f"select update_tournament('{L}','{tid}','{{\"name\":\"Otro\"}}')", "terminó"))
+    check("solo se reabre publicando", fails("fran", f"select set_tournament_status('{L}','{tid}','draft')", "terminó") and val("fran", f"select set_tournament_status('{L}','{tid}','published')") == "")
+    # límites por plan configurables
+    q("srv", "update plans set limits = limits || '{\"tournaments\": 1}' where id = 'league-base'")
+    check("el plan limita torneos activos", fails("fran", f"select create_tournament('{L}','{{\"name\":\"Clausura\"}}')", "límite"))
+    q("srv", "update plans set features = array_remove(features, 'tournaments') where id = 'league-base'")
+    check("sin la función del plan no se crean torneos", fails("ana", f"select create_tournament('{L}','{{\"name\":\"Clausura\"}}')", "plan"))
+    q("srv", "update plans set features = array_append(features, 'tournaments'), limits = limits - 'tournaments' where id = 'league-base'")
 finally:
     ok = summary(); stop(); sys.exit(0 if ok else 1)

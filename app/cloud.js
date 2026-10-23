@@ -41,6 +41,16 @@ const ERR = {
   "ya no está pendiente": "Esa solicitud ya fue atendida.",
   "ya no está activa": "Esa vinculación ya no está activa.",
   "Datos no válidos": "Revisa los datos e inténtalo de nuevo.",
+  "Torneo no encontrado": "No se encontró ese torneo.",
+  "Equipo no encontrado": "No se encontró ese equipo.",
+  "El torneo ya terminó": "El torneo ya terminó. Reábrelo para hacer cambios.",
+  "límite de torneos": "Tu plan llegó al límite de torneos activos.",
+  "ya está inscrito": "Ese equipo ya está inscrito en el torneo.",
+  "no está vinculado a la liga": "Ese equipo no está vinculado a tu liga.",
+  "ya juega en esa jornada": "Uno de esos equipos ya juega en esa jornada.",
+  "inscritos y activos": "Los dos equipos deben estar inscritos y activos en el torneo.",
+  "superan el marcador": "Los goles de los jugadores superan el marcador.",
+  "check constraint": "Revisa los datos: alguno no es válido.",
 };
 
 // Al volver de Google se regresa a la misma sección de la app.
@@ -169,6 +179,25 @@ async function supa() {
     async auditLog(l) { return ok(await sb.from("audit_log").select("*").eq("league_id", l).order("at", { ascending: false }).limit(100)); },
     // Solo para pruebas en modo demo; en Supabase el contrato lo administra la plataforma.
     async demoContract() { throw new Error("Sin permiso"); },
+    // ----- torneos, calendario y resultados (la liga; todo se escribe por funciones con permiso) -----
+    async tournaments(l) { return ok(await sb.from("tournaments").select("*").eq("league_id", l).order("created_at", { ascending: false })); },
+    async tournamentData(l, tid) {
+      const [teams, matches] = await Promise.all([
+        sb.from("tournament_teams").select("*").eq("tournament_id", tid).order("created_at"),
+        sb.from("league_matches").select("*").eq("tournament_id", tid).order("starts_at", { nullsFirst: false })]);
+      const ms = ok(matches), events = ms.length ? ok(await sb.from("match_events").select("*").in("match_id", ms.map((m) => m.id))) : [];
+      return { teams: ok(teams), matches: ms, events };
+    },
+    async createTournament(l, t) { return ok(await sb.rpc("create_tournament", { l, t })); },
+    async updateTournament(l, id, t) { ok(await sb.rpc("update_tournament", { l, tid: id, t })); },
+    async setTournamentStatus(l, id, st) { ok(await sb.rpc("set_tournament_status", { l, tid: id, st })); },
+    async addTournamentTeam(l, tid, { name, link, contact }) { return ok(await sb.rpc("add_tournament_team", { l, tid, nm: name || null, link: link || null, contact: contact || null })); },
+    async removeTournamentTeam(l, id) { ok(await sb.rpc("remove_tournament_team", { l, ttid: id })); },
+    async leagueSaveMatch(l, m) { return ok(await sb.rpc("league_save_match", { l, m })); },
+    async leagueCreateMatches(l, tid, ms) { return ok(await sb.rpc("league_create_matches", { l, tid, ms })); },
+    async leagueDeleteMatch(l, id) { ok(await sb.rpc("league_delete_match", { l, mid: id })); },
+    async recordResult(l, id, hg, ag, events, notes) { ok(await sb.rpc("record_result", { l, mid: id, hg, ag, events: events || [], note: notes || null })); },
+    async clearResult(l, id) { ok(await sb.rpc("clear_result", { l, mid: id })); },
     // ----- pagos -----
     async paid(c, t) { return ok(await sb.rpc("team_paid", { c, t })) || []; },
     async myPayments(c, t) {
@@ -204,7 +233,7 @@ async function supa() {
 function demo() {
   const K = "demo-db";
   const load = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch (e) { return {}; } };
-  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [], contracts: [], invites: [], lteams: [], attempts: [], audit: [] }, load());
+  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [], contracts: [], invites: [], lteams: [], attempts: [], audit: [], tourn: [], ttems: [], lmatches: [], mevents: [] }, load());
   const dataURL = (f) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
   const save = (d) => { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ } };
   const cur = (d) => { const u = d.users.find((x) => x.id === d.session); if (!u) throw new Error("Inicia sesión primero"); return u; };
@@ -223,6 +252,23 @@ function demo() {
   const docs = (d, c, t) => { const cd = d.clubdocs.find((x) => x.id === c), td = d.teamdocs.find((x) => x.club_id === c && x.team_id === t); ensure(cd && td, "Este equipo se administra desde archivos"); return [cd, td]; };
   const slug = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const log = (d, l, action, detail) => d.audit.push({ id: d.audit.length + 1, league_id: l, actor: d.session, action, detail: detail || {}, at: new Date().toISOString() });
+  const TB = ["dg", "gf", "wins", "gc_low", "h2h", "fairplay", "alpha"];
+  const lneed = async (l, f) => { const e = await api.entitlement("league", l); ensure((e.features || []).includes(f), "Tu plan no incluye esa función"); };
+  // Campos de un torneo con las mismas validaciones y límites que las columnas de la base de datos.
+  const tFields = (cur, t) => {
+    const has = (k) => k in t, txt = (k, n) => (has(k) ? String(t[k] ?? "").trim().slice(0, n) || null : cur[k] ?? null), pts = (k, v) => { const x = has(k) ? +t[k] : cur[k] ?? v; ensure(Number.isInteger(x) && x >= 0 && x <= 10, "Datos no válidos"); return x; };
+    const name = has("name") ? String(t.name || "").trim().slice(0, 80) : cur.name; ensure(name && name.length >= 2, "Datos no válidos");
+    const modality = has("modality") ? +t.modality : cur.modality ?? 7; ensure(FMTS.includes(modality), "Datos no válidos");
+    const tb = has("tiebreakers") ? t.tiebreakers : cur.tiebreakers ?? ["dg", "gf", "h2h", "fairplay"]; ensure(tb.every((x) => TB.includes(x)), "Datos no válidos");
+    const fee = has("fee") ? (t.fee === "" || t.fee == null ? null : +t.fee) : cur.fee ?? null; ensure(fee == null || (fee >= 0 && fee <= 100000), "Datos no válidos");
+    return { name, season: txt("season", 40), category: txt("category", 40), modality, day: txt("day", 20), shift: txt("shift", 20), fee, fee_note: txt("fee_note", 200), rules: txt("rules", 8000), pts_win: pts("pts_win", 3), pts_draw: pts("pts_draw", 1), pts_loss: pts("pts_loss", 0), tiebreakers: tb };
+  };
+  // Igual que el disparador lm_guard: equipos inscritos y activos, y un solo partido por equipo en cada jornada.
+  const matchGuard = (d, m, extra = []) => {
+    ensure(d.tourn.find((x) => x.id === m.tournament_id).status !== "finished", "El torneo ya terminó"); ensure(m.home_id !== m.away_id, "Datos no válidos");
+    ensure([m.home_id, m.away_id].every((id) => d.ttems.some((x) => x.id === id && x.tournament_id === m.tournament_id && x.status === "active")), "Los equipos deben estar inscritos y activos en el torneo");
+    if (m.round && m.status !== "canceled") ensure(![...d.lmatches, ...extra].some((o) => o.id !== m.id && o.tournament_id === m.tournament_id && o.round === m.round && o.status !== "canceled" && [o.home_id, o.away_id].some((t) => t === m.home_id || t === m.away_id)), "Un equipo ya juega en esa jornada");
+  };
   // Equipos que hoy reciben Pro de su liga (mismo criterio que la base de datos: contrato vigente y dentro del cupo, los más antiguos primero).
   const proTeams = (d) => d.contracts.filter(contractValid).flatMap((c) => d.lteams.filter((x) => x.league_id === c.league_id && x.status === "approved" && x.pro)
     .sort((a, b) => String(a.decided_at).localeCompare(String(b.decided_at))).slice(0, c.pro_slots).map((x) => ({ ...x, plan: c.pro_plan || "team-pro" })));
@@ -466,6 +512,87 @@ function demo() {
     async demoContract(l, slots, days) {
       const d = db(); ensure(isLeagueAdmin(d, l)); d.contracts = d.contracts.filter((x) => x.league_id !== l);
       d.contracts.push({ league_id: l, pro_slots: slots, status: "active", starts_at: new Date().toISOString(), ends_at: days ? new Date(Date.now() + days * 864e5).toISOString() : null }); save(d);
+    },
+    // ----- torneos, calendario y resultados (mismas reglas que las funciones SQL) -----
+    async tournaments(l) { const d = db(); return isLeagueAdmin(d, l) ? d.tourn.filter((x) => x.league_id === l).slice().reverse() : []; },
+    async tournamentData(l, tid) {
+      const d = db(); ensure(isLeagueAdmin(d, l)); const ms = d.lmatches.filter((m) => m.tournament_id === tid);
+      return { teams: d.ttems.filter((x) => x.tournament_id === tid), matches: ms.slice().sort((a, b) => String(a.starts_at || "~").localeCompare(String(b.starts_at || "~"))), events: d.mevents.filter((e) => ms.some((m) => m.id === e.match_id)) };
+    },
+    async createTournament(l, t) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "tournaments")); const e = await api.entitlement("league", l);
+      ensure((e.features || []).includes("tournaments"), "Tu plan no incluye esa función");
+      ensure(e.limits.tournaments == null || d.tourn.filter((x) => x.league_id === l && x.status !== "finished").length < e.limits.tournaments, "Tu plan llegó al límite de torneos");
+      const r = { id: "tn" + Date.now() + Math.random().toString(36).slice(2, 5), league_id: l, status: "draft", created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...tFields({}, t) };
+      d.tourn.push(r); log(d, l, "tournament.create", { tournament: r.id, name: r.name }); save(d); return r.id;
+    },
+    async updateTournament(l, id, t) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "tournaments")); const r = d.tourn.find((x) => x.id === id && x.league_id === l); ensure(r, "Torneo no encontrado"); ensure(r.status !== "finished", "El torneo ya terminó");
+      Object.assign(r, tFields(r, t), { updated_at: new Date().toISOString() }); log(d, l, "tournament.update", { tournament: id, fields: Object.keys(t) }); save(d);
+    },
+    async setTournamentStatus(l, id, st) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "tournaments")); ensure(["draft", "published", "paused", "finished"].includes(st), "Datos no válidos");
+      const r = d.tourn.find((x) => x.id === id && x.league_id === l); ensure(r, "Torneo no encontrado"); ensure(r.status !== "finished" || st === "published", "El torneo ya terminó");
+      log(d, l, "tournament.status", { tournament: id, from: r.status, to: st }); r.status = st; r.updated_at = new Date().toISOString(); save(d);
+    },
+    async addTournamentTeam(l, tid, { name, link, contact }) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "tournaments")); ensure(d.tourn.some((x) => x.id === tid && x.league_id === l && x.status !== "finished"), "Torneo no encontrado");
+      let nm = String(name || "").trim().slice(0, 60);
+      if (link) { const lt = d.lteams.find((x) => x.id === link && x.league_id === l && x.status === "approved"); ensure(lt, "Ese equipo no está vinculado a la liga"); nm = nm || lt.team_name; }
+      ensure(nm.length >= 2, "Escribe el nombre del equipo");
+      ensure(!d.ttems.some((x) => x.tournament_id === tid && x.status === "active" && (x.name.toLowerCase() === nm.toLowerCase() || (link && x.link_id === link))), "Ese equipo ya está inscrito");
+      const r = { id: "tt" + Date.now() + Math.random().toString(36).slice(2, 5), tournament_id: tid, league_id: l, name: nm, link_id: link || null, contact: String(contact || "").trim().slice(0, 120) || null, status: "active", created_at: new Date().toISOString() };
+      d.ttems.push(r); log(d, l, "tournament.team_add", { tournament: tid, team: nm }); save(d); return r.id;
+    },
+    async removeTournamentTeam(l, id) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "tournaments")); const r = d.ttems.find((x) => x.id === id && x.league_id === l && x.status === "active"); ensure(r, "Equipo no encontrado");
+      const mine = (m) => m.home_id === id || m.away_id === id;
+      if (d.lmatches.some((m) => m.status === "played" && mine(m))) {
+        r.status = "withdrawn"; d.lmatches.filter((m) => ["scheduled", "postponed"].includes(m.status) && mine(m)).forEach((m) => { m.status = "canceled"; m.notes = (m.notes ? m.notes + " · " : "") + "Equipo retirado"; });
+      } else { d.lmatches = d.lmatches.filter((m) => !mine(m)); d.ttems = d.ttems.filter((x) => x.id !== id); }
+      log(d, l, "tournament.team_remove", { tournament: r.tournament_id, team: r.name }); save(d);
+    },
+    async leagueSaveMatch(l, m) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "schedule")); await lneed(l, "schedule"); const st = m.status || "scheduled"; ensure(["scheduled", "postponed", "canceled"].includes(st), "Datos no válidos");
+      const f = { round: String(m.round || "").trim().slice(0, 20) || null, starts_at: m.starts_at || null, venue: String(m.venue || "").trim().slice(0, 40) || null, notes: String(m.notes || "").trim().slice(0, 500) || null, status: st };
+      if (!m.id) {
+        ensure(d.tourn.some((x) => x.id === m.tournament && x.league_id === l), "Torneo no encontrado");
+        const r = { id: "lm" + Date.now() + Math.random().toString(36).slice(2, 5), tournament_id: m.tournament, league_id: l, home_id: m.home, away_id: m.away, home_goals: null, away_goals: null, updated_at: new Date().toISOString(), ...f };
+        matchGuard(d, r); d.lmatches.push(r); log(d, l, "match.create", { match: r.id }); save(d); return r.id;
+      }
+      const r = d.lmatches.find((x) => x.id === m.id && x.league_id === l); ensure(r, "Partido no encontrado"); ensure(r.status !== "played", "Ese partido ya tiene resultado");
+      const before = { starts_at: r.starts_at, venue: r.venue, status: r.status }, nr = { ...r, ...f, home_id: m.home || r.home_id, away_id: m.away || r.away_id };
+      matchGuard(d, nr); Object.assign(r, nr, { updated_at: new Date().toISOString() });
+      log(d, l, before.starts_at !== f.starts_at || before.venue !== f.venue ? "match.reschedule" : "match.update", { match: r.id, from: before, to: { starts_at: f.starts_at, venue: f.venue, status: st } }); save(d); return r.id;
+    },
+    async leagueCreateMatches(l, tid, ms) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "schedule")); await lneed(l, "schedule"); ensure(Array.isArray(ms) && ms.length <= 400, "Datos no válidos"); ensure(d.tourn.some((x) => x.id === tid && x.league_id === l), "Torneo no encontrado");
+      const made = []; for (const m of ms) { const r = { id: "lm" + Date.now() + Math.random().toString(36).slice(2, 5) + made.length, tournament_id: tid, league_id: l, round: m.round || null, starts_at: m.starts_at || null, venue: m.venue || null, home_id: m.home, away_id: m.away, status: "scheduled", home_goals: null, away_goals: null, notes: null }; matchGuard(d, r, made); made.push(r); }
+      d.lmatches.push(...made); log(d, l, "match.generate", { tournament: tid, count: made.length }); save(d); return made.length;
+    },
+    async leagueDeleteMatch(l, id) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "schedule")); const r = d.lmatches.find((x) => x.id === id && x.league_id === l); ensure(r, "Partido no encontrado"); ensure(r.status !== "played", "Ese partido ya tiene resultado");
+      d.lmatches = d.lmatches.filter((x) => x.id !== id); log(d, l, "match.delete", { match: id, round: r.round }); save(d);
+    },
+    async recordResult(l, id, hg, ag, events, notes) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "results")); const r = d.lmatches.find((x) => x.id === id && x.league_id === l); ensure(r, "Partido no encontrado");
+      ensure(d.tourn.find((x) => x.id === r.tournament_id).status !== "finished", "El torneo ya terminó");
+      ensure(Number.isInteger(hg) && Number.isInteger(ag) && hg >= 0 && ag >= 0 && hg <= 99 && ag <= 99, "Datos no válidos"); events = events || []; ensure(events.length <= 100, "Datos no válidos");
+      let gh = 0, ga = 0;
+      for (const e of events) {
+        ensure([r.home_id, r.away_id].includes(e.team) && ["goal", "own_goal", "yellow", "red"].includes(e.kind) && String(e.player || "").trim().length >= 1, "Datos no válidos"); const n = e.n || 1;
+        if (e.kind === "goal") e.team === r.home_id ? (gh += n) : (ga += n); else if (e.kind === "own_goal") e.team === r.home_id ? (ga += n) : (gh += n);
+      }
+      ensure(gh <= hg && ga <= ag, "Los goles de los jugadores superan el marcador");
+      const was = r.status, before = { status: was, home: r.home_goals, away: r.away_goals, events: d.mevents.filter((e) => e.match_id === id).length };
+      d.mevents = d.mevents.filter((e) => e.match_id !== id).concat(events.map((e, i) => ({ id: "me" + Date.now() + i, match_id: id, league_id: l, team_id: e.team, player: String(e.player).trim().slice(0, 60), kind: e.kind, n: e.n || 1 })));
+      Object.assign(r, { status: "played", home_goals: hg, away_goals: ag, notes: String(notes || "").trim().slice(0, 500) || null, updated_at: new Date().toISOString() });
+      log(d, l, was === "played" ? "result.correct" : "result.record", { match: id, before, after: { home: hg, away: ag, events: events.length } }); save(d);
+    },
+    async clearResult(l, id) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "results")); const r = d.lmatches.find((x) => x.id === id && x.league_id === l && x.status === "played"); ensure(r, "Partido no encontrado");
+      log(d, l, "result.clear", { match: id, before: { home: r.home_goals, away: r.away_goals } }); d.mevents = d.mevents.filter((e) => e.match_id !== id);
+      Object.assign(r, { status: "scheduled", home_goals: null, away_goals: null, updated_at: new Date().toISOString() }); save(d);
     },
     // ----- pagos -----
     async paid(c, t) { return db().pays.filter((p) => same(c, t)(p) && p.status === "approved").map(({ kind, item, player_id, amount, detail, decided_at }) => ({ kind, item, player_id, amount, detail, decided_at })); },
