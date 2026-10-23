@@ -119,7 +119,7 @@ export function wireSheet(ctxGet) {
 async function guard(fn) { try { say(""); await fn(); } catch (e) { say(friendly(e)); } }
 
 function act(ctx, a, el) {
-  const c = ctx.clubId, t = ctx.team.id;
+  const c = ctx && ctx.clubId, t = ctx && ctx.team && ctx.team.id;
   if (a === "close") return close();
   if (a === "auth-in" || a === "auth-up") return authSheet(a === "auth-up");
   if (a === "google") return guard(async () => { await api.signInGoogle(); });
@@ -183,6 +183,8 @@ function act(ctx, a, el) {
   });
 }
 
+// Entrar o crear cuenta desde pantallas sin equipo (Mi cuenta, panel de liga).
+export const openAuth = (up) => authSheet(up);
 function authSheet(up) {
   open(up ? "Crear cuenta con correo" : "Entrar", up ? "Usa un correo que revises y una contraseña de 6 o más caracteres." : "Lo más fácil es con Google.", `${googleBtn()}<span class="or">o con correo</span><form data-form="auth" data-up="${up ? 1 : 0}" class="fld">
     <label>Correo<input name="email" type="email" inputmode="email" autocomplete="email" required></label>

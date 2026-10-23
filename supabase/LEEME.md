@@ -33,3 +33,10 @@ La clave anon es pública y es segura ahí. Nunca uses ni compartas la clave **s
 
 ## Probar sin servidor
 Agrega `?demo` antes del `#` del enlace (por ejemplo `.../Club-Diablos/?demo#/diablos/domingos/inicio`). Todo se guarda solo en ese navegador.
+
+## Cuentas, planes y ligas
+- Si ya corriste `schema.sql` antes, vuelve a correrlo completo: agrega las tablas nuevas sin borrar nada.
+- Mi cuenta: `#/cuenta`. Ahí cada cuenta elige si organiza equipos, ligas o ambos, y crea su liga.
+- Panel de liga: `#/liga/<liga>/inicio`. Quien crea la liga queda como superadministrador.
+- Planes: tabla `plans`. Funciones (`features`) y límites (`limits`) se cambian ahí, sin tocar la app. Los precios quedan vacíos hasta decidirlos.
+- Dar Pro a un equipo a mano: agrega una fila en `subscriptions` con `subject_type` = team, `subject_id` = club/equipo (ej. `diablos/domingos`) y `plan_id` = team-pro. Nadie puede darse Pro desde la app.

@@ -237,3 +237,149 @@ drop policy if exists receipts_read on storage.objects;
 create policy receipts_read on storage.objects for select using (
   bucket_id = 'receipts' and ((storage.foldername(name))[3] = auth.uid()::text
   or is_admin((storage.foldername(name))[1], (storage.foldername(name))[2])));
+
+-- ============ Cuentas, planes y ligas (etapa 1 del producto) ============
+-- Una cuenta puede organizar equipos, ligas o ambos. Los planes y sus límites viven en la tabla
+-- "plans": se cambian ahí (Table Editor de Supabase) sin tocar la app. Ningún precio está decidido.
+-- La suscripción a la plataforma (subscriptions) está separada de las finanzas internas (payments).
+
+create table if not exists public.accounts (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  roles text[] not null default '{}' check (roles <@ array['team','league']::text[]),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.plans (
+  id text primary key,
+  audience text not null check (audience in ('team','league')),
+  name text not null,
+  tier smallint not null default 0,                 -- 0 = gratis; el mayor gana si hay varias suscripciones
+  features text[] not null default '{}',            -- funciones habilitadas (ver app/plans.js)
+  limits jsonb not null default '{}',               -- ej. {"teams": 1, "players": 30}; null = sin límite
+  price_monthly numeric(10,2), price_annual numeric(10,2),  -- vacíos hasta decidir precios
+  is_default boolean not null default false,        -- plan que recibe quien no tiene suscripción
+  active boolean not null default true
+);
+insert into public.plans (id, audience, name, tier, features, limits, is_default) values
+  ('team-free', 'team', 'Equipo Gratis', 0,
+     array['roster','attendance','matches','lineup'], '{"teams": 1, "players": 30}', true),
+  ('team-pro', 'team', 'Equipo Pro', 1,
+     array['roster','attendance','matches','lineup','ratings','finance','receipts','stats','themes','share_capture'], '{"teams": 5, "players": null}', false),
+  ('league-base', 'league', 'Liga', 1,
+     array['league_panel','tournaments','schedule','standings','sanctions','league_finance','registration','credentials','public_page','team_pro_grant'], '{"tournaments": null, "admins": 5, "pro_teams_included": 0}', true)
+on conflict (id) do nothing;
+
+-- subject: 'team' -> 'club/equipo'; 'league' -> id de la liga. source 'league' = Pro pagado por la liga.
+create table if not exists public.subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  subject_type text not null check (subject_type in ('team','league')),
+  subject_id text not null,
+  plan_id text not null references public.plans(id),
+  period text check (period in ('monthly','annual')),
+  source text not null default 'direct' check (source in ('direct','league','manual','trial')),
+  granted_by text,                                  -- liga que lo otorga cuando source = 'league'
+  status text not null default 'active' check (status in ('active','past_due','canceled')),
+  starts_at timestamptz not null default now(), ends_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists subs_subject on public.subscriptions (subject_type, subject_id, status);
+
+create table if not exists public.leagues (
+  id text primary key,
+  name text not null check (length(trim(name)) between 2 and 80),
+  owner uuid not null references auth.users(id),
+  settings jsonb not null default '{}',             -- reglamento, precios, conceptos de cobro, marca…
+  created_at timestamptz not null default now()
+);
+
+-- Administradores de la liga. owner = superadministrador; perms '*' = todo.
+create table if not exists public.league_admins (
+  league_id text not null references public.leagues(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role text not null default 'admin' check (role in ('owner','admin')),
+  perms text[] not null default '{}',
+  status text not null default 'active' check (status in ('active','revoked')),
+  created_at timestamptz not null default now(),
+  primary key (league_id, user_id)
+);
+
+create or replace function public.is_league_admin(l text, perm text default null) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from league_admins where league_id = l and user_id = auth.uid() and status = 'active'
+    and (role = 'owner' or perm is null or '*' = any (perms) or perm = any (perms))) $$;
+
+-- Elegir qué organiza la cuenta (se puede tener ambos).
+create or replace function public.set_roles(r text[]) returns text[]
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Inicia sesión primero'; end if;
+  insert into accounts (user_id, roles) values (auth.uid(), coalesce(r, '{}'))
+  on conflict (user_id) do update set roles = excluded.roles;
+  return r;
+end $$;
+
+-- Crear liga: queda como superadministrador quien la crea.
+create or replace function public.create_league(nm text) returns text
+language plpgsql security definer set search_path = public as $$
+declare base text; lid text; n int := 1;
+begin
+  if auth.uid() is null then raise exception 'Inicia sesión primero'; end if;
+  if nm is null or length(trim(nm)) < 2 then raise exception 'Escribe el nombre de la liga'; end if;
+  base := trim(both '-' from regexp_replace(lower(translate(trim(nm), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunaeiouun')), '[^a-z0-9]+', '-', 'g'));
+  if base in ('', 'cuenta', 'liga') then base := 'liga'; end if;
+  lid := left(base, 40);
+  while exists (select 1 from leagues where id = lid) loop n := n + 1; lid := left(base, 36) || '-' || n; end loop;
+  insert into leagues (id, name, owner) values (lid, left(trim(nm), 80), auth.uid());
+  insert into league_admins (league_id, user_id, role, perms) values (lid, auth.uid(), 'owner', array['*']);
+  insert into accounts (user_id, roles) values (auth.uid(), array['league'])
+  on conflict (user_id) do update set roles = (select array(select distinct unnest(accounts.roles || array['league'])));
+  return lid;
+end $$;
+
+-- Equipos que administro y ligas donde soy administrador.
+create or replace function public.my_teams() returns table (club_id text, team_id text)
+language sql stable security definer set search_path = public as $$
+  select club_id, team_id from members where user_id = auth.uid() and status = 'approved' and role = 'admin' order by created_at $$;
+
+create or replace function public.my_leagues() returns table (id text, name text, role text)
+language sql stable security definer set search_path = public as $$
+  select l.id, l.name, a.role from leagues l join league_admins a on a.league_id = l.id
+  where a.user_id = auth.uid() and a.status = 'active' order by l.created_at $$;
+
+-- Plan vigente de un equipo o liga (el de mayor nivel entre sus suscripciones activas, o el gratuito).
+create or replace function public.entitlement(st text, sid text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select to_jsonb(p) || jsonb_build_object('source', coalesce(s.source, 'default'), 'period', s.period, 'ends_at', s.ends_at)
+  from plans p left join lateral (
+    select * from subscriptions x where x.subject_type = st and x.subject_id = sid and x.plan_id = p.id
+      and x.status = 'active' and (x.ends_at is null or x.ends_at > now()) limit 1) s on true
+  where p.audience = st and p.active and (s.id is not null or p.is_default)
+  order by (s.id is not null) desc, p.tier desc limit 1 $$;
+
+alter table public.accounts enable row level security;
+alter table public.plans enable row level security;
+alter table public.subscriptions enable row level security;
+alter table public.leagues enable row level security;
+alter table public.league_admins enable row level security;
+
+drop policy if exists acc_own on public.accounts;
+create policy acc_own on public.accounts for select using (user_id = auth.uid());
+drop policy if exists plans_read on public.plans;
+create policy plans_read on public.plans for select using (active);
+drop policy if exists subs_read on public.subscriptions;
+create policy subs_read on public.subscriptions for select using (
+  (subject_type = 'league' and is_league_admin(subject_id))
+  or (subject_type = 'team' and is_admin(split_part(subject_id, '/', 1), split_part(subject_id, '/', 2))));
+drop policy if exists leagues_read on public.leagues;
+create policy leagues_read on public.leagues for select using (is_league_admin(id));
+drop policy if exists leagues_edit on public.leagues;
+create policy leagues_edit on public.leagues for update using (is_league_admin(id, 'settings')) with check (is_league_admin(id, 'settings'));
+drop policy if exists ladm_read on public.league_admins;
+create policy ladm_read on public.league_admins for select using (user_id = auth.uid() or is_league_admin(league_id, 'admins'));
+
+-- Altas solo por funciones; suscripciones solo desde el servidor (nadie se da Pro solo).
+grant select on public.accounts, public.subscriptions, public.leagues, public.league_admins to authenticated;
+grant update (name, settings) on public.leagues to authenticated;
+grant select on public.plans to anon, authenticated;
+grant execute on function public.set_roles(text[]), public.create_league(text), public.my_teams(), public.my_leagues(),
+  public.entitlement(text,text), public.is_league_admin(text,text) to authenticated;

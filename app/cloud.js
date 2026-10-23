@@ -2,6 +2,7 @@
 //   supabase -> base de datos real (config.js con url y key)
 //   demo     -> todo en este navegador, para probar y enseñar la app sin servidor
 import { CLOUD } from "./config.js";
+import { DEFAULTS, defaultPlan } from "./plans.js";
 
 const DEMO = CLOUD.url === "demo" || /[?&]demo\b/.test(location.search);
 export const mode = DEMO ? "demo" : CLOUD.url && CLOUD.key ? "supabase" : "off";
@@ -21,6 +22,7 @@ const ERR = {
   "Unable to validate email": "Escribe un correo válido.",
   "provider is not enabled": "La entrada con Google todavía no está activada. Avísale a Metra.",
   "payments_amount": "Escribe una cantidad mayor a cero.",
+  "Escribe el nombre de la liga": "Escribe el nombre de la liga.",
 };
 
 // Al volver de Google se regresa a la misma sección de la app.
@@ -103,6 +105,20 @@ async function supa() {
       if (rows.length) ok(await sb.from("match_votes").insert(rows));
       if (mvp) ok(await sb.from("mvp_votes").insert({ club_id: c, team_id: t, match_id: match, voter: u, target: mvp }));
     },
+    // ----- cuenta, roles y ligas -----
+    async account() { const u = await uid(); if (!u) return null; return ok(await sb.from("accounts").select("roles").eq("user_id", u).maybeSingle()) || { roles: [] }; },
+    async setRoles(roles) { return ok(await sb.rpc("set_roles", { r: roles })); },
+    async myTeams() { return ok(await sb.rpc("my_teams")) || []; },
+    async myLeagues() { return ok(await sb.rpc("my_leagues")) || []; },
+    async createLeague(name) { return ok(await sb.rpc("create_league", { nm: name })); },
+    async league(id) {
+      const u = await uid(); if (!u) return null;
+      const l = ok(await sb.from("leagues").select("*").eq("id", id).maybeSingle()); if (!l) return null;
+      const a = ok(await sb.from("league_admins").select("role, perms").eq("league_id", id).eq("user_id", u).maybeSingle());
+      return { ...l, me: a };
+    },
+    async plans() { return ok(await sb.from("plans").select("*").order("tier")); },
+    async entitlement(st, sid) { return ok(await sb.rpc("entitlement", { st, sid })) || defaultPlan(st); },
     // ----- pagos -----
     async paid(c, t) { return ok(await sb.rpc("team_paid", { c, t })) || []; },
     async myPayments(c, t) {
@@ -138,7 +154,7 @@ async function supa() {
 function demo() {
   const K = "demo-db";
   const load = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch (e) { return {}; } };
-  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [] }, load());
+  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [] }, load());
   const dataURL = (f) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
   const save = (d) => { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ } };
   const cur = (d) => { const u = d.users.find((x) => x.id === d.session); if (!u) throw new Error("Inicia sesión primero"); return u; };
@@ -218,6 +234,39 @@ function demo() {
       Object.entries(scores).forEach(([target, score]) => { ensure(target !== m.player_id && r.played.includes(target)); d.rating.push({ club_id: c, team_id: t, match, voter: m.user_id, target, score }); });
       if (mvp) { ensure(mvp !== m.player_id); d.mvp.push({ club_id: c, team_id: t, match, voter: m.user_id, target: mvp }); }
       save(d);
+    },
+    // ----- cuenta, roles y ligas -----
+    async account() { const d = db(); if (!d.session) return null; return d.accounts.find((a) => a.user_id === d.session) || { roles: [] }; },
+    async setRoles(roles) {
+      const d = db(); const u = cur(d); ensure(roles.every((r) => r === "team" || r === "league"));
+      d.accounts = d.accounts.filter((a) => a.user_id !== u.id); d.accounts.push({ user_id: u.id, roles }); save(d); return roles;
+    },
+    async myTeams() { const d = db(); return d.members.filter((m) => m.user_id === d.session && m.status === "approved" && m.role === "admin").map(({ club_id, team_id }) => ({ club_id, team_id })); },
+    async myLeagues() {
+      const d = db(); return d.ladmins.filter((a) => a.user_id === d.session && a.status === "active")
+        .map((a) => ({ id: a.league_id, name: (d.leagues.find((l) => l.id === a.league_id) || {}).name, role: a.role }));
+    },
+    async createLeague(name) {
+      const d = db(); const u = cur(d); ensure(name && name.trim().length > 1, "Escribe el nombre de la liga");
+      const base = name.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "liga";
+      let id = ["cuenta", "liga"].includes(base) ? "liga-1" : base, n = 1;
+      while (d.leagues.some((l) => l.id === id)) id = base.slice(0, 36) + "-" + ++n;
+      d.leagues.push({ id, name: name.trim().slice(0, 80), owner: u.id, settings: {}, created_at: new Date().toISOString() });
+      d.ladmins.push({ league_id: id, user_id: u.id, role: "owner", perms: ["*"], status: "active" });
+      const acc = d.accounts.find((a) => a.user_id === u.id);
+      if (acc) { if (!acc.roles.includes("league")) acc.roles.push("league"); } else d.accounts.push({ user_id: u.id, roles: ["league"] });
+      save(d); return id;
+    },
+    async league(id) {
+      const d = db(); if (!d.session) return null;
+      const a = d.ladmins.find((x) => x.league_id === id && x.user_id === d.session && x.status === "active");
+      const l = d.leagues.find((x) => x.id === id); return a && l ? { ...l, me: { role: a.role, perms: a.perms } } : null;
+    },
+    async plans() { return DEFAULTS; },
+    async entitlement(st, sid) {
+      const s = db().subs.filter((x) => x.subject_type === st && x.subject_id === sid && x.status === "active")
+        .map((x) => ({ ...DEFAULTS.find((p) => p.id === x.plan_id), source: x.source })).sort((a, b) => b.tier - a.tier)[0];
+      return s || defaultPlan(st);
     },
     // ----- pagos -----
     async paid(c, t) { return db().pays.filter((p) => same(c, t)(p) && p.status === "approved").map(({ kind, item, player_id, amount, detail, decided_at }) => ({ kind, item, player_id, amount, detail, decided_at })); },

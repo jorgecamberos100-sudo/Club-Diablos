@@ -15,6 +15,8 @@ const FALLBACK = { display: '"Arial Narrow", Impact, sans-serif', cond: '"Arial 
 export function applyTheme(club, crestURL) {
   const t = club.theme || { colors: club.colors };
   const root = document.documentElement;
+  // Limpia la estética anterior (al pasar de Mi cuenta a un equipo, o de un club a otro).
+  [...Object.values(COLOR_VARS), ...Object.values(FONT_VARS)].forEach((v) => root.style.removeProperty(v));
   Object.entries(t.colors || {}).forEach(([k, v]) => { if (COLOR_VARS[k]) root.style.setProperty(COLOR_VARS[k], v); });
 
   const fonts = t.fonts || {};

@@ -10,7 +10,8 @@ import * as alineacion from "./views/alineacion.js";
 import * as finanzas from "./views/cuentas.js";
 import { enrich } from "./live.js";
 import { mount, wireSheet } from "./cloudui.js";
-import { restoreRoute } from "./cloud.js";
+import { restoreRoute, on } from "./cloud.js";
+import { renderPlatform } from "./platform.js";
 
 // Orden de la barra inferior. Finanzas va al final: lo primero es el juego.
 const VIEWS = {
@@ -64,6 +65,14 @@ async function getCtx(clubId, teamId) {
 async function route() {
   let { club, team, view } = parse();
   try {
+    // Mi cuenta y panel de liga: rutas propias, fuera de los equipos.
+    if (club === "cuenta" || club === "liga") {
+      current = null;
+      await renderPlatform(app, location.hash.replace(/^#\/?/, "").split("/"));
+      wireSheet(() => current);
+      window.scrollTo(0, 0);
+      return;
+    }
     if (!club || !team) {
       const clubs = await loadClubs();
       const c = clubs.find((x) => x.id === club) || clubs[0];
@@ -82,6 +91,7 @@ async function route() {
         ${teams.length > 1
           ? `<select class="team-sel" aria-label="Equipo">${teams.map((t) => `<option value="${esc(t.id)}"${t.id === team ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`
           : `<p>${esc(ctx.team.name)} · ${esc(ctx.team.competition || "")}</p>`}</div>
+        ${on ? `<a class="top-acc" href="#/cuenta" aria-label="Mi cuenta">${icon.cuenta}</a>` : ""}
       </header>
       ${view === "inicio" ? installHint() : ""}
       <div id="view" class="view">${V.render(ctx)}</div>
