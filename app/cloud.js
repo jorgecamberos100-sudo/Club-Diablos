@@ -45,12 +45,21 @@ const ERR = {
   "Equipo no encontrado": "No se encontró ese equipo.",
   "El torneo ya terminó": "El torneo ya terminó. Reábrelo para hacer cambios.",
   "límite de torneos": "Tu plan llegó al límite de torneos activos.",
+  "ya está inscrito en": "Ese jugador ya está inscrito en otro equipo de este torneo. Primero hay que darlo de baja.",
   "ya está inscrito": "Ese equipo ya está inscrito en el torneo.",
   "no está vinculado a la liga": "Ese equipo no está vinculado a tu liga.",
   "ya juega en esa jornada": "Uno de esos equipos ya juega en esa jornada.",
   "inscritos y activos": "Los dos equipos deben estar inscritos y activos en el torneo.",
   "superan el marcador": "Los goles de los jugadores superan el marcador.",
   "check constraint": "Revisa los datos: alguno no es válido.",
+  "Falta la foto": "Falta la foto del jugador: esta liga la exige para activarlo.",
+  "Falta el documento": "Falta el documento del jugador: esta liga lo exige.",
+  "pide documento": "Esta liga pide el documento de identidad.",
+  "fecha de nacimiento": "Indica la fecha de nacimiento (o un documento) para identificar al jugador.",
+  "Ese número ya lo usa": "Ese número de camiseta ya lo usa otro jugador del equipo.",
+  "Registro no encontrado": "No se encontró ese registro.",
+  "Jugador no encontrado": "No se encontró a ese jugador.",
+  "Ya existe un jugador": "Ya existe otro jugador con esos datos (mismo documento, o mismo nombre y fecha de nacimiento).",
   "Sanción no encontrada": "No se encontró esa sanción.",
   "Objeción no encontrada": "No se encontró esa objeción.",
   "Cargo no encontrado": "No se encontró ese cargo.",
@@ -192,6 +201,36 @@ async function supa() {
     async auditLog(l) { return ok(await sb.from("audit_log").select("*").eq("league_id", l).order("at", { ascending: false }).limit(100)); },
     // Solo para pruebas en modo demo; en Supabase el contrato lo administra la plataforma.
     async demoContract() { throw new Error("Sin permiso"); },
+    async leagueBrand(l) { return ok(await sb.rpc("league_brand", { l })); },
+    async setLeagueBrand(l, color, blob) {
+      let logo = null;
+      if (blob) { const u = await uid(), path = `${u}/league-${l}-${Date.now()}.png`; ok(await sb.storage.from("photos").upload(path, blob, { upsert: true, contentType: blob.type || "image/png" })); logo = sb.storage.from("photos").getPublicUrl(path).data.publicUrl; }
+      ok(await sb.rpc("set_league_brand", { l, color, logo }));
+    },
+    // ----- registro de jugadores, padrón y credenciales -----
+    async registrationRules(l) { return ok(await sb.rpc("registration_rules", { l })); },
+    async setRegistrationRules(l, r) { ok(await sb.rpc("set_registration_rules", { l, r })); },
+    async registry(l) {
+      const [p, r] = await Promise.all([sb.from("league_players").select("*").eq("league_id", l).order("norm"), sb.from("player_registrations").select("*").eq("league_id", l).order("created_at", { ascending: false })]);
+      return { players: ok(p), regs: ok(r) };
+    },
+    async uploadPlayerPhoto(l, blob) {
+      const path = `${l}/${crypto.randomUUID()}/p-${Date.now()}.jpg`;
+      ok(await sb.storage.from("player-photos").upload(path, blob, { contentType: "image/jpeg", upsert: false })); return path;
+    },
+    async playerPhotoUrl(path) { if (!path) return null; const r = await sb.storage.from("player-photos").createSignedUrl(path, 3600); return r.error ? null : r.data.signedUrl; },
+    async officeRegister(l, tt, p) { return ok(await sb.rpc("office_register", { l, ttid: tt, p })); },
+    async updateLeaguePlayer(l, pid, p) { ok(await sb.rpc("update_league_player", { l, pid, p })); },
+    async decideRegistration(l, rid, approve, num, why) { ok(await sb.rpc("decide_registration", { l, rid, approve, num: num ?? null, why: why || null })); },
+    async removeRegistration(l, rid, why) { ok(await sb.rpc("remove_registration", { l, rid, why })); },
+    async regLinks(l) { return ok(await sb.from("registration_links").select("*").eq("league_id", l).order("created_at", { ascending: false }).limit(30)); },
+    async createRegLink(l, tt, max, days) { return ok(await sb.rpc("create_reg_link", { l, ttid: tt, max_uses: max || 30, days: days || 14 })); },
+    async revokeRegLink(l, c) { ok(await sb.rpc("revoke_reg_link", { l, c })); },
+    async regLinkInfo(code) { return ok(await sb.rpc("reg_link_info", { p_code: code })); },
+    async registerByLink(code, p) { return ok(await sb.rpc("register_by_link", { p_code: code, p })); },
+    async delegateTargets(c, t) { return ok(await sb.rpc("delegate_targets", { c, t })); },
+    async delegateRegister(c, t, tt, p) { return ok(await sb.rpc("delegate_register", { c, t, ttid: tt, p })); },
+    async delegateRegistrations(c, t) { return ok(await sb.rpc("delegate_registrations", { c, t })); },
     // ----- administradores, sanciones, objeciones y finanzas de la liga -----
     async leagueAdmins(l) { return ok(await sb.rpc("league_admins_list", { l })); },
     async adminInvites(l) { return ok(await sb.from("admin_invites").select("*").eq("league_id", l).order("created_at", { ascending: false }).limit(30)); },
@@ -271,7 +310,7 @@ async function supa() {
 function demo() {
   const K = "demo-db";
   const load = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch (e) { return {}; } };
-  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [], contracts: [], invites: [], lteams: [], attempts: [], audit: [], tourn: [], ttems: [], lmatches: [], mevents: [], ainv: [], sanc: [], disp: [], chg: [], mov: [] }, load());
+  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [], contracts: [], invites: [], lteams: [], attempts: [], audit: [], tourn: [], ttems: [], lmatches: [], mevents: [], ainv: [], sanc: [], disp: [], chg: [], mov: [], lplayers: [], lregs: [], rlinks: [] }, load());
   const dataURL = (f) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
   const save = (d) => { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ } };
   const cur = (d) => { const u = d.users.find((x) => x.id === d.session); if (!u) throw new Error("Inicia sesión primero"); return u; };
@@ -290,6 +329,32 @@ function demo() {
   const docs = (d, c, t) => { const cd = d.clubdocs.find((x) => x.id === c), td = d.teamdocs.find((x) => x.club_id === c && x.team_id === t); ensure(cd && td, "Este equipo se administra desde archivos"); return [cd, td]; };
   const slug = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const log = (d, l, action, detail) => d.audit.push({ id: d.audit.length + 1, league_id: l, actor: d.session, action, detail: detail || {}, at: new Date().toISOString() });
+  const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => ((Math.random() * 16) | (c === "x" ? 0 : 8)).toString(16)));
+  const normName = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const docNorm = (x) => String(x || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase() || null;
+  const photoOk = (p, l) => new RegExp("^" + l + "/[0-9a-f-]{36}/[A-Za-z0-9._-]+(#.*)?$").test(p);
+  const regRules = (d, l) => ({ photo: "optional", doc: "optional", delegate_approval: true, ...((d.leagues.find((x) => x.id === l) || {}).settings || {}).registration });
+  const liveLink = (d, code) => {
+    const c = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), k = c.slice(0, 4) + "-" + c.slice(4, 8) + "-" + c.slice(8, 12), x = d.rlinks.find((y) => y.code === k);
+    const t = x && d.ttems.find((y) => y.id === x.team_id); return x && x.active && new Date(x.expires_at) > Date.now() && x.uses < x.max_uses && t && t.status === "active" && d.tourn.find((y) => y.id === t.tournament_id).status !== "finished" ? x : null;
+  };
+  // Encuentra o crea al jugador del padrón: mismo documento, o mismo nombre y fecha de nacimiento, es la misma persona.
+  const upsertPlayer = (d, l, p, st) => {
+    const r = regRules(d, l), nm = String(p.name || "").trim().slice(0, 80), bd = p.birth_date || null; let dn = docNorm(p.doc_id);
+    ensure(nm.length >= 2, "Escribe el nombre del jugador"); ensure(bd || dn, "Indica la fecha de nacimiento o un documento"); ensure(r.doc !== "required" || dn, "Esta liga pide documento de identidad"); if (r.doc === "off") dn = null; ensure(bd || dn, "Indica la fecha de nacimiento");
+    ensure(!bd || (bd > "1900-01-01" && bd <= new Date().toISOString().slice(0, 10)), "Datos no válidos");
+    const ex = d.lplayers.find((x) => x.league_id === l && ((dn && x.doc_norm === dn) || (bd && x.norm === normName(nm) && x.birth_date === bd)));
+    if (ex) { ex.doc_id = ex.doc_id || (dn ? String(p.doc_id).trim().slice(0, 30) : null); ex.doc_norm = ex.doc_norm || dn; ex.birth_date = ex.birth_date || bd; return ex; }
+    const x = { id: uuid(), league_id: l, name: nm, norm: normName(nm), birth_date: bd, doc_id: dn ? String(p.doc_id).trim().slice(0, 30) : null, doc_norm: dn, photo_path: null, status: st, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    d.lplayers.push(x); return x;
+  };
+  const canActivate = (d, l, pl) => { const r = regRules(d, l); ensure(r.photo !== "required" || pl.photo_path, "Falta la foto del jugador"); ensure(r.doc !== "required" || pl.doc_norm, "Falta el documento del jugador"); };
+  const addReg = (d, l, t, pl, num, st, via) => {
+    const other = d.lregs.find((x) => x.tournament_id === t.tournament_id && x.player_id === pl.id && ["pending", "active"].includes(x.status)); ensure(!other, "Ese jugador ya está inscrito en " + (other && d.ttems.find((x) => x.id === other.team_id).name));
+    ensure(st !== "active" || num == null || !d.lregs.some((x) => x.team_id === t.id && x.number === num && x.status === "active"), "Ese número ya lo usa otro jugador del equipo");
+    const r = { id: uuid(), league_id: l, player_id: pl.id, tournament_id: t.tournament_id, team_id: t.id, number: num, status: st, via, requested_by: d.session, decided_by: st === "active" ? d.session : null, decided_at: st === "active" ? new Date().toISOString() : null, note: null, created_at: new Date().toISOString() };
+    d.lregs.push(r); if (st === "active") pl.status = "active"; return r;
+  };
   const PERMS = ["teams", "tournaments", "schedule", "results", "sanctions", "finance", "registration", "audit", "settings"];
   const validPerms = (p) => Array.isArray(p) && p.every((x) => PERMS.includes(x));
   // Mismas restricciones que las columnas de la tabla sanctions.
@@ -558,6 +623,81 @@ function demo() {
     async demoContract(l, slots, days) {
       const d = db(); ensure(isLeagueAdmin(d, l)); d.contracts = d.contracts.filter((x) => x.league_id !== l);
       d.contracts.push({ league_id: l, pro_slots: slots, status: "active", starts_at: new Date().toISOString(), ends_at: days ? new Date(Date.now() + days * 864e5).toISOString() : null }); save(d);
+    },
+    async leagueBrand(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return { color: "#c8102e", logo: null, ...((d.leagues.find((x) => x.id === l) || {}).settings || {}).brand }; },
+    async setLeagueBrand(l, color, blob) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "settings")); ensure(/^#[0-9a-fA-F]{6}$/.test(color || ""), "Datos no válidos"); const lg = d.leagues.find((x) => x.id === l), cur = (lg.settings || {}).brand || {};
+      lg.settings = { ...(lg.settings || {}), brand: { color: color.toLowerCase(), logo: blob ? await dataURL(blob) : cur.logo || null } }; log(d, l, "league.brand", { color: color.toLowerCase(), logo_changed: !!blob }); save(d);
+    },
+    // ----- registro de jugadores, padrón y credenciales (mismas reglas que las funciones SQL) -----
+    async registrationRules(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return regRules(d, l); },
+    async setRegistrationRules(l, r) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "settings")); const O = ["off", "optional", "required"]; ensure(O.includes(r.photo) && O.includes(r.doc) && typeof r.delegate_approval === "boolean", "Datos no válidos");
+      const lg = d.leagues.find((x) => x.id === l); lg.settings = { ...(lg.settings || {}), registration: { photo: r.photo, doc: r.doc, delegate_approval: r.delegate_approval } }; log(d, l, "registration.rules", { rules: r }); save(d);
+    },
+    async registry(l) { const d = db(); ensure(isLeagueAdmin(d, l, "registration")); return { players: d.lplayers.filter((x) => x.league_id === l).sort((a, b) => a.norm.localeCompare(b.norm)), regs: d.lregs.filter((x) => x.league_id === l).slice().reverse() }; },
+    async uploadPlayerPhoto(l, blob) { const d = db(); ensure(isLeagueAdmin(d, l, "registration")); return `${l}/${uuid()}/p.jpg#` + (await dataURL(blob)); },
+    async playerPhotoUrl(path) { return path ? path.slice(path.indexOf("#") + 1) : null; },
+    async officeRegister(l, tt, p) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "registration")); await lneed(l, "registration"); const t = d.ttems.find((x) => x.id === tt && x.league_id === l && x.status === "active"); ensure(t, "Equipo no encontrado");
+      const pl = upsertPlayer(d, l, p, "pending"); if (p.photo_path) { ensure(photoOk(p.photo_path, l), "Datos no válidos"); pl.photo_path = p.photo_path; }
+      canActivate(d, l, pl); const r = addReg(d, l, t, pl, p.number === "" || p.number == null ? null : +p.number, "active", "office");
+      log(d, l, "player.register", { player: pl.id, registration: r.id, team: t.id, via: "office" }); save(d); return r.id;
+    },
+    async updateLeaguePlayer(l, pid, p) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "registration")); const pl = d.lplayers.find((x) => x.id === pid && x.league_id === l); ensure(pl, "Jugador no encontrado");
+      const n = { ...pl }; if ("name" in p) { n.name = String(p.name).trim().slice(0, 80); n.norm = normName(n.name); } if ("birth_date" in p) n.birth_date = p.birth_date || null;
+      if ("doc_id" in p) { n.doc_id = String(p.doc_id || "").trim().slice(0, 30) || null; n.doc_norm = docNorm(p.doc_id); } if (p.photo_path) { ensure(photoOk(p.photo_path, l), "Datos no válidos"); n.photo_path = p.photo_path; }
+      ensure(!d.lplayers.some((x) => x.id !== pid && x.league_id === l && ((n.doc_norm && x.doc_norm === n.doc_norm) || (n.birth_date && x.norm === n.norm && x.birth_date === n.birth_date))), "Ya existe un jugador con esos datos");
+      log(d, l, "player.update", { player: pid, before: { name: pl.name, birth_date: pl.birth_date, doc: !!pl.doc_norm, photo: !!pl.photo_path }, after: { name: n.name, birth_date: n.birth_date, doc: !!n.doc_norm, photo: !!n.photo_path } });
+      Object.assign(pl, n, { updated_at: new Date().toISOString() }); save(d);
+    },
+    async decideRegistration(l, rid, approve, num, why) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "registration")); const r = d.lregs.find((x) => x.id === rid && x.league_id === l && x.status === "pending"); ensure(r, "ya no está pendiente"); const pl = d.lplayers.find((x) => x.id === r.player_id);
+      if (approve) {
+        canActivate(d, l, pl); ensure(num == null || !d.lregs.some((x) => x.team_id === r.team_id && x.number === num && x.status === "active"), "Ese número ya lo usa otro jugador del equipo");
+        Object.assign(r, { status: "active", number: num ?? null, decided_by: d.session, decided_at: new Date().toISOString() }); pl.status = "active";
+      } else {
+        Object.assign(r, { status: "rejected", note: String(why || "").trim().slice(0, 200) || null, decided_by: d.session, decided_at: new Date().toISOString() });
+        if (!d.lregs.some((x) => x.player_id === pl.id && ["pending", "active"].includes(x.status)) && !d.lregs.some((x) => x.player_id === pl.id && x.status === "removed") && pl.status === "pending") pl.status = "inactive";
+      }
+      log(d, l, approve ? "player.approve" : "player.reject", { player: pl.id, registration: rid, team: r.team_id, number: num ?? null, note: why || null }); save(d);
+    },
+    async removeRegistration(l, rid, why) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "registration")); ensure(String(why || "").trim().length >= 3, "Escribe el motivo"); const r = d.lregs.find((x) => x.id === rid && x.league_id === l && ["pending", "active"].includes(x.status)); ensure(r, "Registro no encontrado");
+      Object.assign(r, { status: "removed", note: String(why).trim().slice(0, 200), decided_by: d.session, decided_at: new Date().toISOString() }); log(d, l, "player.remove", { player: r.player_id, registration: rid, team: r.team_id, reason: String(why).slice(0, 200) }); save(d);
+    },
+    async regLinks(l) { const d = db(); ensure(isLeagueAdmin(d, l, "registration")); return d.rlinks.filter((x) => x.league_id === l).slice().reverse(); },
+    async createRegLink(l, tt, max, days) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "registration")); await lneed(l, "registration"); ensure(d.ttems.some((x) => x.id === tt && x.league_id === l && x.status === "active"), "Equipo no encontrado");
+      max = max || 30; days = days || 14; ensure(max >= 1 && max <= 200 && days >= 1 && days <= 90, "Datos no válidos");
+      const raw = (Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2) + "000000000000").slice(0, 12).toUpperCase(), c = raw.slice(0, 4) + "-" + raw.slice(4, 8) + "-" + raw.slice(8, 12);
+      d.rlinks.push({ code: c, league_id: l, team_id: tt, max_uses: max, uses: 0, expires_at: new Date(Date.now() + days * 864e5).toISOString(), active: true, created_at: new Date().toISOString() }); log(d, l, "reglink.create", { code: c, team: tt, max_uses: max }); save(d); return c;
+    },
+    async revokeRegLink(l, c) { const d = db(); ensure(isLeagueAdmin(d, l, "registration")); const x = d.rlinks.find((y) => y.code === c && y.league_id === l); if (x) x.active = false; log(d, l, "reglink.revoke", { code: c }); save(d); },
+    async regLinkInfo(code) {
+      const d = db(), rl = liveLink(d, code); if (!rl) return { error: "invalid" }; const t = d.ttems.find((x) => x.id === rl.team_id), tn = d.tourn.find((x) => x.id === t.tournament_id), { delegate_approval, ...rules } = regRules(d, rl.league_id);
+      return { league: d.leagues.find((x) => x.id === rl.league_id).name, tournament: tn.name, team: t.name, rules };
+    },
+    async registerByLink(code, p) {
+      const d = db(), rl = liveLink(d, code); if (!rl) return { error: "invalid" }; const t = d.ttems.find((x) => x.id === rl.team_id), pl = upsertPlayer(d, rl.league_id, p, "pending"), r = addReg(d, rl.league_id, t, pl, null, "pending", "link");
+      rl.uses++; log(d, rl.league_id, "player.submit", { player: pl.id, registration: r.id, team: t.id, via: "link", code: rl.code }); save(d); return { ok: true, team: t.name };
+    },
+    async delegateTargets(c, t) {
+      const d = db(); ensure(isAdmin(d, c, t));
+      return d.ttems.filter((tt) => tt.status === "active" && d.lteams.some((x) => x.id === tt.link_id && x.club_id === c && x.team_id === t && x.status === "approved") && d.tourn.find((y) => y.id === tt.tournament_id).status !== "finished")
+        .map((tt) => ({ id: tt.id, league_id: tt.league_id, league: d.leagues.find((x) => x.id === tt.league_id).name, tournament: d.tourn.find((y) => y.id === tt.tournament_id).name, team: tt.name, rules: regRules(d, tt.league_id) }));
+    },
+    async delegateRegister(c, t, tt, p) {
+      const d = db(); ensure(isAdmin(d, c, t)); const x = d.ttems.find((y) => y.id === tt && y.status === "active" && d.lteams.some((z) => z.id === y.link_id && z.club_id === c && z.team_id === t && z.status === "approved")); ensure(x, "Equipo no encontrado");
+      await lneed(x.league_id, "registration"); ensure(d.tourn.find((y) => y.id === x.tournament_id).status !== "finished", "El torneo ya terminó");
+      const pl = upsertPlayer(d, x.league_id, p, "pending"), r = addReg(d, x.league_id, x, pl, null, "pending", "delegate"); log(d, x.league_id, "player.submit", { player: pl.id, registration: r.id, team: x.id, via: "delegate" }); save(d);
+      return { ok: true, registration: r.id, status: "pending" };
+    },
+    async delegateRegistrations(c, t) {
+      const d = db(); ensure(isAdmin(d, c, t));
+      return d.lregs.filter((r) => r.status !== "removed" && d.ttems.some((tt) => tt.id === r.team_id && d.lteams.some((z) => z.id === tt.link_id && z.club_id === c && z.team_id === t))).slice().reverse()
+        .map((r) => ({ id: r.id, name: d.lplayers.find((x) => x.id === r.player_id).name, status: r.status, number: r.number, team: d.ttems.find((x) => x.id === r.team_id).name, created_at: r.created_at }));
     },
     // ----- administradores, sanciones, objeciones y finanzas de la liga (mismas reglas que las funciones SQL) -----
     async leagueAdmins(l) {

@@ -69,7 +69,7 @@ async function route() {
   let { club, team, view } = parse();
   try {
     // Mi cuenta y panel de liga: rutas propias, fuera de los equipos.
-    if (club === "cuenta" || club === "liga") {
+    if (club === "cuenta" || club === "liga" || club === "registro") {
       current = null;
       await renderPlatform(app, location.hash.replace(/^#\/?/, "").split("/"));
       wireSheet(() => current);

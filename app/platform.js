@@ -14,9 +14,11 @@ import * as torneos from "./league/torneos.js";
 import * as sanciones from "./league/sanciones.js";
 import * as finanzas from "./league/finanzas.js";
 import * as ajustes from "./league/ajustes.js";
+import * as jugadores from "./league/jugadores.js";
+import * as delegate from "./league/delegate.js";
 
 // Cada sección con módulo propio exporta render(ctx), actions y forms. Las demás muestran su descripción.
-const MODULES = { equipos, torneos, sanciones, finanzas, ajustes };
+const MODULES = { equipos, torneos, jugadores, sanciones, finanzas, ajustes };
 
 const THEME = {
   name: "Mi cuenta",
@@ -33,6 +35,7 @@ const SECTIONS = {
   inicio: { label: "Inicio" },
   torneos: { label: "Torneos", f: ["tournaments", "schedule", "standings"], txt: "Temporadas, torneos, categorías y modalidades de fútbol 5 a 11; jornadas, horarios, canchas, resultados, tablas y goleo." },
   equipos: { label: "Equipos", f: ["registration", "credentials", "team_pro_grant"], txt: "Equipos inscritos, invitaciones con código, registro de jugadores por el delegado o en oficina, y credenciales para imprimir." },
+  jugadores: { label: "Jugadores", f: ["registration", "credentials"], txt: "Padrón de jugadores de la liga, registro por delegado, enlace o en oficina, y credenciales para imprimir." },
   sanciones: { label: "Sanciones", f: ["sanctions"], txt: "Sanciones con motivo, fechas y evidencia; objeciones, actas (también por foto) e incidencias con su resolución." },
   finanzas: { label: "Finanzas", f: ["league_finance"], txt: "Conceptos de cobro configurables y qué debe y ha pagado cada equipo. Son registros administrativos, no cobros dentro de la app." },
   ajustes: { label: "Ajustes", f: ["public_page"], txt: "Reglamento, precios, marca de la liga, página pública y administradores con permisos." },
@@ -43,12 +46,13 @@ const shell = (title, sub, body, extra = "") => `<header class="top"><div class=
 
 export async function renderPlatform(app, [kind, id, sec]) {
   applyTheme(THEME);
-  document.title = kind === "liga" ? "Liga" : "Mi cuenta";
+  document.title = kind === "liga" ? "Liga" : kind === "registro" ? "Registro de jugadores" : "Mi cuenta";
   if (!on) {
     app.innerHTML = shell("Mi cuenta", "", card("Cuentas apagadas", `<p>Las cuentas se activan al conectar la base de datos. Para probar ahora, agrega <b>?demo</b> antes del # en el enlace.</p>`));
     return;
   }
   await init();
+  if (kind === "registro") { await registro(app, id); wire(app); return; }
   const user = await api.user();
   if (!user) {
     app.innerHTML = shell("Mi cuenta", "", card("Entra para organizar", `<p>Con tu cuenta administras tus equipos y tus ligas desde un solo lugar.</p>${googleBtn()}<button type="button" class="link" data-cl="auth-in">Entrar con correo</button>`));
@@ -99,7 +103,7 @@ async function teamsCard() {
     const e = ents[i], act = links[i].filter((x) => ["pending", "approved"].includes(x.status));
     const why = e && e.source === "league" ? " · Pro de la liga" : "";
     return `<a class="cl-row" href="#/${esc(m.club_id)}/${esc(m.team_id)}/inicio"><span><b>${esc(name(m.club_id))}</b><small>${esc(m.team_id)}${esc(why)}</small></span><span class="chip ok">${esc(e ? e.name : "")}</span></a>`
-      + act.map((x) => `<div class="cl-row static sub"><span><b>${esc(x.league_name || x.league_id)}</b><small>${x.status === "approved" && x.pro ? "Pro cubierto por la liga" : ""}</small></span><span class="acts">${chip(LST[x.status][1], LST[x.status][0])}<button type="button" class="btn sm ghost" data-cl="unlink" data-id="${esc(x.id)}">${x.status === "pending" ? "Cancelar" : "Dejar la liga"}</button></span></div>`).join("");
+      + act.map((x) => `<div class="cl-row static sub"><span><b>${esc(x.league_name || x.league_id)}</b><small>${x.status === "approved" && x.pro ? "Pro cubierto por la liga" : ""}</small></span><span class="acts">${chip(LST[x.status][1], LST[x.status][0])}${x.status === "approved" ? `<button type="button" class="btn sm" data-cl="regleague" data-c="${esc(m.club_id)}" data-t="${esc(m.team_id)}">Registrar jugadores</button>` : ""}<button type="button" class="btn sm ghost" data-cl="unlink" data-id="${esc(x.id)}">${x.status === "pending" ? "Cancelar" : "Dejar la liga"}</button></span></div>`).join("");
   }).join("");
   const linkForm = mine.length ? `<form data-pf="link" class="fld"><label>Vincular con una liga<input name="code" placeholder="Código de la liga" autocomplete="off" autocapitalize="characters" required></label>
     ${mine.length > 1 ? `<label>Equipo<select name="team">${mine.map((m) => `<option value="${esc(m.club_id)}/${esc(m.team_id)}">${esc(name(m.club_id))}</option>`).join("")}</select></label>` : `<input type="hidden" name="team" value="${esc(mine[0].club_id)}/${esc(mine[0].team_id)}">`}
@@ -114,6 +118,19 @@ async function leaguesCard() {
   const mine = await api.myLeagues();
   const rows = mine.map((l) => `<a class="cl-row" href="#/liga/${esc(l.id)}/inicio"><span><b>${esc(l.name)}</b></span><span class="chip ok">${esc(ROLE_NAME[l.role] || l.role)}</span></a>`).join("");
   return card("Mis ligas", `${rows}<form data-pf="league" class="fld"><label>${mine.length ? "Crear otra liga" : "Crea tu liga"}<input name="nm" placeholder="Nombre de la liga" maxlength="80" required></label><button class="btn" type="submit">Crear liga</button><p class="msg" role="alert" hidden></p></form>`);
+}
+
+// ---------- Registro por enlace (sin cuenta) ----------
+async function registro(app, code) {
+  const info = await api.regLinkInfo(code || "").catch(() => ({ error: "invalid" }));
+  if (info.error) { app.innerHTML = shell("Registro de jugadores", "", card("Enlace no válido", `<p>Este enlace no existe, ya venció o ya no admite más registros. Pídele uno nuevo a tu liga.</p>`)); return; }
+  const r = info.rules;
+  app.innerHTML = shell("Registro de jugadores", info.league, card(info.team, `<p>${esc(info.tournament)}</p>
+    <form data-pf="reglink" data-code="${esc(code)}" class="fld"><label>Nombre completo<input name="name" required minlength="2" maxlength="80" autocomplete="name"></label>
+    <label>Fecha de nacimiento<input name="birth" type="date" max="${new Date().toISOString().slice(0, 10)}"></label>
+    ${r.doc === "off" ? "" : `<label>Documento de identidad${r.doc === "required" ? " (obligatorio)" : " (opcional)"}<input name="doc" maxlength="30"${r.doc === "required" ? " required" : ""}></label>`}
+    <p class="hint">Escribe la fecha de nacimiento o el documento. Tu registro queda pendiente hasta que la liga lo apruebe.${r.photo === "off" ? "" : " La foto la toma tu delegado o la liga."} Tus datos solo los ve la administración de la liga.</p>
+    <button class="btn" type="submit">Enviar mi registro</button><p class="msg" role="alert" hidden></p></form>`));
 }
 
 // ---------- Panel de liga ----------
@@ -162,6 +179,7 @@ function wire(app) {
       if (a === "auth-in") return openAuth(false);
       if (a === "google") return await api.signInGoogle();
       if (a === "out") { await api.signOut(); return window.__reload(); }
+      if (a === "regleague") return await delegate.open(t.dataset.c, t.dataset.t);
       if (a === "unlink") { if (!confirm("¿Salir de esta liga? Tu equipo conserva todo; solo pierde el Pro que venía de la liga.")) return; await api.unlinkTeam(t.dataset.id); toast("Saliste de la liga"); return window.__reload(); }
       if (a === "add-role") { const acc = (await api.account()) || { roles: [] }; await api.setRoles([...new Set([...(acc.roles || []), t.dataset.r])]); return window.__reload(); }
     } catch (err) { toast(friendly(err), true); }
@@ -195,6 +213,11 @@ function wire(app) {
         const fd = new FormData(f), r = await api.createTeam(fd.get("nm").trim(), +fd.get("fmt"));
         location.hash = `#/${r.club}/${r.team}/plantel`;
         return;
+      }
+      if (f.dataset.pf === "reglink") {
+        const fd = new FormData(f), r = await api.registerByLink(f.dataset.code, { name: fd.get("name").trim(), birth_date: fd.get("birth") || null, doc_id: (fd.get("doc") || "").trim() || null });
+        if (r.error) { btn.disabled = false; return say(f, "Este enlace ya no es válido. Pídele uno nuevo a tu liga."); }
+        f.closest(".cl-card").innerHTML = `<h2>¡Listo!</h2><p>Tu registro con ${esc(r.team)} quedó enviado. La liga lo revisará y lo aprobará.</p>`; return;
       }
       if (f.dataset.pf === "adminjoin") {
         const r = await api.acceptAdminInvite(new FormData(f).get("code"));

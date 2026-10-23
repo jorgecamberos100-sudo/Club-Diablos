@@ -614,3 +614,30 @@ a.btn { text-decoration: none; display: inline-block; }
 .ev select, .ev input { padding: 9px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font-size: 15px; min-width: 0; }
 .rules { white-space: normal; }
 @media (max-width: 420px) { .three { grid-template-columns: 1fr 1fr 1fr; } .ev { grid-template-columns: 1fr 1fr; } .ev select:last-child { grid-column: span 2; } }
+/* Credenciales imprimibles */
+#print-root { display: none; }
+.cred-sheet { display: grid; grid-template-columns: repeat(2, 85.6mm); gap: 4mm; justify-content: center; }
+.cred { width: 85.6mm; height: 54mm; border: 0.3mm solid #222; border-radius: 3mm; overflow: hidden; display: flex; flex-direction: column; background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; break-inside: avoid; }
+.cred-h { background: var(--cc); color: #fff; padding: 2mm 3mm; display: flex; align-items: center; gap: 2mm; min-height: 11mm; }
+.cred-h img { height: 8mm; width: 8mm; object-fit: contain; background: #fff; border-radius: 1mm; }
+.cred-h b { display: block; font-size: 3.6mm; line-height: 1.1; } .cred-h small { font-size: 2.6mm; opacity: 0.9; }
+.cred-b { flex: 1; display: flex; gap: 3mm; padding: 2.5mm 3mm; }
+.cred-ph { width: 24mm; height: 30mm; border: 0.2mm solid #999; display: flex; align-items: center; justify-content: center; overflow: hidden; flex: none; font-size: 2.4mm; color: #888; }
+.cred-ph img { width: 100%; height: 100%; object-fit: cover; }
+.cred-i { display: flex; flex-direction: column; gap: 1.2mm; min-width: 0; } .cred-i b { font-size: 4mm; line-height: 1.15; overflow-wrap: anywhere; } .cred-i span { font-size: 3mm; color: #333; } .cred-i em { font-style: normal; font-weight: 700; font-size: 7mm; color: var(--cc); }
+.cred-f { display: flex; justify-content: space-between; padding: 1.2mm 3mm; font-size: 2.4mm; color: #444; border-top: 0.2mm solid #ccc; }
+@media print {
+  body > *:not(#print-root) { display: none !important; }
+  #print-root { display: block !important; }
+  @page { size: A4; margin: 8mm; }
+  .cred { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+/* Jugadores */
+.pl[hidden] { display: none; }
+.pl { align-items: center; }
+.pl-ph { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: var(--raise); display: inline-flex; align-items: center; justify-content: center; flex: none; color: var(--muted); margin-right: 10px; }
+.pl-ph img { width: 100%; height: 100%; object-fit: cover; }
+.fld-inline { display: flex; flex-direction: column; gap: 4px; font-family: var(--cond); color: var(--muted); font-size: 14px; margin: 8px 0; }
+.fld-inline input, .fld-inline select { padding: 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font-size: 16px; }
+.perms { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; } .perms legend { font: 600 14px var(--cond); color: var(--muted); padding: 0 6px; }
+.tabbar[style*="--n:7"] a { font-size: 11px; padding-left: 0; padding-right: 0; }

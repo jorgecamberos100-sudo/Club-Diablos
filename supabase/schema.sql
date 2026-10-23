@@ -1550,3 +1550,321 @@ begin
     select team_id, sum(points)::int as pts from sanctions where league_id = l and tournament_id = tid and kind = 'puntos' and status <> 'revoked' group by team_id) x), '[]');
 end $$;
 grant execute on function public.standings_adjustments(text,uuid) to authenticated;
+
+-- ============ Etapa 7 del producto: registro de jugadores, padrón central y credenciales ============
+-- Reglas de registro por liga (foto, documento, aprobación de lo que mandan los delegados). Valores por omisión: foto y documento opcionales, con aprobación.
+create or replace function public.reg_rules(l text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('photo', 'optional', 'doc', 'optional', 'delegate_approval', true) || coalesce((select settings->'registration' from leagues where id = l), '{}') $$;
+revoke all on function public.reg_rules(text) from public, anon, authenticated;
+
+create or replace function public.set_registration_rules(l text, r jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_league_admin(l, 'settings') then raise exception 'Sin permiso'; end if;
+  if (r->>'photo') not in ('off','optional','required') or (r->>'doc') not in ('off','optional','required') or jsonb_typeof(r->'delegate_approval') <> 'boolean' then raise exception 'Datos no válidos'; end if;
+  update leagues set settings = jsonb_set(settings, '{registration}', jsonb_build_object('photo', r->>'photo', 'doc', r->>'doc', 'delegate_approval', r->'delegate_approval')) where id = l;
+  perform log_action(l, 'registration.rules', jsonb_build_object('rules', r));
+end $$;
+create or replace function public.registration_rules(l text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not (is_league_admin(l) ) then raise exception 'Sin permiso'; end if;
+  return reg_rules(l);
+end $$;
+
+-- Nombre normalizado: minúsculas, sin acentos, sin signos ni espacios repetidos.
+create or replace function public.norm_name(x text) returns text language sql immutable as $$
+  select trim(regexp_replace(translate(lower(coalesce(x, '')), 'áàäâãéèëêíìïîóòöôõúùüûñç', 'aaaaaeeeeiiiiooooouuuunc'), '[^a-z0-9]+', ' ', 'g')) $$;
+
+create table if not exists public.league_players (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  name text not null check (length(trim(name)) between 2 and 80),
+  norm text not null,
+  birth_date date check (birth_date is null or (birth_date > date '1900-01-01' and birth_date <= current_date)),
+  doc_id text check (doc_id is null or length(doc_id) between 3 and 30), doc_norm text,
+  photo_path text check (photo_path is null or length(photo_path) <= 300),
+  status text not null default 'pending' check (status in ('pending','active','inactive')),
+  created_by uuid references auth.users(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  check (birth_date is not null or doc_norm is not null)      -- identidad mínima para no duplicar
+);
+create unique index if not exists lp_doc on public.league_players (league_id, doc_norm) where doc_norm is not null;
+create unique index if not exists lp_name on public.league_players (league_id, norm, birth_date) where birth_date is not null;
+create index if not exists lp_search on public.league_players (league_id, norm);
+
+create table if not exists public.player_registrations (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  player_id uuid not null references public.league_players(id),
+  tournament_id uuid not null references public.tournaments(id) on delete cascade,
+  team_id uuid not null references public.tournament_teams(id),
+  number smallint check (number is null or number between 0 and 99),
+  status text not null default 'pending' check (status in ('pending','active','rejected','removed')),
+  via text not null check (via in ('office','delegate','link')),
+  requested_by uuid references auth.users(id), decided_by uuid references auth.users(id), decided_at timestamptz,
+  note text check (note is null or length(note) <= 200),
+  created_at timestamptz not null default now()
+);
+create unique index if not exists pr_one_team on public.player_registrations (tournament_id, player_id) where status in ('pending','active');
+create unique index if not exists pr_number on public.player_registrations (team_id, number) where status = 'active' and number is not null;
+create index if not exists pr_league on public.player_registrations (league_id, status);
+
+create table if not exists public.registration_links (
+  code text primary key,
+  league_id text not null references public.leagues(id) on delete cascade,
+  team_id uuid not null references public.tournament_teams(id) on delete cascade,
+  max_uses int not null check (max_uses between 1 and 200), uses int not null default 0,
+  expires_at timestamptz not null, active boolean not null default true,
+  created_by uuid references auth.users(id), created_at timestamptz not null default now()
+);
+
+alter table public.league_players enable row level security; alter table public.player_registrations enable row level security; alter table public.registration_links enable row level security;
+drop policy if exists lp_read on public.league_players; create policy lp_read on public.league_players for select using (is_league_admin(league_id, 'registration'));
+drop policy if exists pr_read on public.player_registrations; create policy pr_read on public.player_registrations for select using (is_league_admin(league_id, 'registration'));
+drop policy if exists rl_read on public.registration_links; create policy rl_read on public.registration_links for select using (is_league_admin(league_id, 'registration'));
+grant select on public.league_players, public.player_registrations, public.registration_links to authenticated;
+
+-- Fotos de jugadores: bucket PRIVADO (a diferencia de los escudos). Se leen con enlaces firmados temporales y solo los administradores con permiso de registro.
+insert into storage.buckets (id, name, public) values ('player-photos', 'player-photos', false) on conflict (id) do nothing;
+drop policy if exists pphotos_write on storage.objects;
+create policy pphotos_write on storage.objects for insert with check (bucket_id = 'player-photos' and is_league_admin((storage.foldername(name))[1], 'registration'));
+drop policy if exists pphotos_update on storage.objects;
+create policy pphotos_update on storage.objects for update using (bucket_id = 'player-photos' and is_league_admin((storage.foldername(name))[1], 'registration'));
+drop policy if exists pphotos_read on storage.objects;
+create policy pphotos_read on storage.objects for select using (bucket_id = 'player-photos' and is_league_admin((storage.foldername(name))[1], 'registration'));
+
+-- Encuentra o crea al jugador del padrón. Mismo documento, o mismo nombre y fecha de nacimiento = la misma persona (no se duplica).
+create or replace function public.upsert_player(l text, p jsonb, st text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare r jsonb := reg_rules(l); nm text := left(trim(coalesce(p->>'name', '')), 80); bd date := nullif(p->>'birth_date', '')::date; dn text := nullif(upper(regexp_replace(coalesce(p->>'doc_id', ''), '[^A-Za-z0-9]', '', 'g')), ''); pid uuid;
+begin
+  if length(nm) < 2 then raise exception 'Escribe el nombre del jugador'; end if;
+  if bd is null and dn is null then raise exception 'Indica la fecha de nacimiento o un documento'; end if;
+  if r->>'doc' = 'required' and dn is null then raise exception 'Esta liga pide documento de identidad'; end if;
+  if r->>'doc' = 'off' then dn := null; end if;
+  if bd is null and dn is null then raise exception 'Indica la fecha de nacimiento'; end if;
+  select id into pid from league_players where league_id = l and ((dn is not null and doc_norm = dn) or (bd is not null and norm = norm_name(nm) and birth_date = bd)) limit 1;
+  if pid is not null then
+    update league_players set doc_id = coalesce(doc_id, case when dn is not null then left(trim(p->>'doc_id'), 30) end), doc_norm = coalesce(doc_norm, dn), birth_date = coalesce(birth_date, bd), updated_at = now() where id = pid;
+    return pid;
+  end if;
+  insert into league_players (league_id, name, norm, birth_date, doc_id, doc_norm, status, created_by)
+  values (l, nm, norm_name(nm), bd, case when dn is not null then left(trim(p->>'doc_id'), 30) end, dn, st, auth.uid()) returning id into pid;
+  return pid;
+end $$;
+revoke all on function public.upsert_player(text,jsonb,text) from public, anon, authenticated;
+
+-- Reglas para activar a un jugador en un equipo.
+create or replace function public.check_can_activate(l text, pid uuid, rid uuid default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare r jsonb := reg_rules(l); pl league_players;
+begin
+  select * into pl from league_players where id = pid and league_id = l;
+  if r->>'photo' = 'required' and pl.photo_path is null then raise exception 'Falta la foto del jugador'; end if;
+  if r->>'doc' = 'required' and pl.doc_norm is null then raise exception 'Falta el documento del jugador'; end if;
+end $$;
+revoke all on function public.check_can_activate(text,uuid,uuid) from public, anon, authenticated;
+
+create or replace function public.conflict_msg(tid uuid, pid uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select 'Ese jugador ya está inscrito en ' || t.name from player_registrations r join tournament_teams t on t.id = r.team_id where r.tournament_id = tid and r.player_id = pid and r.status in ('pending','active') limit 1 $$;
+revoke all on function public.conflict_msg(uuid,uuid) from public, anon, authenticated;
+
+create or replace function public.add_registration(l text, tt tournament_teams, pid uuid, num int, st text, v text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare rid uuid; msg text;
+begin
+  msg := conflict_msg(tt.tournament_id, pid);
+  if msg is not null then raise exception '%', msg; end if;
+  if st = 'active' and num is not null and exists (select 1 from player_registrations where team_id = tt.id and number = num and status = 'active') then raise exception 'Ese número ya lo usa otro jugador del equipo'; end if;
+  insert into player_registrations (league_id, player_id, tournament_id, team_id, number, status, via, requested_by, decided_by, decided_at)
+  values (l, pid, tt.tournament_id, tt.id, num, st, v, auth.uid(), case when st = 'active' then auth.uid() end, case when st = 'active' then now() end) returning id into rid;
+  if st = 'active' then update league_players set status = 'active', updated_at = now() where id = pid; end if;
+  return rid;
+end $$;
+revoke all on function public.add_registration(text,tournament_teams,uuid,int,text,text) from public, anon, authenticated;
+
+-- Método 2: registro en oficina por un administrador (con foto y documento según las reglas de la liga).
+create or replace function public.office_register(l text, ttid uuid, p jsonb) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare tt tournament_teams; pid uuid; rid uuid; num int := nullif(p->>'number', '')::int; ph text := nullif(p->>'photo_path', '');
+begin
+  if not is_league_admin(l, 'registration') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'registration') then raise exception 'Tu plan no incluye esa función'; end if;
+  select * into tt from tournament_teams where id = ttid and league_id = l and status = 'active';
+  if tt.id is null then raise exception 'Equipo no encontrado'; end if;
+  pid := upsert_player(l, p, 'pending');
+  if ph is not null then
+    if ph !~ ('^' || l || '/[0-9a-f-]{36}/[A-Za-z0-9._-]+$') then raise exception 'Datos no válidos'; end if;
+    update league_players set photo_path = ph where id = pid;
+  end if;
+  perform check_can_activate(l, pid);
+  rid := add_registration(l, tt, pid, num, 'active', 'office');
+  perform log_action(l, 'player.register', jsonb_build_object('player', pid, 'registration', rid, 'team', tt.id, 'via', 'office'));
+  return rid;
+end $$;
+
+-- Método 1a: el delegado del equipo vinculado registra a su gente. Queda pendiente si la liga pide aprobación.
+create or replace function public.delegate_targets(c text, t text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id', tt.id, 'league_id', tt.league_id, 'league', lg.name, 'tournament', tn.name, 'team', tt.name, 'rules', reg_rules(tt.league_id)) order by tn.name)
+    from tournament_teams tt join league_teams lt on lt.id = tt.link_id and lt.club_id = c and lt.team_id = t and lt.status = 'approved'
+    join tournaments tn on tn.id = tt.tournament_id join leagues lg on lg.id = tt.league_id where tt.status = 'active' and tn.status <> 'finished'), '[]');
+end $$;
+
+create or replace function public.delegate_register(c text, t text, ttid uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare tt tournament_teams; pid uuid; rid uuid; r jsonb; st text;
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  select tt2.* into tt from tournament_teams tt2 join league_teams lt on lt.id = tt2.link_id and lt.club_id = c and lt.team_id = t and lt.status = 'approved'
+   where tt2.id = ttid and tt2.status = 'active';
+  if tt.id is null then raise exception 'Equipo no encontrado'; end if;
+  if not league_feature(tt.league_id, 'registration') then raise exception 'Tu plan no incluye esa función'; end if;
+  r := reg_rules(tt.league_id);
+  if (select status from tournaments where id = tt.tournament_id) = 'finished' then raise exception 'El torneo ya terminó'; end if;
+  pid := upsert_player(tt.league_id, p, 'pending');
+  st := 'pending';
+  rid := add_registration(tt.league_id, tt, pid, null, st, 'delegate');
+  perform log_action(tt.league_id, 'player.submit', jsonb_build_object('player', pid, 'registration', rid, 'team', tt.id, 'via', 'delegate'));
+  return jsonb_build_object('ok', true, 'registration', rid, 'status', st);
+end $$;
+
+create or replace function public.delegate_registrations(c text, t text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id', pr.id, 'name', lp.name, 'status', pr.status, 'number', pr.number, 'team', tt.name, 'created_at', pr.created_at) order by pr.created_at desc)
+    from player_registrations pr join league_players lp on lp.id = pr.player_id join tournament_teams tt on tt.id = pr.team_id join league_teams lt on lt.id = tt.link_id and lt.club_id = c and lt.team_id = t
+    where pr.status <> 'removed'), '[]');
+end $$;
+
+-- Método 1b: enlace de registro. Lo crea la liga para un equipo; quien lo recibe manda sus datos y queda pendiente de aprobación.
+create or replace function public.create_reg_link(l text, ttid uuid, max_uses int default 30, days int default 14) returns text
+language plpgsql security definer set search_path = public as $$
+declare raw text; c text;
+begin
+  if not is_league_admin(l, 'registration') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'registration') then raise exception 'Tu plan no incluye esa función'; end if;
+  if not exists (select 1 from tournament_teams where id = ttid and league_id = l and status = 'active') then raise exception 'Equipo no encontrado'; end if;
+  if max_uses is null or max_uses < 1 or max_uses > 200 or days is null or days < 1 or days > 90 then raise exception 'Datos no válidos'; end if;
+  raw := upper(substr(md5(gen_random_uuid()::text || clock_timestamp()::text), 1, 12));
+  c := substr(raw, 1, 4) || '-' || substr(raw, 5, 4) || '-' || substr(raw, 9, 4);
+  insert into registration_links (code, league_id, team_id, max_uses, expires_at, created_by) values (c, l, ttid, max_uses, now() + make_interval(days => days), auth.uid());
+  perform log_action(l, 'reglink.create', jsonb_build_object('code', c, 'team', ttid, 'max_uses', max_uses));
+  return c;
+end $$;
+
+create or replace function public.revoke_reg_link(l text, c text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_league_admin(l, 'registration') then raise exception 'Sin permiso'; end if;
+  update registration_links set active = false where code = c and league_id = l;
+  perform log_action(l, 'reglink.revoke', jsonb_build_object('code', c));
+end $$;
+
+create or replace function public.reg_link_info(p_code text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare cid text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g')); x record;
+begin
+  select rl.*, lg.name as lname, tn.name as tname, tt.name as team into x from registration_links rl join leagues lg on lg.id = rl.league_id join tournament_teams tt on tt.id = rl.team_id join tournaments tn on tn.id = tt.tournament_id
+   where rl.code = substr(cid, 1, 4) || '-' || substr(cid, 5, 4) || '-' || substr(cid, 9, 4) and rl.active and rl.expires_at > now() and rl.uses < rl.max_uses and tt.status = 'active' and tn.status <> 'finished';
+  if x.code is null then return jsonb_build_object('error', 'invalid'); end if;
+  return jsonb_build_object('league', x.lname, 'tournament', x.tname, 'team', x.team, 'rules', reg_rules(x.league_id) - 'delegate_approval');
+end $$;
+
+create or replace function public.register_by_link(p_code text, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare cid text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g')); rl registration_links; tt tournament_teams; pid uuid; rid uuid;
+begin
+  select * into rl from registration_links where code = substr(cid, 1, 4) || '-' || substr(cid, 5, 4) || '-' || substr(cid, 9, 4) and active and expires_at > now() and uses < max_uses for update;
+  if rl.code is null then return jsonb_build_object('error', 'invalid'); end if;
+  select * into tt from tournament_teams where id = rl.team_id and status = 'active';
+  if tt.id is null or (select status from tournaments where id = tt.tournament_id) = 'finished' then return jsonb_build_object('error', 'invalid'); end if;
+  pid := upsert_player(rl.league_id, p, 'pending');
+  rid := add_registration(rl.league_id, tt, pid, null, 'pending', 'link');
+  update registration_links set uses = uses + 1 where code = rl.code;
+  perform log_action(rl.league_id, 'player.submit', jsonb_build_object('player', pid, 'registration', rid, 'team', tt.id, 'via', 'link', 'code', rl.code));
+  return jsonb_build_object('ok', true, 'team', tt.name);
+end $$;
+
+create or replace function public.decide_registration(l text, rid uuid, approve boolean, num int default null, why text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare r player_registrations;
+begin
+  if not is_league_admin(l, 'registration') then raise exception 'Sin permiso'; end if;
+  select * into r from player_registrations where id = rid and league_id = l and status = 'pending' for update;
+  if r.id is null then raise exception 'ya no está pendiente'; end if;
+  if approve then
+    perform check_can_activate(l, r.player_id);
+    if num is not null and exists (select 1 from player_registrations where team_id = r.team_id and number = num and status = 'active') then raise exception 'Ese número ya lo usa otro jugador del equipo'; end if;
+    update player_registrations set status = 'active', number = num, decided_by = auth.uid(), decided_at = now() where id = rid;
+    update league_players set status = 'active', updated_at = now() where id = r.player_id;
+  else
+    update player_registrations set status = 'rejected', note = nullif(left(trim(coalesce(why, '')), 200), ''), decided_by = auth.uid(), decided_at = now() where id = rid;
+    if not exists (select 1 from player_registrations where player_id = r.player_id and status in ('pending','active')) and not exists (select 1 from player_registrations where player_id = r.player_id and status = 'removed') then
+      update league_players set status = 'inactive' where id = r.player_id and status = 'pending';
+    end if;
+  end if;
+  perform log_action(l, case when approve then 'player.approve' else 'player.reject' end, jsonb_build_object('player', r.player_id, 'registration', rid, 'team', r.team_id, 'number', num, 'note', left(why, 200)));
+end $$;
+
+create or replace function public.remove_registration(l text, rid uuid, why text) returns void
+language plpgsql security definer set search_path = public as $$
+declare r player_registrations;
+begin
+  if not is_league_admin(l, 'registration') then raise exception 'Sin permiso'; end if;
+  if length(trim(coalesce(why, ''))) < 3 then raise exception 'Escribe el motivo'; end if;
+  select * into r from player_registrations where id = rid and league_id = l and status in ('pending','active') for update;
+  if r.id is null then raise exception 'Registro no encontrado'; end if;
+  update player_registrations set status = 'removed', note = left(trim(why), 200), decided_by = auth.uid(), decided_at = now() where id = rid;
+  perform log_action(l, 'player.remove', jsonb_build_object('player', r.player_id, 'registration', rid, 'team', r.team_id, 'reason', left(why, 200)));
+end $$;
+
+create or replace function public.update_league_player(l text, pid uuid, p jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur league_players; nm text; dn text; ph text := nullif(p->>'photo_path', '');
+begin
+  if not is_league_admin(l, 'registration') then raise exception 'Sin permiso'; end if;
+  select * into cur from league_players where id = pid and league_id = l for update;
+  if cur.id is null then raise exception 'Jugador no encontrado'; end if;
+  nm := case when p ? 'name' then left(trim(p->>'name'), 80) else cur.name end;
+  dn := case when p ? 'doc_id' then nullif(upper(regexp_replace(coalesce(p->>'doc_id', ''), '[^A-Za-z0-9]', '', 'g')), '') else cur.doc_norm end;
+  if ph is not null and ph !~ ('^' || l || '/[0-9a-f-]{36}/[A-Za-z0-9._-]+$') then raise exception 'Datos no válidos'; end if;
+  begin
+    update league_players set name = nm, norm = norm_name(nm), birth_date = case when p ? 'birth_date' then nullif(p->>'birth_date', '')::date else birth_date end,
+      doc_id = case when p ? 'doc_id' then nullif(left(trim(p->>'doc_id'), 30), '') else doc_id end, doc_norm = dn, photo_path = coalesce(ph, photo_path), updated_at = now() where id = pid;
+  exception when unique_violation then raise exception 'Ya existe un jugador con esos datos';
+  end;
+  perform log_action(l, 'player.update', jsonb_build_object('player', pid, 'before', jsonb_build_object('name', cur.name, 'birth_date', cur.birth_date, 'doc', cur.doc_norm is not null, 'photo', cur.photo_path is not null),
+    'after', jsonb_build_object('name', nm, 'birth_date', p->>'birth_date', 'doc', dn is not null, 'photo', coalesce(ph, cur.photo_path) is not null)));
+end $$;
+
+grant execute on function public.set_registration_rules(text,jsonb), public.registration_rules(text), public.office_register(text,uuid,jsonb), public.delegate_targets(text,text),
+  public.delegate_register(text,text,uuid,jsonb), public.delegate_registrations(text,text), public.create_reg_link(text,uuid,int,int), public.revoke_reg_link(text,text),
+  public.decide_registration(text,uuid,boolean,int,text), public.remove_registration(text,uuid,text), public.update_league_player(text,uuid,jsonb) to authenticated;
+-- Estas dos las usa quien recibe el enlace, sin cuenta. Solo exponen nombres de liga/equipo y reciben datos con tope por enlace.
+grant execute on function public.reg_link_info(text), public.register_by_link(text,jsonb) to anon, authenticated;
+
+-- Marca de la liga (credenciales y página pública): color y logo. El logo vive en el bucket público de imágenes, en la carpeta de quien lo sube.
+create or replace function public.set_league_brand(l text, color text, logo text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare cur jsonb;
+begin
+  if not is_league_admin(l, 'settings') then raise exception 'Sin permiso'; end if;
+  if color is null or color !~ '^#[0-9a-fA-F]{6}$' then raise exception 'Datos no válidos'; end if;
+  if logo is not null and logo !~ ('^https://[^ ]+/storage/v1/object/public/photos/' || auth.uid()::text || '/[^ ]+$') then raise exception 'Datos no válidos'; end if;
+  select settings->'brand' into cur from leagues where id = l;
+  update leagues set settings = jsonb_set(settings, '{brand}', jsonb_build_object('color', lower(color), 'logo', coalesce(logo, cur->>'logo'))) where id = l;
+  perform log_action(l, 'league.brand', jsonb_build_object('color', lower(color), 'logo_changed', logo is not null));
+end $$;
+create or replace function public.league_brand(l text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_league_admin(l) then raise exception 'Sin permiso'; end if;
+  return jsonb_build_object('color', '#c8102e', 'logo', null) || coalesce((select settings->'brand' from leagues where id = l), '{}');
+end $$;
+grant execute on function public.set_league_brand(text,text,text), public.league_brand(text) to authenticated;

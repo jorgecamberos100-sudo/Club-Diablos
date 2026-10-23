@@ -10,7 +10,7 @@ Importante: todo lo de Supabase se probó contra un PostgreSQL local con un simu
 | 2. Gestión de equipos y jugadores | Hecho y probado | Equipos en base de datos con las mismas pantallas que los de archivo; Diablos y el club de ejemplo no se tocan. |
 | 3. Torneos, inscripción, calendario, resultados, tabla, goleo | Hecho y probado | Ver detalle abajo. |
 | 4. Administradores con permisos, sanciones, objeciones y protestas, finanzas de liga, bitácora, reportes | Hecho y probado | Ver detalle abajo. Los reportes salen como CSV (abre en Excel); falta PDF. |
-| 5. Registro de jugadores, padrón central, credenciales | Pendiente | `match_events.player_id` ya está reservado para enlazar con el padrón. |
+| 5. Registro de jugadores, padrón central, credenciales | Hecho y probado | Ver detalle abajo. `match_events.player_id` sigue sin enlazarse al padrón (los goleadores se escriben a mano). |
 | 6. Página pública y componente incrustable | Pendiente | El estado "Publicado" del torneo ya existe; aún no hay lectura pública. |
 | 7. Acta por foto (OCR) y chatbot por liga | Pendiente | |
 | 8. Pulido, guía de activación, informe final | En curso | |
@@ -30,6 +30,21 @@ Importante: todo lo de Supabase se probó contra un PostgreSQL local con un simu
 - Bitácora legible con quién, cuándo y el antes/después; se puede filtrar por registro (historial de una sanción u objeción).
 - Reportes: saldos por equipo, movimientos y sanciones en CSV con acentos correctos y protegidos contra fórmulas.
 - Pruebas: 187 de base de datos (permisos, planes, RLS, anulaciones, bitácora), 19 de posiciones, 9 de saldos/CSV, 19 de navegador para esta etapa.
+
+## Etapa 5 en detalle
+- Padrón central por liga (`league_players`): una persona existe una sola vez (mismo documento, o mismo nombre sin acentos/mayúsculas y misma fecha de nacimiento; garantizado por índices únicos en la base). Un jugador solo puede estar activo o pendiente en un equipo por torneo; la baja se conserva como historial y permite el traspaso.
+- Método 1 (delegado o enlace): el delegado del equipo vinculado registra desde «Mi cuenta → Registrar jugadores»; o la liga crea un enlace con tope de usos y vigencia que cualquiera abre sin cuenta (`#/registro/<código>`). Todo llega como pendiente; la liga aprueba o rechaza con motivo.
+- Método 2 (oficina): un administrador con permiso registra con foto y documento; el jugador queda activo en el acto.
+- Reglas por liga: foto y documento «no se pide / opcional / obligatoria», y si lo que mandan delegados y enlaces espera aprobación. Se validan en la base: no se activa a quien no cumple.
+- Fotos de jugadores en un bucket **privado** (`player-photos`) con enlaces firmados temporales, visibles solo para administradores con permiso de registro. Las fotos se reducen en el navegador antes de subirse.
+- Credenciales imprimibles (85.6 × 54 mm, 10 por hoja A4; una sola o por equipo o todo el torneo) con el color y logo de la liga (Ajustes → Marca). Llevan nombre, número, equipo, torneo, foto y código; no llevan documento ni fecha de nacimiento.
+- Pruebas: 238 de base de datos en total (51 nuevas de esta etapa), 24 de navegador (alta con foto, duplicados, búsqueda, reglas, enlace sin cuenta, delegado, aprobación, impresión, marca, baja).
+
+## Límites conocidos de la etapa 5
+- Quien se registra por enlace no sube foto (un formulario anónimo con subida de archivos es un riesgo de abuso): la agrega el delegado o la liga al aprobar.
+- La credencial no lleva código QR ni hay una página para verificarla; el código es solo una referencia. Se puede agregar con la página pública.
+- Los menores de edad se marcan como «Menor», pero el consentimiento del tutor lo gestiona la liga fuera de la app (ver aviso de privacidad en la guía de activación).
+- Las fotos solo se probaron con el almacenamiento simulado (modo demo) y con las políticas de storage cargadas en PostgreSQL local; falta una prueba real contra un proyecto de Supabase.
 
 ## Límites conocidos de la etapa 4
 - Los delegados de los equipos todavía no presentan objeciones ellos mismos desde su cuenta: las registra un administrador de la liga.

@@ -2,7 +2,7 @@
 import { esc } from "../util.js";
 import { api } from "../cloud.js";
 import { FEATURES, can as hasFeature } from "../plans.js";
-import { card, chip, row, btn, empty, dtime, toast, copyText, waLink, appURL } from "../ui.js";
+import { card, chip, row, btn, empty, dtime, toast, copyText, waLink, appURL, shrinkImage } from "../ui.js";
 import * as sheet from "../sheet.js";
 import { actionLabel, detailText } from "./audit.js";
 
@@ -19,6 +19,13 @@ export async function render(ctx) {
   const info = card("Tu liga", `<div class="cl-who"><b>${esc(ctx.l.name)}</b><span>${esc(ROLE[ctx.l.me.role] || "")}</span></div><p class="hint">Plan: ${esc(ctx.ent ? ctx.ent.name : "—")}</p>
     <ul class="feat">${["public_page"].map((f) => `<li><span>${esc(FEATURES[f])}</span><span class="chip ${hasFeature(ctx.ent, f) ? "ok" : "due"}">${hasFeature(ctx.ent, f) ? "En tu plan" : "No incluido"}</span></li>`).join("")}</ul>
     <p class="hint">Reglamento, marca de la liga y página pública llegan en las siguientes etapas.</p>`);
+  let brandCard = "";
+  if (ctx.can("settings")) {
+    const b = await api.leagueBrand(ctx.id);
+    brandCard = card("Marca de la liga", `<p>Los colores y el logo se usan en las credenciales y, más adelante, en la página pública.</p>
+      <form data-lf="brand" class="fld"><div class="crest-prev">${b.logo ? `<img src="${esc(b.logo)}" alt="Logo actual" width="56" height="56">` : ""}<label>Logo<input type="file" name="logo" accept="image/*"></label></div>
+      <label>Color principal<input type="color" name="color" value="${esc(b.color)}"></label><button class="btn" type="submit">Guardar marca</button></form>`);
+  }
   let adm = "";
   if (mine) {
     const live = invites.filter((i) => i.active && !i.used_by && new Date(i.expires_at) > new Date());
@@ -36,7 +43,7 @@ export async function render(ctx) {
   const aud = log ? card("Bitácora", (log.length ? log.map((a) => row(actionLabel(a.action), `${a.actor || "—"} · ${dtime(a.at)}${detailText(a) ? " · " + detailText(a) : ""}`)).join("") : empty("Todavía no hay movimientos."))
     + (log.length >= auditN ? `<div class="row-acts">${btn("Ver más", 'data-la="more"', "ghost")}</div>` : "")
     + `<p class="hint">Cada cambio importante queda con quién lo hizo, cuándo y, en las correcciones, el valor anterior. No se puede borrar desde la app.</p>`) : "";
-  return info + adm + aud;
+  return info + brandCard + adm + aud;
 }
 
 const done = (ctx) => (ctx.reload(), undefined);
@@ -54,6 +61,9 @@ export const actions = {
   },
 };
 export const forms = {
+  async brand(ctx, f, fd) {
+    const file = fd.get("logo"); await api.setLeagueBrand(ctx.id, fd.get("color"), file && file.size ? await shrinkImage(file, 400, 0.9, "image/png") : null); toast("Marca guardada"); done(ctx);
+  },
   async adminvite(ctx, f, fd) {
     const perms = fd.getAll("perm"); if (!perms.length) return toast("Marca al menos un permiso.", true);
     const code = await api.createAdminInvite(ctx.id, perms, (fd.get("label") || "").trim(), +fd.get("days") || 7); toast("Código creado: " + code); done(ctx);

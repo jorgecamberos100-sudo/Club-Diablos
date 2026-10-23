@@ -9,7 +9,7 @@ async def browser():
     pg = await br.new_page(viewport={"width": 390, "height": 844}); pg.errors = []
     pg.on("pageerror", lambda e: pg.errors.append(str(e)))
     pg.on("console", lambda m: m.type == "error" and not any(i in m.text for i in IGNORE) and pg.errors.append(m.text))
-    pg.on("dialog", lambda d: d.accept())
+    pg.dialog_text = ""; pg.on("dialog", lambda d: d.accept(pg.dialog_text))   # confirm() se acepta; en prompt() se escribe pg.dialog_text
     return p, br, pg
 
 async def signup(pg, email, roles=None):

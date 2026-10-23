@@ -29,3 +29,15 @@ export function saveFile(name, text, mime = "text/csv;charset=utf-8") {
   const url = URL.createObjectURL(new Blob([text], { type: mime })), a = document.createElement("a");
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+
+// Reduce una foto a un JPEG chico (lado máximo en px) antes de subirla: ahorra datos y evita fotos enormes.
+export function shrinkImage(file, max = 480, quality = 0.82, type = "image/jpeg") {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); c.toBlob((b) => (b ? res(b) : rej(new Error("Datos no válidos"))), type, quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Datos no válidos")); }; img.src = url;
+  });
+}
