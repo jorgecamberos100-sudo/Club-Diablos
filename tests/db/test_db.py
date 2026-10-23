@@ -476,6 +476,12 @@ try:
     val("srv", f"update leagues set settings = jsonb_set(settings,'{{public}}','{{\"enabled\":true,\"chat\":true,\"chat_daily\":50}}') where id='{L}'")
     check("sin la función en el plan el asistente se corta", ck()["error"] == "off")
     q("srv", "update plans set features = array_append(features, 'public_page') where id = 'league-base'")
+    print("Endurecimiento de funciones")
+    anon_ok = val("srv", "select string_agg(p.proname, ',' order by p.proname) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f' and has_function_privilege('anon', p.oid, 'execute') and p.prorettype <> 'trigger'::regtype")
+    check("anon solo ejecuta las funciones públicas", anon_ok == "chat_take,claimed,public_league,public_tournament,reg_link_info,register_by_link,team_paid", anon_ok)
+    check("anon no puede llamar funciones de administración (ni siquiera para recibir el error de permiso)", fails("anon", f"select record_result('{L}','{UID['ana']}',1,0,'[]')", "permission denied") and fails("anon", f"select create_league('X')", "permission denied") and fails("anon", f"select league_admins_list('{L}')", "permission denied"))
+    check("con sesión se sigue llamando lo de siempre", val("ana", f"select count(*) from league_admins_list('{L}')") != "" and not val("ana", f"select count(*) from league_admins_list('{L}')").startswith("ERR"))
+    check("las funciones internas siguen cerradas para todos", fails("ana", f"select log_action('{L}','x','{{}}')", "permission denied"))
 except BaseException:
     import traceback; traceback.print_exc(); import harness; harness.failed += 1; print("  FALLA la prueba se interrumpió con una excepción (arriba)")
 finally:

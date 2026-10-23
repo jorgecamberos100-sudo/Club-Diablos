@@ -2061,3 +2061,25 @@ begin
 end $$;
 revoke all on function public.chat_usage_today(text) from public, anon;
 grant execute on function public.chat_usage_today(text) to authenticated;
+
+-- =====================================================================================================
+-- Endurecimiento: los visitantes sin cuenta (anon) solo pueden ejecutar las funciones públicas de abajo.
+-- (En Postgres toda función nueva es ejecutable por PUBLIC y Supabase además la abre a anon; cada función ya valida
+-- permisos por dentro, esto cierra la puerta antes de llegar.) Quien ya podía ejecutarlas con sesión (authenticated) sigue pudiendo;
+-- las funciones internas que ya estaban cerradas para todos siguen cerradas. Se vuelve a aplicar en cada corrida del archivo.
+-- =====================================================================================================
+do $$
+declare f record; keep oid[] := '{}';
+begin
+  for f in select p.oid from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.prokind in ('f', 'p') and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e') loop
+    if has_function_privilege('authenticated', f.oid, 'execute') then keep := keep || f.oid; end if;
+  end loop;
+  for f in select p.oid, p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.prokind in ('f', 'p') and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e') loop
+    execute format('revoke execute on function %s from public, anon', f.sig);
+    if f.oid = any(keep) then execute format('grant execute on function %s to authenticated', f.sig); end if;
+  end loop;
+end $$;
+grant execute on function public.claimed(text,text), public.team_paid(text,text), public.reg_link_info(text), public.register_by_link(text,jsonb),
+  public.public_league(text), public.public_tournament(text,uuid), public.chat_take(text) to anon;

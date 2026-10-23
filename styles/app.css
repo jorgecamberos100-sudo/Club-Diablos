@@ -662,3 +662,15 @@ body.embed .tabbar { display: none; }
 .chat-ideas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .chat-form { display: flex; gap: 8px; }
 .chat-form input { flex: 1; min-width: 0; }
+
+/* Móvil: nombres largos no deben ensanchar la pantalla */
+.fld label, .fld-inline { min-width: 0; }
+.fld select, .fld input, .fld textarea, .fld-inline select, .fld-inline input { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+.two, .three { grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); }
+.three { --cols: 3; }
+.top h1 { overflow-wrap: anywhere; }
+.chat-form input { width: 0; flex: 1 1 auto; }
+.view { grid-template-columns: minmax(0, 1fr); }
+.view > * { min-width: 0; }
+.cl-card { grid-template-columns: minmax(0, 1fr); }
+.cl-card > * { min-width: 0; }
