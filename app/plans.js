@@ -24,6 +24,7 @@ export const FEATURES = {
   registration: "Registro de jugadores",
   credentials: "Credenciales para imprimir",
   public_page: "Página pública",
+  actas: "Actas desde foto",
   team_pro_grant: "Pro para los equipos de la liga",
 };
 
@@ -33,7 +34,7 @@ export const DEFAULTS = [
   { id: "team-pro", audience: "team", name: "Equipo Pro", tier: 1,
     features: ["roster", "attendance", "matches", "lineup", "ratings", "finance", "receipts", "stats", "themes", "share_capture"], limits: { teams: 5, players: null } },
   { id: "league-base", audience: "league", name: "Liga", tier: 1, is_default: true,
-    features: ["league_panel", "tournaments", "schedule", "standings", "sanctions", "league_finance", "registration", "credentials", "public_page", "team_pro_grant"],
+    features: ["league_panel", "tournaments", "schedule", "standings", "sanctions", "league_finance", "registration", "credentials", "public_page", "actas", "team_pro_grant"],
     limits: { tournaments: null, admins: 5, pro_teams_included: 0 } },
 ];
 

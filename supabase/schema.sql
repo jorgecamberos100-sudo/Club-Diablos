@@ -266,7 +266,7 @@ insert into public.plans (id, audience, name, tier, features, limits, is_default
   ('team-pro', 'team', 'Equipo Pro', 1,
      array['roster','attendance','matches','lineup','ratings','finance','receipts','stats','themes','share_capture'], '{"teams": 5, "players": null}', false),
   ('league-base', 'league', 'Liga', 1,
-     array['league_panel','tournaments','schedule','standings','sanctions','league_finance','registration','credentials','public_page','team_pro_grant'], '{"tournaments": null, "admins": 5, "pro_teams_included": 0}', true)
+     array['league_panel','tournaments','schedule','standings','sanctions','league_finance','registration','credentials','public_page','actas','team_pro_grant'], '{"tournaments": null, "admins": 5, "pro_teams_included": 0}', true)
 on conflict (id) do nothing;
 
 -- subject: 'team' -> 'club/equipo'; 'league' -> id de la liga. source 'league' = Pro pagado por la liga.
@@ -1925,3 +1925,99 @@ begin
 end $$;
 grant execute on function public.set_public_page(text,boolean,boolean,boolean,int), public.public_page_state(text) to authenticated;
 grant execute on function public.public_league(text), public.public_tournament(text,uuid) to anon, authenticated;
+
+
+-- =====================================================================================================
+-- Etapa 7: actas digitalizadas desde foto.
+-- La foto del acta (el original) se guarda en un bucket PRIVADO y no se borra. Un borrador (a mano o leído por OCR)
+-- no cambia nada oficial: solo "confirm_acta" registra el resultado, con la misma función que usa la captura manual.
+-- =====================================================================================================
+update public.plans set features = array_append(features, 'actas') where id = 'league-base' and not ('actas' = any(features));
+
+insert into storage.buckets (id, name, public) values ('actas', 'actas', false) on conflict (id) do nothing;
+drop policy if exists actas_write on storage.objects;
+create policy actas_write on storage.objects for insert with check (bucket_id = 'actas' and is_league_admin((storage.foldername(name))[1], 'results'));
+drop policy if exists actas_read on storage.objects;
+create policy actas_read on storage.objects for select using (bucket_id = 'actas' and is_league_admin((storage.foldername(name))[1], 'results'));
+-- A propósito no hay políticas de update ni delete: el original queda como evidencia.
+
+create table if not exists public.acta_uploads (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  match_id uuid not null references public.league_matches(id) on delete cascade,
+  path text not null check (path like league_id || '/%' and length(path) <= 300),
+  status text not null default 'pending' check (status in ('pending','confirmed','discarded')),
+  draft jsonb,
+  engine text check (engine in ('manual','browser','server')),
+  ocr_text text check (length(ocr_text) <= 8000),
+  discard_reason text check (length(discard_reason) <= 200),
+  created_by uuid default auth.uid(),
+  created_at timestamptz not null default now(),
+  decided_by uuid,
+  decided_at timestamptz
+);
+create index if not exists acta_uploads_match on public.acta_uploads (match_id, created_at desc);
+alter table public.acta_uploads enable row level security;
+drop policy if exists acta_read on public.acta_uploads;
+create policy acta_read on public.acta_uploads for select using (is_league_admin(league_id, 'results'));
+grant select on public.acta_uploads to authenticated;
+
+create or replace function public.create_acta(l text, mid uuid, p_path text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare m league_matches; nid uuid;
+begin
+  if not is_league_admin(l, 'results') then raise exception 'Sin permiso'; end if;
+  if not league_feature(l, 'actas') then raise exception 'Tu plan no incluye esa función'; end if;
+  select * into m from league_matches where id = mid and league_id = l;
+  if m.id is null then raise exception 'Partido no encontrado'; end if;
+  if (select status from tournaments where id = m.tournament_id) = 'finished' then raise exception 'El torneo ya terminó'; end if;
+  if p_path is null or p_path not like l || '/%' or length(p_path) > 300 then raise exception 'Datos no válidos'; end if;
+  if (select count(*) from acta_uploads where match_id = mid and status = 'pending') >= 5 then raise exception 'Demasiadas actas pendientes'; end if;
+  insert into acta_uploads (league_id, match_id, path) values (l, mid, p_path) returning acta_uploads.id into nid;
+  perform log_action(l, 'acta.upload', jsonb_build_object('acta', nid, 'match', mid));
+  return nid;
+end $$;
+
+-- Guarda lo que se leyó o escribió. Sigue siendo un borrador: no toca el partido.
+create or replace function public.save_acta_draft(l text, aid uuid, p_draft jsonb, p_engine text, p_text text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare a acta_uploads;
+begin
+  if not is_league_admin(l, 'results') then raise exception 'Sin permiso'; end if;
+  select * into a from acta_uploads where id = aid and league_id = l and status = 'pending' for update;
+  if a.id is null then raise exception 'Acta no encontrada'; end if;
+  if jsonb_typeof(p_draft) <> 'object' or length(p_draft::text) > 20000 or p_engine not in ('manual','browser','server') then raise exception 'Datos no válidos'; end if;
+  if p_draft ? 'events' and (jsonb_typeof(p_draft->'events') <> 'array' or jsonb_array_length(p_draft->'events') > 100) then raise exception 'Datos no válidos'; end if;
+  update acta_uploads set draft = p_draft, engine = p_engine, ocr_text = left(p_text, 8000) where id = aid;
+end $$;
+
+-- Confirmación humana: recién aquí el resultado pasa a ser oficial. Usa record_result, así que aplica las mismas reglas.
+create or replace function public.confirm_acta(l text, aid uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare a acta_uploads; m league_matches; d jsonb;
+begin
+  if not is_league_admin(l, 'results') then raise exception 'Sin permiso'; end if;
+  select * into a from acta_uploads where id = aid and league_id = l and status = 'pending' for update;
+  if a.id is null then raise exception 'Acta no encontrada'; end if;
+  d := a.draft;
+  if d is null or d->>'hg' is null or d->>'ag' is null then raise exception 'Falta el marcador en el borrador'; end if;
+  select * into m from league_matches where id = a.match_id for update;
+  if m.status = 'played' then raise exception 'Ese partido ya tiene resultado'; end if;
+  perform record_result(l, a.match_id, (d->>'hg')::int, (d->>'ag')::int, coalesce(d->'events', '[]'), d->>'note');
+  update acta_uploads set status = 'confirmed', decided_by = auth.uid(), decided_at = now() where id = aid;
+  perform log_action(l, 'acta.confirm', jsonb_build_object('acta', aid, 'match', a.match_id, 'engine', a.engine));
+end $$;
+
+create or replace function public.discard_acta(l text, aid uuid, p_reason text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare a acta_uploads;
+begin
+  if not is_league_admin(l, 'results') then raise exception 'Sin permiso'; end if;
+  select * into a from acta_uploads where id = aid and league_id = l and status = 'pending' for update;
+  if a.id is null then raise exception 'Acta no encontrada'; end if;
+  update acta_uploads set status = 'discarded', discard_reason = left(trim(coalesce(p_reason, '')), 200), decided_by = auth.uid(), decided_at = now() where id = aid;
+  perform log_action(l, 'acta.discard', jsonb_build_object('acta', aid, 'match', a.match_id));
+end $$;
+
+revoke all on function public.create_acta(text,uuid,text), public.save_acta_draft(text,uuid,jsonb,text,text), public.confirm_acta(text,uuid), public.discard_acta(text,uuid,text) from public, anon;
+grant execute on function public.create_acta(text,uuid,text), public.save_acta_draft(text,uuid,jsonb,text,text), public.confirm_acta(text,uuid), public.discard_acta(text,uuid,text) to authenticated;

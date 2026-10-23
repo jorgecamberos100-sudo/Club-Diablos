@@ -1,5 +1,6 @@
 // Sección Torneos del panel de liga: torneos, equipos inscritos, calendario, resultados, tabla y goleo.
 // Las reglas viven en la base de datos (permisos, plan, jornadas, marcador); aquí solo se muestran y se piden los datos.
+import { openActas } from "./actas.js";
 import { esc } from "../util.js";
 import { api } from "../cloud.js";
 import { can as hasFeature } from "../plans.js";
@@ -67,7 +68,7 @@ function calendario(t, d, may, closed) {
   const mrow = (m) => row(`${tname(m.home_id)} ${m.status === "played" ? m.home_goals + " - " + m.away_goals : "vs"} ${tname(m.away_id)}`,
     [m.starts_at ? dtime(m.starts_at) : "Sin fecha", m.venue, m.notes].filter(Boolean).join(" · "),
     MS[m.status] + (S && S.ctx.can("sanctions") ? btn("Protesta", `data-la="dispute" data-id="${esc(m.id)}"`, "ghost") : "") + (!closed && may.r && m.status !== "canceled" ? btn(m.status === "played" ? "Corregir" : "Resultado", `data-la="result" data-id="${esc(m.id)}"`) : "")
-    + (!closed && may.s && m.status !== "played" ? btn("Editar", `data-la="match" data-id="${esc(m.id)}"`, "ghost") : ""));
+    + (!closed && may.r && m.status !== "played" && m.status !== "canceled" && S && hasFeature(S.ctx.ent, "actas") ? btn("Acta", `data-la="acta" data-id="${esc(m.id)}"`, "ghost") : "") + (!closed && may.s && m.status !== "played" ? btn("Editar", `data-la="match" data-id="${esc(m.id)}"`, "ghost") : ""));
   const tools = !closed && may.s && d.teams.filter((x) => x.status === "active").length >= 2
     ? `<div class="row-acts">${btn("Agregar partido", 'data-la="match"')}${!d.matches.length ? btn("Generar calendario", 'data-la="gen"', "ghost") : ""}</div>` : "";
   return card("Calendario", (rounds.length ? rounds.map((r) => `<h3 class="rnd">${esc(r)}</h3>${by[r].map(mrow).join("")}`).join("") : empty(d.teams.length < 2 ? "Inscribe al menos dos equipos para armar el calendario." : "Todavía no hay partidos.")) + tools);
@@ -166,6 +167,7 @@ export const actions = {
   },
   async match(ctx, el) { matchSheet(el.dataset.id ? find(el.dataset.id) : null); },
   async result(ctx, el) { resultSheet(find(el.dataset.id)); },
+  async acta(ctx, el) { const m = find(el.dataset.id); await openActas(ctx, m, { id: m.home_id, name: tname(m.home_id) }, { id: m.away_id, name: tname(m.away_id) }); },
   async gen() { genSheet(); },
   async dispute(ctx, el) { disputeFor(ctx, find(el.dataset.id), S.teams); },
   async rm(ctx, el) {

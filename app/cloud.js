@@ -51,6 +51,9 @@ const ERR = {
   "ya juega en esa jornada": "Uno de esos equipos ya juega en esa jornada.",
   "inscritos y activos": "Los dos equipos deben estar inscritos y activos en el torneo.",
   "superan el marcador": "Los goles de los jugadores superan el marcador.",
+  "Acta no encontrada": "No se encontró esa acta; quizá ya se confirmó o se descartó.",
+  "Falta el marcador en el borrador": "Escribe el marcador antes de confirmar.",
+  "Demasiadas actas pendientes": "Ese partido ya tiene 5 actas pendientes: confirma o descarta alguna.",
   "check constraint": "Revisa los datos: alguno no es válido.",
   "Falta la foto": "Falta la foto del jugador: esta liga la exige para activarlo.",
   "Falta el documento": "Falta el documento del jugador: esta liga lo exige.",
@@ -212,6 +215,18 @@ async function supa() {
     async publicTournament(l, tid) { return ok(await sb.rpc("public_tournament", { l, tid })); },
     async publicState(l) { return ok(await sb.rpc("public_page_state", { l })); },
     async setPublicPage(l, enabled, scorers, chat, chatDaily) { ok(await sb.rpc("set_public_page", { l, enabled, scorers, chat: !!chat, chat_daily: chatDaily ?? 100 })); },
+    // ----- actas desde foto: el original queda guardado; nada es oficial hasta confirmar -----
+    async uploadActa(l, mid, blob) {
+      const path = `${l}/${mid}/${crypto.randomUUID()}.jpg`;
+      ok(await sb.storage.from("actas").upload(path, blob, { contentType: "image/jpeg", upsert: false }));
+      return ok(await sb.rpc("create_acta", { l, mid, p_path: path }));
+    },
+    async actaList(l, mid) { return ok(await sb.from("acta_uploads").select("*").eq("league_id", l).eq("match_id", mid).order("created_at", { ascending: false })); },
+    async actaUrl(path) { if (!path) return null; const r = await sb.storage.from("actas").createSignedUrl(path, 3600); return r.error ? null : r.data.signedUrl; },
+    async saveActaDraft(l, id, draft, engine, text) { ok(await sb.rpc("save_acta_draft", { l, aid: id, p_draft: draft, p_engine: engine, p_text: text || null })); },
+    async confirmActa(l, id) { ok(await sb.rpc("confirm_acta", { l, aid: id })); },
+    async discardActa(l, id, reason) { ok(await sb.rpc("discard_acta", { l, aid: id, p_reason: reason || null })); },
+    async accessToken() { const r = await sb.auth.getSession(); return (r.data.session && r.data.session.access_token) || ""; },
     // ----- registro de jugadores, padrón y credenciales -----
     async registrationRules(l) { return ok(await sb.rpc("registration_rules", { l })); },
     async setRegistrationRules(l, r) { ok(await sb.rpc("set_registration_rules", { l, r })); },
@@ -659,6 +674,34 @@ function demo() {
         events: d.mevents.filter((x) => ids.has(x.match_id) && ["goal", "yellow", "red"].includes(x.kind)).map((x) => ({ match_id: x.match_id, team_id: x.team_id, kind: x.kind, n: x.n, player: x.kind === "goal" && sc ? x.player : "" })),
         adjust: Object.entries(by).map(([team_id, points]) => ({ team_id, points })), scorers: sc };
     },
+    // ----- actas desde foto (mismas reglas que las funciones SQL) -----
+    async uploadActa(l, mid, blob) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "results")); await lneed(l, "actas"); const m = d.lmatches.find((x) => x.id === mid && x.league_id === l); ensure(m, "Partido no encontrado");
+      ensure(d.tourn.find((x) => x.id === m.tournament_id).status !== "finished", "El torneo ya terminó"); d.actas = d.actas || [];
+      ensure(d.actas.filter((x) => x.match_id === mid && x.status === "pending").length < 5, "Demasiadas actas pendientes");
+      const a = { id: uuid(), league_id: l, match_id: mid, path: `${l}/${mid}/${uuid()}.jpg#` + (await dataURL(blob)), status: "pending", draft: null, engine: null, ocr_text: null, discard_reason: null, created_by: d.session, created_at: new Date().toISOString(), decided_by: null, decided_at: null };
+      d.actas.push(a); log(d, l, "acta.upload", { acta: a.id, match: mid }); save(d); return a.id;
+    },
+    async actaList(l, mid) { const d = db(); return isLeagueAdmin(d, l, "results") ? (d.actas || []).filter((x) => x.league_id === l && x.match_id === mid).slice().reverse() : []; },
+    async actaUrl(path) { return path ? path.slice(path.indexOf("#") + 1) : null; },
+    async saveActaDraft(l, id, draft, engine, text) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "results")); const a = (d.actas || []).find((x) => x.id === id && x.league_id === l && x.status === "pending"); ensure(a, "Acta no encontrada");
+      ensure(draft && typeof draft === "object" && !Array.isArray(draft) && JSON.stringify(draft).length <= 20000 && ["manual", "browser", "server"].includes(engine) && (!draft.events || (Array.isArray(draft.events) && draft.events.length <= 100)), "Datos no válidos");
+      Object.assign(a, { draft, engine, ocr_text: text ? String(text).slice(0, 8000) : null }); save(d);
+    },
+    async confirmActa(l, id) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "results")); const a = (d.actas || []).find((x) => x.id === id && x.league_id === l && x.status === "pending"); ensure(a, "Acta no encontrada");
+      const dr = a.draft; ensure(dr && Number.isInteger(dr.hg) && Number.isInteger(dr.ag), "Falta el marcador en el borrador");
+      ensure(d.lmatches.find((x) => x.id === a.match_id).status !== "played", "Ese partido ya tiene resultado");
+      await api.recordResult(l, a.match_id, dr.hg, dr.ag, (dr.events || []).map((e) => ({ ...e })), dr.note || "");
+      const d2 = db(), b = d2.actas.find((x) => x.id === id); Object.assign(b, { status: "confirmed", decided_by: d2.session, decided_at: new Date().toISOString() });
+      log(d2, l, "acta.confirm", { acta: id, match: b.match_id, engine: b.engine }); save(d2);
+    },
+    async discardActa(l, id, reason) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "results")); const a = (d.actas || []).find((x) => x.id === id && x.league_id === l && x.status === "pending"); ensure(a, "Acta no encontrada");
+      Object.assign(a, { status: "discarded", discard_reason: String(reason || "").trim().slice(0, 200), decided_by: d.session, decided_at: new Date().toISOString() }); log(d, l, "acta.discard", { acta: id, match: a.match_id }); save(d);
+    },
+    async accessToken() { return "demo"; },
     // ----- registro de jugadores, padrón y credenciales (mismas reglas que las funciones SQL) -----
     async registrationRules(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return regRules(d, l); },
     async setRegistrationRules(l, r) {

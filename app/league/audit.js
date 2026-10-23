@@ -7,6 +7,7 @@ const LABEL = {
   "dispute.file": "Registró una objeción o protesta", "dispute.resolve": "Resolvió una objeción o protesta", "dispute.change": "Cambió una resolución",
   "charge.create": "Creó cargos", "charge.void": "Anuló un cargo", "movement.payment": "Registró un pago", "movement.income": "Registró un ingreso", "movement.expense": "Registró un gasto", "movement.void": "Anuló un movimiento",
   "admin.invite": "Invitó a un administrador", "admin.invite_revoke": "Revocó una invitación", "admin.join": "Un administrador aceptó su invitación", "admin.perms": "Cambió permisos de un administrador", "admin.revoke": "Quitó a un administrador",
+  "acta.upload": "Subió la foto de un acta", "acta.confirm": "Confirmó un acta y registró el resultado", "acta.discard": "Descartó un acta", "public.settings": "Cambió la página pública",
   "invite.create": "Creó una invitación de equipos", "invite.revoke": "Revocó una invitación de equipos",
 };
 export const actionLabel = (a) => LABEL[a] || a;

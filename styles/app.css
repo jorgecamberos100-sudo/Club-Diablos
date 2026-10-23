@@ -649,3 +649,7 @@ a.btn { text-decoration: none; display: inline-block; }
 body.embed .view { padding-bottom: 12px; }
 body.embed .tabbar { display: none; }
 .snip { width: 100%; font: 12px monospace; background: var(--ink); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+
+/* Actas */
+.acta-img { display: block; width: 100%; max-height: 40vh; object-fit: contain; background: var(--ink); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; }
+.msg.warn { color: var(--fg); background: var(--raise); border-left: 3px solid var(--red); padding: 8px 10px; border-radius: 6px; }
