@@ -45,12 +45,24 @@ const ERR = {
   "Equipo no encontrado": "No se encontró ese equipo.",
   "El torneo ya terminó": "El torneo ya terminó. Reábrelo para hacer cambios.",
   "límite de torneos": "Tu plan llegó al límite de torneos activos.",
+  "inscrito en este torneo": "Ese jugador ya está inscrito en este torneo. Si es un error, habla con la liga.",
   "ya está inscrito en": "Ese jugador ya está inscrito en otro equipo de este torneo. Primero hay que darlo de baja.",
   "ya está inscrito": "Ese equipo ya está inscrito en el torneo.",
   "no está vinculado a la liga": "Ese equipo no está vinculado a tu liga.",
   "ya juega en esa jornada": "Uno de esos equipos ya juega en esa jornada.",
   "inscritos y activos": "Los dos equipos deben estar inscritos y activos en el torneo.",
   "superan el marcador": "Los goles de los jugadores superan el marcador.",
+  "Archivo no permitido": "Ese tipo de archivo no se permite: usa una foto JPG, PNG o WEBP.",
+  "Archivo demasiado grande": "La foto es demasiado grande. Tómala de nuevo o usa una más ligera.",
+  "aún no publica su aviso de privacidad": "La liga aún no publica su aviso de privacidad. Hazlo en Ajustes antes de registrar jugadores.",
+  "Falta aceptar el aviso": "Para registrarte hay que aceptar el aviso de privacidad.",
+  "aviso de privacidad cambió": "El aviso de privacidad cambió: vuelve a abrir el enlace y léelo de nuevo.",
+  "madre, padre o tutor": "Para menores de edad se necesita el nombre y la autorización de su madre, padre o tutor.",
+  "Indica la fecha de nacimiento": "Indica la fecha de nacimiento.",
+  "Demasiados intentos": "Demasiados intentos seguidos. Espera unos minutos y vuelve a intentarlo.",
+  "entre 80 y 8000": "El aviso de privacidad debe tener entre 80 y 8000 caracteres.",
+  "contacto para dudas de privacidad": "Indica un contacto (correo o teléfono) para dudas de privacidad.",
+  "no se publican nombres": "Con menores de edad no se publican nombres de jugadores.",
   "Acta no encontrada": "No se encontró esa acta; quizá ya se confirmó o se descartó.",
   "Falta el marcador en el borrador": "Escribe el marcador antes de confirmar.",
   "Demasiadas actas pendientes": "Ese partido ya tiene 5 actas pendientes: confirma o descarta alguna.",
@@ -94,9 +106,18 @@ export function friendly(e) {
   return k ? ERR[k] : "No se pudo completar. Revisa tu conexión e inténtalo de nuevo.";
 }
 
+// Límites de subida (los mismos que fija schema.sql en cada almacén). Se revisan antes de subir para dar un mensaje claro.
+export const LIMIT = { photos: 2097152, player: 1048576, acta: 5242880, receipt: 5242880 };
+const IMG_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export function checkImage(blob, max) {
+  if (!blob || !IMG_TYPES.includes(blob.type)) throw new Error("Archivo no permitido");
+  if (blob.size > max) throw new Error("Archivo demasiado grande");
+}
+
 // ---------- Supabase ----------
 async function supa() {
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm");
+  const pubPhoto = (path) => (path ? sb.storage.from("photos").getPublicUrl(path).data.publicUrl : null);
   const sb = createClient(CLOUD.url, CLOUD.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "pkce" } });
   const back = restoreRoute();
   if (back) { await sb.auth.getSession(); back.clean(); }
@@ -204,20 +225,24 @@ async function supa() {
     async auditLog(l) { return ok(await sb.from("audit_log").select("*").eq("league_id", l).order("at", { ascending: false }).limit(100)); },
     // Solo para pruebas en modo demo; en Supabase el contrato lo administra la plataforma.
     async demoContract() { throw new Error("Sin permiso"); },
-    async leagueBrand(l) { return ok(await sb.rpc("league_brand", { l })); },
+    async leagueBrand(l) { const b = ok(await sb.rpc("league_brand", { l })); return { color: b.color, logo: pubPhoto(b.logo_path) }; },
     async setLeagueBrand(l, color, blob) {
-      let logo = null;
-      if (blob) { const u = await uid(), path = `${u}/league-${l}-${Date.now()}.png`; ok(await sb.storage.from("photos").upload(path, blob, { upsert: true, contentType: blob.type || "image/png" })); logo = sb.storage.from("photos").getPublicUrl(path).data.publicUrl; }
+      let logo = null;   // se manda la RUTA dentro de nuestro almacén; la base no acepta URLs de otros sitios
+      if (blob) { checkImage(blob, LIMIT.photos); const u = await uid(); logo = `${u}/league-${l}-${Date.now()}.png`; ok(await sb.storage.from("photos").upload(logo, blob, { upsert: true, contentType: blob.type || "image/png" })); }
       ok(await sb.rpc("set_league_brand", { l, color, logo }));
     },
     // ----- página pública (lectura sin cuenta; solo datos públicos) -----
-    async publicLeague(l) { return ok(await sb.rpc("public_league", { l })); },
+    async publicLeague(l) { const r = ok(await sb.rpc("public_league", { l })); if (r && r.league) r.league.brand = { color: r.league.brand.color, logo: pubPhoto(r.league.brand.logo_path) }; return r; },
     async publicTournament(l, tid) { return ok(await sb.rpc("public_tournament", { l, tid })); },
     async publicState(l) { return ok(await sb.rpc("public_page_state", { l })); },
     async chatUsage(l) { return ok(await sb.rpc("chat_usage_today", { l })); },
-    async setPublicPage(l, enabled, scorers, chat, chatDaily) { ok(await sb.rpc("set_public_page", { l, enabled, scorers, chat: !!chat, chat_daily: chatDaily ?? 100 })); },
+    async setPublicPage(l, s) { ok(await sb.rpc("set_public_page", { l, s })); },
+    async privacyState(l) { return ok(await sb.rpc("privacy_state", { l })); },
+    async setPrivacy(l, p) { return ok(await sb.rpc("set_privacy", { l, p })); },
+    async forgetPlayer(l, pid) { const path = ok(await sb.rpc("forget_player", { l, pid })); if (path) await sb.storage.from("player-photos").remove([path]); },
     // ----- actas desde foto: el original queda guardado; nada es oficial hasta confirmar -----
     async uploadActa(l, mid, blob) {
+      checkImage(blob, LIMIT.acta);
       const path = `${l}/${mid}/${crypto.randomUUID()}.jpg`;
       ok(await sb.storage.from("actas").upload(path, blob, { contentType: "image/jpeg", upsert: false }));
       return ok(await sb.rpc("create_acta", { l, mid, p_path: path }));
@@ -236,6 +261,7 @@ async function supa() {
       return { players: ok(p), regs: ok(r) };
     },
     async uploadPlayerPhoto(l, blob) {
+      checkImage(blob, LIMIT.player);
       const path = `${l}/${crypto.randomUUID()}/p-${Date.now()}.jpg`;
       ok(await sb.storage.from("player-photos").upload(path, blob, { contentType: "image/jpeg", upsert: false })); return path;
     },
@@ -248,9 +274,9 @@ async function supa() {
     async createRegLink(l, tt, max, days) { return ok(await sb.rpc("create_reg_link", { l, ttid: tt, max_uses: max || 30, days: days || 14 })); },
     async revokeRegLink(l, c) { ok(await sb.rpc("revoke_reg_link", { l, c })); },
     async regLinkInfo(code) { return ok(await sb.rpc("reg_link_info", { p_code: code })); },
-    async registerByLink(code, p) { return ok(await sb.rpc("register_by_link", { p_code: code, p })); },
+    async registerByLink(code, p) { return ok(await sb.rpc("register_by_link", { p_code: code, p })); },   // devuelve {ok} o {error: invalid|rate|data, message}
     async delegateTargets(c, t) { return ok(await sb.rpc("delegate_targets", { c, t })); },
-    async delegateRegister(c, t, tt, p) { return ok(await sb.rpc("delegate_register", { c, t, ttid: tt, p })); },
+    async delegateRegister(c, t, tt, p) { const r = ok(await sb.rpc("delegate_register", { c, t, ttid: tt, p })); if (r && r.error) throw new Error(r.message || "Datos no válidos"); return r; },
     async delegateRegistrations(c, t) { return ok(await sb.rpc("delegate_registrations", { c, t })); },
     // ----- administradores, sanciones, objeciones y finanzas de la liga -----
     async leagueAdmins(l) { return ok(await sb.rpc("league_admins_list", { l })); },
@@ -354,29 +380,51 @@ function demo() {
   const normName = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
   const docNorm = (x) => String(x || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase() || null;
   const photoOk = (p, l) => new RegExp("^" + l + "/[0-9a-f-]{36}/[A-Za-z0-9._-]+(#.*)?$").test(p);
-  const regRules = (d, l) => ({ photo: "optional", doc: "optional", delegate_approval: true, ...((d.leagues.find((x) => x.id === l) || {}).settings || {}).registration });
+  const regRules = (d, l) => ({ photo: "optional", doc: "off", delegate_approval: true, ...((d.leagues.find((x) => x.id === l) || {}).settings || {}).registration });
   const liveLink = (d, code) => {
     const c = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), k = c.slice(0, 4) + "-" + c.slice(4, 8) + "-" + c.slice(8, 12), x = d.rlinks.find((y) => y.code === k);
     const t = x && d.ttems.find((y) => y.id === x.team_id); return x && x.active && new Date(x.expires_at) > Date.now() && x.uses < x.max_uses && t && t.status === "active" && d.tourn.find((y) => y.id === t.tournament_id).status !== "finished" ? x : null;
   };
   // Encuentra o crea al jugador del padrón: mismo documento, o mismo nombre y fecha de nacimiento, es la misma persona.
-  const upsertPlayer = (d, l, p, st) => {
+  const upsertPlayer = (d, l, p, st, update = true) => {
     const r = regRules(d, l), nm = String(p.name || "").trim().slice(0, 80), bd = p.birth_date || null; let dn = docNorm(p.doc_id);
-    ensure(nm.length >= 2, "Escribe el nombre del jugador"); ensure(bd || dn, "Indica la fecha de nacimiento o un documento"); ensure(r.doc !== "required" || dn, "Esta liga pide documento de identidad"); if (r.doc === "off") dn = null; ensure(bd || dn, "Indica la fecha de nacimiento");
+    ensure(nm.length >= 2, "Escribe el nombre del jugador"); ensure(r.doc !== "required" || dn, "Esta liga pide documento de identidad"); if (r.doc === "off") dn = null; ensure(bd, "Indica la fecha de nacimiento");
     ensure(!bd || (bd > "1900-01-01" && bd <= new Date().toISOString().slice(0, 10)), "Datos no válidos");
     const ex = d.lplayers.find((x) => x.league_id === l && ((dn && x.doc_norm === dn) || (bd && x.norm === normName(nm) && x.birth_date === bd)));
-    if (ex) { ex.doc_id = ex.doc_id || (dn ? String(p.doc_id).trim().slice(0, 30) : null); ex.doc_norm = ex.doc_norm || dn; ex.birth_date = ex.birth_date || bd; return ex; }
+    if (ex) { if (update) { ex.doc_id = ex.doc_id || (dn ? String(p.doc_id).trim().slice(0, 30) : null); ex.doc_norm = ex.doc_norm || dn; ex.birth_date = ex.birth_date || bd; } return ex; }
     const x = { id: uuid(), league_id: l, name: nm, norm: normName(nm), birth_date: bd, doc_id: dn ? String(p.doc_id).trim().slice(0, 30) : null, doc_norm: dn, photo_path: null, status: st, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     d.lplayers.push(x); return x;
   };
   const canActivate = (d, l, pl) => { const r = regRules(d, l); ensure(r.photo !== "required" || pl.photo_path, "Falta la foto del jugador"); ensure(r.doc !== "required" || pl.doc_norm, "Falta el documento del jugador"); };
-  const addReg = (d, l, t, pl, num, st, via) => {
-    const other = d.lregs.find((x) => x.tournament_id === t.tournament_id && x.player_id === pl.id && ["pending", "active"].includes(x.status)); ensure(!other, "Ese jugador ya está inscrito en " + (other && d.ttems.find((x) => x.id === other.team_id).name));
+  const regConflict = (d, t, pl) => d.lregs.find((x) => x.tournament_id === t.tournament_id && x.player_id === pl.id && ["pending", "active"].includes(x.status));
+  const addReg = (d, l, t, pl, num, st, via, consent = null) => {
+    const other = regConflict(d, t, pl); ensure(!other, via === "office" ? "Ese jugador ya está inscrito en " + (other && d.ttems.find((x) => x.id === other.team_id).name) : "Ese jugador ya está inscrito en este torneo");
     ensure(st !== "active" || num == null || !d.lregs.some((x) => x.team_id === t.id && x.number === num && x.status === "active"), "Ese número ya lo usa otro jugador del equipo");
-    const r = { id: uuid(), league_id: l, player_id: pl.id, tournament_id: t.tournament_id, team_id: t.id, number: num, status: st, via, requested_by: d.session, decided_by: st === "active" ? d.session : null, decided_at: st === "active" ? new Date().toISOString() : null, note: null, created_at: new Date().toISOString() };
+    const r = { id: uuid(), league_id: l, player_id: pl.id, tournament_id: t.tournament_id, team_id: t.id, number: num, status: st, via, requested_by: d.session, decided_by: st === "active" ? d.session : null, decided_at: st === "active" ? new Date().toISOString() : null, note: null, consent, created_at: new Date().toISOString() };
     d.lregs.push(r); if (st === "active") pl.status = "active"; return r;
   };
-  const pubSettings = (d, l) => ({ enabled: false, scorers: true, chat: false, chat_daily: 100, ...((d.leagues.find((x) => x.id === l) || {}).settings || {}).public });
+  const privacyOf = (d, l) => ({ notice: null, contact: null, minors: false, version: 0, ...((d.leagues.find((x) => x.id === l) || {}).settings || {}).privacy });
+  const pubPrivacy = (d, l) => { const v = privacyOf(d, l); return v.notice ? { notice: v.notice, contact: v.contact, version: v.version } : null; };
+  const pubSettings = (d, l) => {
+    const { scorers, ...s } = ((d.leagues.find((x) => x.id === l) || {}).settings || {}).public || {}, minors = privacyOf(d, l).minors;
+    const r = { enabled: false, names: "off", details: true, chat: false, chat_daily: 100, tz: "America/Tijuana", ...s, minors };
+    if (minors) r.names = "off"; return r;
+  };
+  const shortName = (n) => { const w = String(n || "").trim().split(/\s+/); return w.length > 1 ? w[0] + " " + w[1][0] + "." : w[0]; };
+  // Consentimiento: aviso publicado, aceptado (o declarado por la liga/delegado) y, si es menor, con madre, padre o tutor. Mismas reglas que consent_check.
+  const consentCheck = (d, l, p, via) => {
+    const pv = privacyOf(d, l), c = p.consent;
+    ensure(String(pv.notice || "").trim(), "La liga aún no publica su aviso de privacidad");
+    ensure(c && typeof c === "object" && c.accepted === true, "Falta aceptar el aviso de privacidad");
+    ensure(via !== "link" || c.version === pv.version, "El aviso de privacidad cambió; vuelve a abrir el enlace");
+    ensure(p.birth_date, "Indica la fecha de nacimiento");
+    const lim = new Date(); lim.setFullYear(lim.getFullYear() - 18); const minor = p.birth_date > lim.toISOString().slice(0, 10), g = String(c.guardian_name || "").trim().slice(0, 80);
+    ensure(!minor || (c.by === "guardian" && g.length >= 3), "Para menores de edad se necesita el consentimiento de madre, padre o tutor");
+    return { version: pv.version, by: minor || c.by === "guardian" ? "guardian" : "self", guardian_name: g.length >= 3 ? g : null, minor, via, at: new Date().toISOString(), attested_by: d.session };
+  };
+  // Límite simple por enlace (en la base real además hay tope por IP).
+  const demoRate = (d, k, max, secs) => { d.rate = d.rate || {}; const w = k + "|" + Math.floor(Date.now() / 1000 / secs); d.rate[w] = (d.rate[w] || 0) + 1; return d.rate[w] <= max; };
+  const TZS = ["America/Tijuana", "America/Mexico_City", "America/Monterrey", "America/Cancun", "America/Hermosillo", "America/Chihuahua", "America/Los_Angeles", "America/Bogota", "America/Lima", "America/Santiago", "America/Argentina/Buenos_Aires", "Europe/Madrid"];
   const PERMS = ["teams", "tournaments", "schedule", "results", "sanctions", "finance", "registration", "audit", "settings"];
   const validPerms = (p) => Array.isArray(p) && p.every((x) => PERMS.includes(x));
   // Mismas restricciones que las columnas de la tabla sanctions.
@@ -646,39 +694,58 @@ function demo() {
       const d = db(); ensure(isLeagueAdmin(d, l)); d.contracts = d.contracts.filter((x) => x.league_id !== l);
       d.contracts.push({ league_id: l, pro_slots: slots, status: "active", starts_at: new Date().toISOString(), ends_at: days ? new Date(Date.now() + days * 864e5).toISOString() : null }); save(d);
     },
-    async leagueBrand(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return { color: "#c8102e", logo: null, ...((d.leagues.find((x) => x.id === l) || {}).settings || {}).brand }; },
+    async leagueBrand(l) { const d = db(); ensure(isLeagueAdmin(d, l)); const b = ((d.leagues.find((x) => x.id === l) || {}).settings || {}).brand || {}; return { color: b.color || "#c8102e", logo: b.logo || null }; },
     async setLeagueBrand(l, color, blob) {
-      const d = db(); ensure(isLeagueAdmin(d, l, "settings")); ensure(/^#[0-9a-fA-F]{6}$/.test(color || ""), "Datos no válidos"); const lg = d.leagues.find((x) => x.id === l), cur = (lg.settings || {}).brand || {};
+      const d = db(); ensure(isLeagueAdmin(d, l, "settings")); ensure(/^#[0-9a-fA-F]{6}$/.test(color || ""), "Datos no válidos"); if (blob) checkImage(blob, LIMIT.photos); const lg = d.leagues.find((x) => x.id === l), cur = (lg.settings || {}).brand || {};
       lg.settings = { ...(lg.settings || {}), brand: { color: color.toLowerCase(), logo: blob ? await dataURL(blob) : cur.logo || null } }; log(d, l, "league.brand", { color: color.toLowerCase(), logo_changed: !!blob }); save(d);
     },
     async publicState(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return pubSettings(d, l); },
     async chatUsage(l) { const d = db(); ensure(isLeagueAdmin(d, l, "settings")); return (d.chatUse || {})[l + "|" + new Date().toISOString().slice(0, 10)] || 0; },
-    async setPublicPage(l, enabled, scorers, chat, chatDaily) {
-      const d = db(); ensure(isLeagueAdmin(d, l, "settings")); chatDaily = chatDaily ?? 100; ensure(typeof enabled === "boolean" && typeof scorers === "boolean" && chatDaily >= 0 && chatDaily <= 5000, "Datos no válidos");
-      if (enabled) await lneed(l, "public_page"); const lg = d.leagues.find((x) => x.id === l); lg.settings = { ...(lg.settings || {}), public: { enabled, scorers, chat: !!chat, chat_daily: chatDaily } };
-      log(d, l, "public.settings", { enabled, scorers, chat: !!chat, chat_daily: chatDaily }); save(d);
+    async setPublicPage(l, s) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "settings")); ensure(s && typeof s === "object", "Datos no válidos"); const cur = pubSettings(d, l);
+      const n = { enabled: s.enabled ?? cur.enabled, names: s.names ?? cur.names, details: s.details ?? cur.details, chat: s.chat ?? cur.chat, chat_daily: s.chat_daily ?? cur.chat_daily, tz: s.tz ?? cur.tz };
+      ensure(typeof n.enabled === "boolean" && typeof n.details === "boolean" && typeof n.chat === "boolean" && ["off", "initials", "full"].includes(n.names) && Number.isInteger(n.chat_daily) && n.chat_daily >= 0 && n.chat_daily <= 5000 && TZS.includes(n.tz), "Datos no válidos");
+      ensure(n.names === "off" || !cur.minors, "Con menores de edad no se publican nombres");
+      if (n.enabled) await lneed(l, "public_page"); const lg = d.leagues.find((x) => x.id === l); lg.settings = { ...(lg.settings || {}), public: n };
+      log(d, l, "public.settings", n); save(d);
+    },
+    async privacyState(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return privacyOf(d, l); },
+    async setPrivacy(l, p) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "settings")); ensure(p && typeof p === "object", "Datos no válidos"); const cur = privacyOf(d, l);
+      const nt = String(p.notice || "").trim(), ct = String(p.contact || "").trim().slice(0, 160), mn = !!p.minors;
+      ensure(nt.length <= 8000 && (nt.length === 0 || nt.length >= 80), "El aviso debe tener entre 80 y 8000 caracteres"); ensure(!nt || ct.length >= 5, "Indica un contacto para dudas de privacidad");
+      const v = (cur.version || 0) + (nt !== (cur.notice || "") ? 1 : 0), lg = d.leagues.find((x) => x.id === l);
+      lg.settings = { ...(lg.settings || {}), privacy: { notice: nt || null, contact: ct || null, minors: mn, version: v, updated_at: new Date().toISOString() } };
+      if (mn && lg.settings.public) lg.settings.public.names = "off";
+      log(d, l, "privacy.update", { version: v, minors: mn }); save(d); return { version: v };
+    },
+    async forgetPlayer(l, pid) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "registration")); const pl = d.lplayers.find((x) => x.id === pid && x.league_id === l); ensure(pl, "Jugador no encontrado");
+      d.lregs.filter((r) => r.player_id === pid).forEach((r) => { if (["pending", "active"].includes(r.status)) Object.assign(r, { status: "removed", note: "Datos eliminados a petición" }); r.consent = null; });
+      Object.assign(pl, { name: "Jugador eliminado", norm: "eliminado-" + pid, birth_date: null, doc_id: null, doc_norm: "ELIM" + pid.replace(/-/g, ""), photo_path: null, status: "inactive", updated_at: new Date().toISOString() });
+      log(d, l, "player.forget", { player: pid }); save(d);
     },
     async publicLeague(l) {
       const d = db(), lg = d.leagues.find((x) => x.id === l), ps = lg && pubSettings(d, l), e = lg && (await api.entitlement("league", l));
       if (!lg || !ps.enabled || !(e.features || []).includes("public_page")) return { error: "not_found" };
       const b = (lg.settings || {}).brand || {};
-      return { league: { id: lg.id, name: lg.name, brand: { color: b.color || "#c8102e", logo: b.logo || null } }, chat: !!ps.chat,
+      return { league: { id: lg.id, name: lg.name, brand: { color: b.color || "#c8102e", logo: b.logo || null } }, chat: !!ps.chat, privacy: (({ notice, contact } = {}) => (notice ? { notice, contact } : null))(pubPrivacy(d, l) || {}),
         tournaments: d.tourn.filter((t) => t.league_id === l && ["published", "paused", "finished"].includes(t.status)).slice().reverse().map((t) => ({ id: t.id, name: t.name, season: t.season, category: t.category, modality: t.modality, status: t.status })) };
     },
     async publicTournament(l, tid) {
       const d = db(), lg = d.leagues.find((x) => x.id === l), t = d.tourn.find((x) => x.id === tid && x.league_id === l && ["published", "paused", "finished"].includes(x.status)), e = lg && (await api.entitlement("league", l));
       if (!t || !pubSettings(d, l).enabled || !(e.features || []).includes("public_page")) return { error: "not_found" };
-      const sc = pubSettings(d, l).scorers, ms = d.lmatches.filter((m) => m.tournament_id === tid), ids = new Set(ms.map((m) => m.id)), by = {};
+      const ps = pubSettings(d, l), nm = ps.names, dt = ps.details, ms = d.lmatches.filter((m) => m.tournament_id === tid), ids = new Set(ms.map((m) => m.id)), by = {};
       d.sanc.filter((x) => x.tournament_id === tid && x.kind === "puntos" && x.status !== "revoked").forEach((x) => (by[x.team_id] = (by[x.team_id] || 0) + x.points));
       return { tournament: { id: t.id, name: t.name, season: t.season, category: t.category, modality: t.modality, status: t.status, pts_win: t.pts_win, pts_draw: t.pts_draw, pts_loss: t.pts_loss, tiebreakers: t.tiebreakers },
         teams: d.ttems.filter((x) => x.tournament_id === tid).map((x) => ({ id: x.id, name: x.name, status: x.status })).sort((a, b) => a.name.localeCompare(b.name, "es")),
-        matches: ms.map((m) => ({ id: m.id, round: m.round, starts_at: m.starts_at, venue: m.venue, home_id: m.home_id, away_id: m.away_id, status: m.status, home_goals: m.home_goals, away_goals: m.away_goals })),
-        events: d.mevents.filter((x) => ids.has(x.match_id) && ["goal", "yellow", "red"].includes(x.kind)).map((x) => ({ match_id: x.match_id, team_id: x.team_id, kind: x.kind, n: x.n, player: x.kind === "goal" && sc ? x.player : "" })),
-        adjust: Object.entries(by).map(([team_id, points]) => ({ team_id, points })), scorers: sc };
+        matches: ms.map((m) => ({ id: m.id, round: m.round, starts_at: dt || !m.starts_at ? m.starts_at : new Date(m.starts_at).toLocaleDateString("en-CA", { timeZone: ps.tz }), venue: dt ? m.venue : null, home_id: m.home_id, away_id: m.away_id, status: m.status, home_goals: m.home_goals, away_goals: m.away_goals })),
+        events: d.mevents.filter((x) => ids.has(x.match_id) && ["goal", "yellow", "red"].includes(x.kind)).map((x) => ({ match_id: x.match_id, team_id: x.team_id, kind: x.kind, n: x.n, player: x.kind !== "goal" ? "" : nm === "full" ? x.player : nm === "initials" ? shortName(x.player) : "" })),
+        adjust: Object.entries(by).map(([team_id, points]) => ({ team_id, points })), scorers: nm !== "off", names: nm, details: dt };
     },
     // ----- actas desde foto (mismas reglas que las funciones SQL) -----
     async uploadActa(l, mid, blob) {
-      const d = db(); ensure(isLeagueAdmin(d, l, "results")); await lneed(l, "actas"); const m = d.lmatches.find((x) => x.id === mid && x.league_id === l); ensure(m, "Partido no encontrado");
+      const d = db(); ensure(isLeagueAdmin(d, l, "results")); checkImage(blob, LIMIT.acta); await lneed(l, "actas"); const m = d.lmatches.find((x) => x.id === mid && x.league_id === l); ensure(m, "Partido no encontrado");
       ensure(d.tourn.find((x) => x.id === m.tournament_id).status !== "finished", "El torneo ya terminó"); d.actas = d.actas || [];
       ensure(d.actas.filter((x) => x.match_id === mid && x.status === "pending").length < 5, "Demasiadas actas pendientes");
       const a = { id: uuid(), league_id: l, match_id: mid, path: `${l}/${mid}/${uuid()}.jpg#` + (await dataURL(blob)), status: "pending", draft: null, engine: null, ocr_text: null, discard_reason: null, created_by: d.session, created_at: new Date().toISOString(), decided_by: null, decided_at: null };
@@ -712,12 +779,12 @@ function demo() {
       const lg = d.leagues.find((x) => x.id === l); lg.settings = { ...(lg.settings || {}), registration: { photo: r.photo, doc: r.doc, delegate_approval: r.delegate_approval } }; log(d, l, "registration.rules", { rules: r }); save(d);
     },
     async registry(l) { const d = db(); ensure(isLeagueAdmin(d, l, "registration")); return { players: d.lplayers.filter((x) => x.league_id === l).sort((a, b) => a.norm.localeCompare(b.norm)), regs: d.lregs.filter((x) => x.league_id === l).slice().reverse() }; },
-    async uploadPlayerPhoto(l, blob) { const d = db(); ensure(isLeagueAdmin(d, l, "registration")); return `${l}/${uuid()}/p.jpg#` + (await dataURL(blob)); },
+    async uploadPlayerPhoto(l, blob) { const d = db(); ensure(isLeagueAdmin(d, l, "registration")); checkImage(blob, LIMIT.player); return `${l}/${uuid()}/p.jpg#` + (await dataURL(blob)); },
     async playerPhotoUrl(path) { return path ? path.slice(path.indexOf("#") + 1) : null; },
     async officeRegister(l, tt, p) {
       const d = db(); ensure(isLeagueAdmin(d, l, "registration")); await lneed(l, "registration"); const t = d.ttems.find((x) => x.id === tt && x.league_id === l && x.status === "active"); ensure(t, "Equipo no encontrado");
-      const pl = upsertPlayer(d, l, p, "pending"); if (p.photo_path) { ensure(photoOk(p.photo_path, l), "Datos no válidos"); pl.photo_path = p.photo_path; }
-      canActivate(d, l, pl); const r = addReg(d, l, t, pl, p.number === "" || p.number == null ? null : +p.number, "active", "office");
+      const cons = consentCheck(d, l, p, "office"), pl = upsertPlayer(d, l, p, "pending"); if (p.photo_path) { ensure(photoOk(p.photo_path, l), "Datos no válidos"); pl.photo_path = p.photo_path; }
+      canActivate(d, l, pl); const r = addReg(d, l, t, pl, p.number === "" || p.number == null ? null : +p.number, "active", "office", cons);
       log(d, l, "player.register", { player: pl.id, registration: r.id, team: t.id, via: "office" }); save(d); return r.id;
     },
     async updateLeaguePlayer(l, pid, p) {
@@ -753,21 +820,31 @@ function demo() {
     async revokeRegLink(l, c) { const d = db(); ensure(isLeagueAdmin(d, l, "registration")); const x = d.rlinks.find((y) => y.code === c && y.league_id === l); if (x) x.active = false; log(d, l, "reglink.revoke", { code: c }); save(d); },
     async regLinkInfo(code) {
       const d = db(), rl = liveLink(d, code); if (!rl) return { error: "invalid" }; const t = d.ttems.find((x) => x.id === rl.team_id), tn = d.tourn.find((x) => x.id === t.tournament_id), { delegate_approval, ...rules } = regRules(d, rl.league_id);
-      return { league: d.leagues.find((x) => x.id === rl.league_id).name, tournament: tn.name, team: t.name, rules };
+      return { league: d.leagues.find((x) => x.id === rl.league_id).name, tournament: tn.name, team: t.name, rules, privacy: pubPrivacy(d, rl.league_id) };
     },
     async registerByLink(code, p) {
-      const d = db(), rl = liveLink(d, code); if (!rl) return { error: "invalid" }; const t = d.ttems.find((x) => x.id === rl.team_id), pl = upsertPlayer(d, rl.league_id, p, "pending"), r = addReg(d, rl.league_id, t, pl, null, "pending", "link");
-      rl.uses++; log(d, rl.league_id, "player.submit", { player: pl.id, registration: r.id, team: t.id, via: "link", code_end: rl.code.slice(-4) }); save(d); return { ok: true, team: t.name };
+      const d = db();
+      if (!p || typeof p !== "object" || JSON.stringify(p).length > 3000) return { error: "data", message: "Datos no válidos" };
+      const rl = liveLink(d, code); if (!rl) return { error: "invalid" };
+      if (!demoRate(d, "reglink-code:" + rl.code, 40, 3600)) { save(d); return { error: "rate" }; }
+      const t = d.ttems.find((x) => x.id === rl.team_id);
+      try {
+        const cons = consentCheck(d, rl.league_id, p, "link"), pl = upsertPlayer(d, rl.league_id, p, "pending", false);
+        if (regConflict(d, t, pl)) log(d, rl.league_id, "player.submit_duplicate", { player: pl.id, team: t.id, via: "link", code_end: rl.code.slice(-4) });   // misma respuesta que un registro nuevo
+        else { const r = addReg(d, rl.league_id, t, pl, null, "pending", "link", cons); log(d, rl.league_id, "player.submit", { player: pl.id, registration: r.id, team: t.id, via: "link", code_end: rl.code.slice(-4) }); }
+      } catch (e) { const d2 = db(); d2.rate = d.rate; save(d2); return { error: "data", message: e.message }; }
+      rl.uses++; save(d); return { ok: true, team: t.name };
     },
     async delegateTargets(c, t) {
       const d = db(); ensure(isAdmin(d, c, t));
       return d.ttems.filter((tt) => tt.status === "active" && d.lteams.some((x) => x.id === tt.link_id && x.club_id === c && x.team_id === t && x.status === "approved") && d.tourn.find((y) => y.id === tt.tournament_id).status !== "finished")
-        .map((tt) => ({ id: tt.id, league_id: tt.league_id, league: d.leagues.find((x) => x.id === tt.league_id).name, tournament: d.tourn.find((y) => y.id === tt.tournament_id).name, team: tt.name, rules: regRules(d, tt.league_id) }));
+        .map((tt) => ({ id: tt.id, league_id: tt.league_id, league: d.leagues.find((x) => x.id === tt.league_id).name, tournament: d.tourn.find((y) => y.id === tt.tournament_id).name, team: tt.name, rules: regRules(d, tt.league_id), privacy: pubPrivacy(d, tt.league_id) }));
     },
     async delegateRegister(c, t, tt, p) {
       const d = db(); ensure(isAdmin(d, c, t)); const x = d.ttems.find((y) => y.id === tt && y.status === "active" && d.lteams.some((z) => z.id === y.link_id && z.club_id === c && z.team_id === t && z.status === "approved")); ensure(x, "Equipo no encontrado");
       await lneed(x.league_id, "registration"); ensure(d.tourn.find((y) => y.id === x.tournament_id).status !== "finished", "El torneo ya terminó");
-      const pl = upsertPlayer(d, x.league_id, p, "pending"), r = addReg(d, x.league_id, x, pl, null, "pending", "delegate"); log(d, x.league_id, "player.submit", { player: pl.id, registration: r.id, team: x.id, via: "delegate" }); save(d);
+      ensure(demoRate(d, "delegate:" + d.session, 60, 3600), "Demasiados intentos; espera unos minutos");
+      const cons = consentCheck(d, x.league_id, p, "delegate"), pl = upsertPlayer(d, x.league_id, p, "pending", false), r = addReg(d, x.league_id, x, pl, null, "pending", "delegate", cons); log(d, x.league_id, "player.submit", { player: pl.id, registration: r.id, team: x.id, via: "delegate" }); save(d);
       return { ok: true, registration: r.id, status: "pending" };
     },
     async delegateRegistrations(c, t) {

@@ -674,3 +674,11 @@ body.embed .tabbar { display: none; }
 .view > * { min-width: 0; }
 .cl-card { grid-template-columns: minmax(0, 1fr); }
 .cl-card > * { min-width: 0; }
+
+/* Privacidad */
+details.privacy { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--panel); }
+details.privacy summary { cursor: pointer; font-weight: 600; min-height: 30px; display: flex; align-items: center; }
+.privacy-txt { max-height: 40vh; overflow-y: auto; font-size: 14px; margin-top: 6px; white-space: normal; }
+details.danger { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
+details.danger summary { cursor: pointer; color: var(--muted); min-height: 30px; display: flex; align-items: center; }
+.pub-priv { margin-top: 12px; }

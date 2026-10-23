@@ -6,6 +6,28 @@ import { card, chip, row, btn, empty, dtime, toast, copyText, waLink, appURL, sh
 import * as sheet from "../sheet.js";
 import { actionLabel, detailText } from "./audit.js";
 
+const TZS = ["America/Tijuana", "America/Mexico_City", "America/Monterrey", "America/Cancun", "America/Hermosillo", "America/Chihuahua", "America/Los_Angeles", "America/Bogota", "America/Lima", "America/Santiago", "America/Argentina/Buenos_Aires", "Europe/Madrid"];
+// Plantilla de partida. NO es asesoría legal: la liga completa lo que está entre corchetes y lo revisa con quien la asesore.
+const TEMPLATE = (liga) => `Aviso de privacidad de ${liga}
+
+Responsable: [nombre de la persona o asociación responsable de la liga], con domicilio en [domicilio].
+
+Datos que pedimos: nombre, fecha de nacimiento y, si la liga lo pide, foto [y documento de identidad]. No pedimos datos que no necesitemos para organizar el torneo.
+
+Para qué los usamos: registrar a cada jugador en su equipo, verificar su categoría y su identidad en los partidos, imprimir credenciales y publicar resultados. [Agrega aquí cualquier otro uso.]
+
+Quién los ve: solo la administración de la liga. Si la liga publica su página, solo se muestran nombres de equipos, calendario y resultados; [los nombres de goleadores solo si la liga lo activa].
+
+Menores de edad: para registrar a un menor se necesita la autorización de su madre, padre o tutor.
+
+Cuánto tiempo los guardamos: [por ejemplo, mientras el jugador participe y hasta X meses después].
+
+Tus derechos: puedes pedir ver, corregir o borrar tus datos, u oponerte a su uso, escribiendo a [contacto]. Responderemos en [plazo].
+
+Cambios: si cambiamos este aviso, lo publicaremos aquí y te lo volveremos a pedir al registrarte.
+
+Fecha de esta versión: [fecha].`;
+
 export const PERMS = { teams: "Equipos e invitaciones", tournaments: "Torneos", schedule: "Calendario", results: "Resultados", sanctions: "Sanciones y objeciones", finance: "Finanzas de la liga", registration: "Registro de jugadores", audit: "Ver la bitácora", settings: "Ajustes de la liga" };
 const ROLE = { owner: "Superadministrador", admin: "Administrador" };
 let S = null, auditN = 30;
@@ -26,13 +48,27 @@ export async function render(ctx) {
       <form data-lf="brand" class="fld"><div class="crest-prev">${b.logo ? `<img src="${esc(b.logo)}" alt="Logo actual" width="56" height="56">` : ""}<label>Logo<input type="file" name="logo" accept="image/*"></label></div>
       <label>Color principal<input type="color" name="color" value="${esc(b.color)}"></label><button class="btn" type="submit">Guardar marca</button></form>`);
   }
-  let pubCard = "";
+  let pubCard = "", privCard = "";
+  if (ctx.can("settings")) {
+    const pv = await api.privacyState(ctx.id);
+    privCard = card("Privacidad", `<p>Antes de registrar jugadores, la liga publica su aviso de privacidad: lo ven y lo aceptan quienes se registran (o su madre, padre o tutor, si son menores). Cada cambio crea una versión nueva.</p>
+      <form data-lf="privacy" class="fld"><label>Aviso de privacidad${pv.version ? ` (versión ${pv.version})` : ""}<textarea name="notice" rows="8" maxlength="8000" placeholder="Escribe aquí tu aviso o usa la plantilla">${esc(pv.notice || "")}</textarea></label>
+      ${pv.notice ? "" : btn("Usar plantilla para revisar", 'data-la="tpl"', "ghost")}
+      <label>Contacto para dudas de privacidad o para pedir que se borren datos<input name="contact" maxlength="160" value="${esc(pv.contact || "")}" placeholder="correo o teléfono de la liga"></label>
+      <label class="opt"><input type="checkbox" name="minors"${pv.minors ? " checked" : ""}><span>En esta liga juegan menores de edad (no se publican nombres de jugadores)</span></label>
+      <button class="btn" type="submit">Guardar aviso</button></form>
+      <p class="hint">La plantilla es un punto de partida, no un documento legal: tiene partes entre [corchetes] que la liga debe completar y revisar con quien la asesore. La app no garantiza el cumplimiento de ninguna ley.</p>`);
+  }
   if (ctx.can("settings") && hasFeature(ctx.ent, "public_page")) {
     const ps = await api.publicState(ctx.id), ts = (await api.tournaments(ctx.id)).filter((t) => ["published", "paused", "finished"].includes(t.status));
-    const link = appURL() + "#/p/" + ctx.id, snip = (t) => `<iframe src="${appURL()}#/embed/${ctx.id}/${t.id}/tabla" title="${esc(ctx.l.name + " - " + t.name)}" width="100%" height="520" style="border:0" loading="lazy"></iframe>`;
-    pubCard = card("Página pública", `<p>Cualquiera con el enlace puede ver la tabla, el calendario y, si lo permites, el goleo. Solo se muestran torneos publicados. No aparecen notas, documentos, fotos, finanzas ni sanciones.</p>
+    const link = appURL() + "#/p/" + ctx.id, snip = (t) => `<iframe src="${appURL()}#/embed/${ctx.id}/${t.id}/tabla" title="${esc(ctx.l.name + " - " + t.name)}" width="100%" height="520" style="border:0" loading="lazy" referrerpolicy="no-referrer"></iframe>`;
+    const NAMES = { off: "No mostrar nombres (recomendado)", initials: "Solo nombre e inicial del apellido", full: "Nombre completo" };
+    pubCard = card("Página pública", `<p>Cualquiera con el enlace puede ver la tabla, el calendario y, si lo permites, el goleo. Solo se muestran torneos publicados. Nunca aparecen fotos, documentos, fechas de nacimiento, contactos, notas, finanzas ni motivos de sanciones.</p>
       <form data-lf="pub" class="fld"><label class="opt"><input type="checkbox" name="enabled"${ps.enabled ? " checked" : ""}><span>Página pública activa</span></label>
-      <label class="opt"><input type="checkbox" name="scorers"${ps.scorers ? " checked" : ""}><span>Mostrar nombres de goleadores</span></label>
+      <label>Nombres de goleadores<select name="names"${ps.minors ? " disabled" : ""}>${Object.entries(NAMES).map(([k, v]) => `<option value="${k}"${k === ps.names ? " selected" : ""}>${v}</option>`).join("")}</select></label>
+      ${ps.minors ? `<p class="hint">Marcaste que hay menores de edad: los nombres no se publican.</p>` : ""}
+      <label class="opt"><input type="checkbox" name="details"${ps.details ? " checked" : ""}><span>Mostrar hora y cancha de los partidos (si no, solo la fecha)</span></label>
+      <label>Zona horaria de la liga<select name="tz">${TZS.map((z) => `<option${z === ps.tz ? " selected" : ""}>${z}</option>`).join("")}</select></label>
       <label class="opt"><input type="checkbox" name="chat"${ps.chat ? " checked" : ""}><span>Asistente de preguntas en la página</span></label>
       <label>Preguntas al asistente por día (máximo)<input name="daily" type="number" min="0" max="5000" value="${ps.chat_daily}"></label>
       <p class="hint">Las respuestas por reglas no cuestan. El tope aplica al servicio con modelo de lenguaje, si tu liga lo configura${ps.chat ? "; hoy lleva " + (await api.chatUsage(ctx.id)) + " pregunta(s) contadas" : ""}.</p><button class="btn" type="submit">Guardar</button></form>`
@@ -57,11 +93,12 @@ export async function render(ctx) {
   const aud = log ? card("Bitácora", (log.length ? log.map((a) => row(actionLabel(a.action), `${a.actor || "—"} · ${dtime(a.at)}${detailText(a) ? " · " + detailText(a) : ""}`)).join("") : empty("Todavía no hay movimientos."))
     + (log.length >= auditN ? `<div class="row-acts">${btn("Ver más", 'data-la="more"', "ghost")}</div>` : "")
     + `<p class="hint">Cada cambio importante queda con quién lo hizo, cuándo y, en las correcciones, el valor anterior. No se puede borrar desde la app.</p>`) : "";
-  return info + brandCard + pubCard + adm + aud;
+  return info + brandCard + privCard + pubCard + adm + aud;
 }
 
 const done = (ctx) => (ctx.reload(), undefined);
 export const actions = {
+  async tpl(ctx) { const t = document.querySelector("form[data-lf=privacy] textarea[name=notice]"); if (t && !t.value.trim()) t.value = TEMPLATE(ctx.l.name); },
   async copy(ctx, el) { toast((await copyText(el.dataset.v)) ? "Código copiado" : "No se pudo copiar; selecciónalo y cópialo a mano.", false); },
   async rinv(ctx, el) { await api.revokeAdminInvite(ctx.id, el.dataset.v); toast("Código revocado"); done(ctx); },
   async more(ctx) { auditN += 50; done(ctx); },
@@ -79,7 +116,13 @@ export const forms = {
     const file = fd.get("logo"); await api.setLeagueBrand(ctx.id, fd.get("color"), file && file.size ? await shrinkImage(file, 400, 0.9, "image/png") : null); toast("Marca guardada"); done(ctx);
   },
   async pub(ctx, f, fd) {
-    await api.setPublicPage(ctx.id, fd.get("enabled") === "on", fd.get("scorers") === "on", fd.get("chat") === "on", Math.max(0, Math.min(5000, +fd.get("daily") || 0))); toast("Página pública guardada"); done(ctx);
+    const s = { enabled: fd.get("enabled") === "on", details: fd.get("details") === "on", chat: fd.get("chat") === "on", chat_daily: Math.max(0, Math.min(5000, Math.round(+fd.get("daily") || 0))), tz: fd.get("tz") };
+    if (fd.get("names")) s.names = fd.get("names");
+    await api.setPublicPage(ctx.id, s); toast("Página pública guardada"); done(ctx);
+  },
+  async privacy(ctx, f, fd) {
+    const r = await api.setPrivacy(ctx.id, { notice: fd.get("notice"), contact: fd.get("contact"), minors: fd.get("minors") === "on" });
+    toast(`Aviso guardado (versión ${r.version})`); done(ctx);
   },
   async adminvite(ctx, f, fd) {
     const perms = fd.getAll("perm"); if (!perms.length) return toast("Marca al menos un permiso.", true);

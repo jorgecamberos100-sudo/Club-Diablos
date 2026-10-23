@@ -5,6 +5,7 @@ import { can as hasFeature } from "../plans.js";
 import { card, chip, row, btn, empty, dshort, toast, copyText, waLink, appURL, shrinkImage } from "../ui.js";
 import * as sheet from "../sheet.js";
 import { printCredentials, credId } from "./credentials.js";
+import { consentFields, consentFrom } from "../consent.js";
 
 const VIA = { office: "Oficina", delegate: "Delegado", link: "Enlace" };
 const ST = { pending: ["due", "Pendiente"], active: ["ok", "Activo"], inactive: ["na", "Inactivo"], rejected: ["na", "Rechazado"], removed: ["na", "Baja"] };
@@ -17,9 +18,10 @@ const tour = (id) => S.tours.find((t) => t.id === id) || {};
 
 export async function render(ctx) {
   if (!ctx.can("registration")) return card("Jugadores", empty("Tu cuenta no tiene permiso para ver el registro de jugadores."));
-  const [reg, teams, tours, rules, brand, links] = await Promise.all([api.registry(ctx.id), api.leagueTeams(ctx.id), api.tournaments(ctx.id), api.registrationRules(ctx.id), api.leagueBrand(ctx.id), api.regLinks(ctx.id)]);
+  const [reg, teams, tours, rules, brand, links, priv] = await Promise.all([api.registry(ctx.id), api.leagueTeams(ctx.id), api.tournaments(ctx.id), api.registrationRules(ctx.id), api.leagueBrand(ctx.id), api.regLinks(ctx.id), api.privacyState(ctx.id)]);
+  const privacy = priv && priv.notice ? { notice: priv.notice, contact: priv.contact, version: priv.version } : null;
   if (!tours.some((t) => t.id === tid)) tid = (tours[0] || {}).id || null;
-  S = { ctx, ...reg, teams, tours, rules, brand, links };
+  S = { ctx, ...reg, teams, tours, rules, brand, links, privacy };
   const enabled = hasFeature(ctx.ent, "registration"), canSet = ctx.can("settings");
   const byP = new Map(reg.players.map((p) => [p.id, p])), cur = (pid) => reg.regs.find((r) => r.player_id === pid && ["pending", "active"].includes(r.status));
   const photos = new Map(await Promise.all(reg.players.filter((p) => p.photo_path).slice(0, 80).map(async (p) => [p.id, await api.playerPhotoUrl(p.photo_path).catch(() => null)])));
@@ -27,13 +29,14 @@ export async function render(ctx) {
   const needs = (p) => [S.rules.photo === "required" && !p.photo_path && "foto", S.rules.doc === "required" && !p.doc_norm && "documento"].filter(Boolean);
 
   const pendCard = pend.length ? card("Por revisar", pend.map((r) => { const p = byP.get(r.player_id) || {}; const miss = needs(p);
-    return row(p.name, `${tname(r.team_id)} · ${VIA[r.via]} · ${dshort(r.created_at)}${miss.length ? " · Falta: " + miss.join(" y ") : ""}`,
+    return row(p.name, `${tname(r.team_id)} · ${VIA[r.via]} · ${dshort(r.created_at)}${r.consent && r.consent.minor ? " · Menor, autoriza: " + (r.consent.guardian_name || "tutor") : ""}${miss.length ? " · Falta: " + miss.join(" y ") : ""}`,
       btn("Aprobar", `data-la="approve" data-id="${esc(r.id)}"`) + btn("Rechazar", `data-la="reject" data-id="${esc(r.id)}"`, "ghost")); }).join("")) : "";
 
   const act = reg.regs.filter((r) => r.status === "active").length;
   const top = card("Registro de jugadores", `<p><b>${reg.players.length}</b> en el padrón · <b>${act}</b> activos en equipos${pend.length ? ` · <b>${pend.length}</b> por revisar` : ""}</p>
     <div class="row-acts">${enabled && teams.length ? btn("Registrar jugador", 'data-la="reg"') : ""}</div>
     ${enabled ? "" : '<p class="hint">Tu plan no incluye el registro de jugadores.</p>'}${enabled && !teams.length ? '<p class="hint">Primero inscribe equipos en un torneo.</p>' : ""}
+    ${privacy ? "" : `<p class="msg" role="alert">Antes de registrar jugadores publica el aviso de privacidad de tu liga en Ajustes${canSet ? "" : " (lo hace quien tiene permiso de ajustes)"}.</p>`}
     <p class="hint">Un jugador existe una sola vez en el padrón de la liga (mismo documento, o mismo nombre y fecha de nacimiento) y solo puede estar en un equipo por torneo.</p>`);
 
   const list = reg.players.map((p) => { const r = cur(p.id), a = age(p.birth_date), ph = photos.get(p.id);
@@ -73,9 +76,10 @@ export const actions = {
     sheet.open("Registrar jugador", "Registro en oficina: queda activo de inmediato", `<form data-jform="reg" class="fld">
       <label>Equipo<select name="team" required>${S.teams.map((t) => `<option value="${esc(t.id)}"${t.tournament_id === tid ? " selected" : ""}>${esc(t.name)} · ${esc(tour(t.tournament_id).name || "")}</option>`).join("")}</select></label>
       <label>Nombre completo<input name="name" required minlength="2" maxlength="80"></label>
-      <div class="two"><label>Fecha de nacimiento<input name="birth" type="date" max="${new Date().toISOString().slice(0, 10)}"></label><label>Número<input name="number" type="number" min="0" max="99"></label></div>
+      <div class="two"><label>Fecha de nacimiento<input name="birth" type="date" required max="${new Date().toISOString().slice(0, 10)}"></label><label>Número<input name="number" type="number" min="0" max="99"></label></div>
       ${r.doc === "off" ? "" : `<label>Documento de identidad${r.doc === "required" ? " (obligatorio)" : " (opcional)"}<input name="doc" maxlength="30"${r.doc === "required" ? " required" : ""}></label>`}
-      ${photoInput(r.photo)}<p class="hint">Si el jugador ya está en el padrón, se usa su registro (no se duplica).</p><button class="btn" type="submit">Registrar</button></form>`);
+      ${photoInput(r.photo)}<p class="hint">Si el jugador ya está en el padrón, se usa su registro (no se duplica).</p>
+      ${consentFields(S.privacy, "attest")}<button class="btn" type="submit"${S.privacy ? "" : " disabled"}>Registrar</button></form>`);
   },
   async edit(ctx, el) {
     const p = S.players.find((x) => x.id === el.dataset.id), r = S.rules;
@@ -84,7 +88,9 @@ export const actions = {
       <label>Fecha de nacimiento<input name="birth" type="date" value="${esc(p.birth_date || "")}"></label>
       ${r.doc === "off" ? "" : `<label>Documento de identidad<input name="doc" maxlength="30" value="${esc(p.doc_id || "")}"></label>`}
       ${r.photo === "off" ? "" : `<label>${p.photo_path ? "Cambiar foto" : "Agregar foto"}<input type="file" name="photo" accept="image/*" capture="environment"></label>`}
-      <button class="btn" type="submit">Guardar</button></form>`);
+      <button class="btn" type="submit">Guardar</button></form>
+      <details class="danger"><summary>Borrar sus datos personales</summary><p class="hint">Si el jugador (o su tutor) lo pide: se borran nombre, fecha de nacimiento, documento y foto, y se le da de baja. Queda un registro anónimo para no romper el historial. Los nombres escritos en actas y goles no se tocan. No se puede deshacer.</p>
+      <button class="btn ghost" type="button" data-jj="forget" data-id="${esc(p.id)}">Borrar datos de ${esc(p.name)}</button></details>`);
   },
   async approve(ctx, el) {
     const reg = S.regs.find((x) => x.id === el.dataset.id), p = S.players.find((x) => x.id === reg.player_id);
@@ -114,12 +120,18 @@ export const forms = {
 };
 
 async function upload(ctx, file) { return api.uploadPlayerPhoto(ctx.id, await shrinkImage(file)); }
-sheet.wireNs("j", () => {}, (k, f, fd) => {
+sheet.wireNs("j", (k, el) => {
+  if (k !== "forget") return;
+  sheet.guard(async () => {
+    if (!confirm("¿Borrar los datos personales de este jugador? No se puede deshacer.")) return;
+    await api.forgetPlayer(S.ctx.id, el.dataset.id); sheet.close(); toast("Datos borrados"); S.ctx.reload();
+  });
+}, (k, f, fd) => {
   const ctx = S.ctx;
   sheet.guard(async () => {
     const file = fd.get("photo"), has = file && file.size > 0;
     if (k === "reg") {
-      const p = { name: fd.get("name").trim(), birth_date: fd.get("birth") || null, doc_id: (fd.get("doc") || "").trim() || null, number: fd.get("number") === "" ? null : +fd.get("number") };
+      const p = { name: fd.get("name").trim(), birth_date: fd.get("birth") || null, doc_id: (fd.get("doc") || "").trim() || null, number: fd.get("number") === "" ? null : +fd.get("number"), consent: consentFrom(fd) };
       if (has) p.photo_path = await upload(ctx, file);
       await api.officeRegister(ctx.id, fd.get("team"), p);
     } else if (k === "edit") {

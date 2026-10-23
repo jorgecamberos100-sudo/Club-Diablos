@@ -33,11 +33,14 @@ export function saveFile(name, text, mime = "text/csv;charset=utf-8") {
 // Reduce una foto a un JPEG chico (lado máximo en px) antes de subirla: ahorra datos y evita fotos enormes.
 export function shrinkImage(file, max = 480, quality = 0.82, type = "image/jpeg") {
   return new Promise((res, rej) => {
+    // Solo fotos (sin SVG, que puede llevar código) y de un tamaño razonable antes de reducirlas.
+    if (!file || !/^image\/(jpeg|png|webp|heic|heif|gif)$/i.test(file.type || "")) return rej(new Error("Archivo no permitido"));
+    if (file.size > 25 * 1024 * 1024) return rej(new Error("Archivo demasiado grande"));
     const img = new Image(), url = URL.createObjectURL(file);
     img.onload = () => {
       const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
       c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); c.toBlob((b) => (b ? res(b) : rej(new Error("Datos no válidos"))), type, quality);
     };
-    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Datos no válidos")); }; img.src = url;
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Archivo no permitido")); }; img.src = url;
   });
 }

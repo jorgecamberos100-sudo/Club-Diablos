@@ -9,6 +9,7 @@ import { openAuth, googleBtn } from "./cloudui.js";
 import { loadClubs } from "./data.js";
 import { FEATURES, can } from "./plans.js";
 import { card, chip, toast, dshort } from "./ui.js";
+import { consentFields, consentFrom } from "./consent.js";
 import * as equipos from "./league/equipos.js";
 import * as torneos from "./league/torneos.js";
 import * as sanciones from "./league/sanciones.js";
@@ -123,14 +124,16 @@ async function leaguesCard() {
 // ---------- Registro por enlace (sin cuenta) ----------
 async function registro(app, code) {
   const info = await api.regLinkInfo(code || "").catch(() => ({ error: "invalid" }));
+  if (info.error === "rate") { app.innerHTML = shell("Registro de jugadores", "", card("Espera un momento", `<p>Hubo demasiados intentos desde esta conexión. Vuelve a intentarlo en unos minutos.</p>`)); return; }
   if (info.error) { app.innerHTML = shell("Registro de jugadores", "", card("Enlace no válido", `<p>Este enlace no existe, ya venció o ya no admite más registros. Pídele uno nuevo a tu liga.</p>`)); return; }
   const r = info.rules;
   app.innerHTML = shell("Registro de jugadores", info.league, card(info.team, `<p>${esc(info.tournament)}</p>
     <form data-pf="reglink" data-code="${esc(code)}" class="fld"><label>Nombre completo<input name="name" required minlength="2" maxlength="80" autocomplete="name"></label>
-    <label>Fecha de nacimiento<input name="birth" type="date" max="${new Date().toISOString().slice(0, 10)}"></label>
+    <label>Fecha de nacimiento<input name="birth" type="date" required max="${new Date().toISOString().slice(0, 10)}"></label>
     ${r.doc === "off" ? "" : `<label>Documento de identidad${r.doc === "required" ? " (obligatorio)" : " (opcional)"}<input name="doc" maxlength="30"${r.doc === "required" ? " required" : ""}></label>`}
-    <p class="hint">Escribe la fecha de nacimiento o el documento. Tu registro queda pendiente hasta que la liga lo apruebe.${r.photo === "off" ? "" : " La foto la toma tu delegado o la liga."} Tus datos solo los ve la administración de la liga.</p>
-    <button class="btn" type="submit">Enviar mi registro</button><p class="msg" role="alert" hidden></p></form>`));
+    <p class="hint">Tu registro queda pendiente hasta que la liga lo apruebe.${r.photo === "off" ? "" : " La foto la toma tu delegado o la liga."} Tus datos solo los ve la administración de la liga.</p>
+    ${consentFields(info.privacy, "self")}
+    <button class="btn" type="submit"${info.privacy ? "" : " disabled"}>Enviar mi registro</button><p class="msg" role="alert" hidden></p></form>`));
 }
 
 // ---------- Panel de liga ----------
@@ -215,9 +218,9 @@ function wire(app) {
         return;
       }
       if (f.dataset.pf === "reglink") {
-        const fd = new FormData(f), r = await api.registerByLink(f.dataset.code, { name: fd.get("name").trim(), birth_date: fd.get("birth") || null, doc_id: (fd.get("doc") || "").trim() || null });
-        if (r.error) { btn.disabled = false; return say(f, "Este enlace ya no es válido. Pídele uno nuevo a tu liga."); }
-        f.closest(".cl-card").innerHTML = `<h2>¡Listo!</h2><p>Tu registro con ${esc(r.team)} quedó enviado. La liga lo revisará y lo aprobará.</p>`; return;
+        const fd = new FormData(f), r = await api.registerByLink(f.dataset.code, { name: fd.get("name").trim(), birth_date: fd.get("birth") || null, doc_id: (fd.get("doc") || "").trim() || null, consent: consentFrom(fd) });
+        if (r.error) { btn.disabled = false; return say(f, r.error === "rate" ? "Hubo demasiados intentos. Espera unos minutos y vuelve a intentarlo." : r.error === "data" ? friendly({ message: r.message }) : "Este enlace ya no es válido. Pídele uno nuevo a tu liga."); }
+        f.closest(".cl-card").innerHTML = `<h2>¡Listo!</h2><p>Recibimos tus datos para ${esc(r.team)}. La liga los revisará; si todo está en orden, te aprobará.</p>`; return;
       }
       if (f.dataset.pf === "adminjoin") {
         const r = await api.acceptAdminInvite(new FormData(f).get("code"));

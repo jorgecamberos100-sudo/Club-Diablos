@@ -6,6 +6,7 @@ import { applyTheme } from "./theme.js";
 import { themeFrom } from "./color.js";
 import { standings, scorers } from "./league/standings.js";
 import { dtime } from "./ui.js";
+import { noticeHTML } from "./consent.js";
 
 export const TABS = { tabla: "Tabla", calendario: "Calendario", goleo: "Goleo" };
 const STATUS = { published: "En curso", paused: "En pausa", finished: "Terminado" };
@@ -18,19 +19,21 @@ export function tablaHTML(t, d) {
     `<tr><td>${r.pos}</td><td class="nm">${esc(r.name)}${r.withdrawn ? " (baja)" : ""}</td><td>${r.pj}</td><td>${r.g}</td><td>${r.e}</td><td>${r.p}</td><td>${r.gf}</td><td>${r.gc}</td><td>${r.dg}</td><td><b>${r.pts}</b></td></tr>`).join("")}</tbody></table></div>`;
 }
 
+// Con "solo fecha" la base manda AAAA-MM-DD: se muestra sin hora y sin cambiar de día por la zona horaria.
+const when = (v) => { const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(v); return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" }) : dtime(v); };
 export function calendarioHTML(d) {
   const name = new Map(d.teams.map((x) => [x.id, x.name])), ms = d.matches.slice().sort((a, b) => (a.starts_at || "~").localeCompare(b.starts_at || "~"));
   if (!ms.length) return `<p class="hint">El calendario todavía no está publicado.</p>`;
   const groups = new Map(); ms.forEach((m) => { const k = m.round || "Partidos"; (groups.get(k) || groups.set(k, []).get(k)).push(m); });
   return [...groups].map(([r, list]) => `<h3>${esc(r)}</h3>` + list.map((m) => {
     const played = m.status === "played", sc = played ? `<b class="sc">${m.home_goals} - ${m.away_goals}</b>` : `<span class="sc">vs</span>`;
-    const sub = [m.starts_at ? dtime(m.starts_at) : "", m.venue || "", m.status === "postponed" ? "Pospuesto" : m.status === "canceled" ? "Cancelado" : ""].filter(Boolean).join(" · ");
+    const sub = [m.starts_at ? when(m.starts_at) : "", m.venue || "", m.status === "postponed" ? "Pospuesto" : m.status === "canceled" ? "Cancelado" : ""].filter(Boolean).join(" · ");
     return `<div class="cl-row static pm"><span><b>${esc(name.get(m.home_id) || "—")} ${sc} ${esc(name.get(m.away_id) || "—")}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span></div>`;
   }).join("")).join("");
 }
 
 export function goleoHTML(d) {
-  if (!d.scorers) return `<p class="hint">Esta liga no publica el goleo.</p>`;
+  if (!d.scorers) return `<p class="hint">Esta liga no publica los nombres de goleadores.</p>`;
   const sc = scorers(d.teams, d.matches, d.events);
   return sc.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>Goles</th></tr></thead><tbody>${sc.map((s, i) => `<tr><td>${i + 1}</td><td class="nm">${esc(s.player)}</td><td>${esc(s.team)}</td><td><b>${s.goals}</b></td></tr>`).join("")}</tbody></table></div>` : `<p class="hint">Todavía no hay goles registrados.</p>`;
 }
@@ -46,6 +49,7 @@ export async function renderPublic(app, [kind, l, tid, tab], { chatMount } = {})
   if (on) await init();
   let lg = null;
   try { lg = on && l ? await api.publicLeague(l) : null; } catch (e) { console.error(e); }
+  if (lg && lg.error === "rate") { applyTheme({ name: "Liga" }); app.innerHTML = ERRBOX("Espera un momento", "Hubo demasiadas visitas desde esta conexión. Intenta de nuevo en unos minutos."); return; }
   if (!lg || lg.error) { applyTheme({ name: "Liga" }); app.innerHTML = ERRBOX("Página no disponible", "Esta liga no tiene página pública o aún no la ha activado."); return; }
   brandTheme(lg.league);
   const T = lg.tournaments;
@@ -60,7 +64,7 @@ export async function renderPublic(app, [kind, l, tid, tab], { chatMount } = {})
   const body = cur === "tabla" ? tablaHTML(d.tournament, d) : cur === "calendario" ? calendarioHTML(d) : goleoHTML(d);
   const switcher = T.length > 1 && !embed ? `<label class="fld-inline">Torneo<select class="pub-t" aria-label="Torneo">${T.map((x) => `<option value="${esc(x.id)}"${x.id === tid ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>` : "";
   app.innerHTML = head + `<div class="view pub">${switcher}<div class="seg-tabs" role="tablist">${Object.entries(TABS).map(([k, v]) => `<button type="button" role="tab" aria-selected="${k === cur}" data-pt="${k}">${v}</button>`).join("")}</div>
-    <section class="s cl-card" aria-live="polite">${body}</section>${embed ? `<p class="hint pub-foot">${esc(lg.league.name)} · ${esc(d.tournament.name)}</p>` : ""}<div id="pub-chat"></div></div>`;
+    <section class="s cl-card" aria-live="polite">${body}</section>${embed ? `<p class="hint pub-foot">${esc(lg.league.name)} · ${esc(d.tournament.name)}</p>` : ""}<div id="pub-chat"></div>${!embed && lg.privacy ? `<div class="pub-priv">${noticeHTML(lg.privacy)}</div>` : ""}</div>`;
   app.querySelectorAll("[data-pt]").forEach((b) => (b.onclick = () => { location.hash = `${pre}/${l}/${tid}/${b.dataset.pt}`; }));
   const sel = app.querySelector(".pub-t"); if (sel) sel.onchange = () => { location.hash = `#/p/${l}/${sel.value}/${cur}`; };
   if (!embed && lg.chat && chatMount) chatMount(document.getElementById("pub-chat"), l, d);

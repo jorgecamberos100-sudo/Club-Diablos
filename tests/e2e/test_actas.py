@@ -19,8 +19,11 @@ async def main():
     check("el partido pendiente ofrece subir su acta", await pg.locator("button:text-is('Acta')").count() == 1)
 
     await pg.click("button:text-is('Acta')"); await pg.wait_for_selector("#sheet input[type=file]")
+    await pg.set_input_files("#sheet input[name=photo]", {"name": "acta.html", "mimeType": "text/html", "buffer": b"<script>alert(1)</script>"}); await pg.click("#sheet button:text-is('Subir foto')")
+    await pg.wait_for_selector("#sheet .msg:has-text('tipo de archivo')"); check("un archivo que no es foto se rechaza antes de subir", await pg.locator("#sheet img.acta-img").count() == 0)
+    pg.errors[:] = [e for e in pg.errors if "Archivo no permitido" not in e]
     await pg.set_input_files("#sheet input[name=photo]", IMG); await pg.click("#sheet button:text-is('Subir foto')")
-    await pg.wait_for_selector("#sheet img.acta-img"); check("al subir la foto se abre la revisión con la imagen", True)
+    await pg.wait_for_selector("#sheet img.acta-img"); check("al subir la foto se abre la revisión con la imagen", (await pg.get_attribute("#sheet img.acta-img", "src")).startswith("data:image/jpeg"))
     check("el servicio de lectura solo aparece si está configurado", await pg.locator("#sheet button:text-is('Leer con el servicio')").count() == 0)
 
     # texto → borrador (con un error a propósito para ver el aviso)
