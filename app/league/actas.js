@@ -34,6 +34,7 @@ async function review(a) {
     <div class="row-acts">${btn("Interpretar texto", 'data-kj="parse"', "ghost")}</div>
     <p class="msg warn" id="warns" hidden></p>
     <form id="actaform" data-kform="draft" class="fld"><div class="two"><label>${esc(M.home.name)}<input name="hg" type="number" min="0" max="99" required value="${esc(d.hg ?? "")}"></label><label>${esc(M.away.name)}<input name="ag" type="number" min="0" max="99" required value="${esc(d.ag ?? "")}"></label></div>
+      ${M.match.stage === "knockout" ? `<div class="two"><label>Penales ${esc(M.home.name)}<input name="hp" type="number" min="0" max="99" value="${esc(d.hp ?? "")}"></label><label>Penales ${esc(M.away.name)}<input name="ap" type="number" min="0" max="99" value="${esc(d.ap ?? "")}"></label></div><p class="hint">Eliminatoria: si empatan, escribe los penales.</p>` : ""}
       <h3>Goles y tarjetas</h3><div id="evs">${(d.events || []).map(evRow).join("")}</div><button type="button" class="btn sm ghost" data-kj="evadd">+ Agregar gol o tarjeta</button>
       <label>Nota<input name="notes" maxlength="500" value="${esc(d.note || "")}"></label>
       <p class="hint">Lo que ves aquí es un borrador. Al confirmar se registra como resultado oficial y queda en la bitácora con la foto de respaldo.</p>
@@ -43,7 +44,8 @@ async function review(a) {
 
 function draftFrom(f) {
   const fd = new FormData(f), rows = [...f.querySelectorAll(".ev")].map((r) => ({ team: r.querySelector("[name=ev_team]").value, player: r.querySelector("[name=ev_player]").value.trim(), kind: r.querySelector("[name=ev_kind]").value })).filter((x) => x.player);
-  return { draft: { hg: fd.get("hg") === "" ? null : +fd.get("hg"), ag: fd.get("ag") === "" ? null : +fd.get("ag"), events: rows, note: (fd.get("notes") || "").trim() }, text: (document.querySelector("#sheet [name=text]") || {}).value || "" };
+  const n = (k) => (fd.get(k) === null || fd.get(k) === "" ? null : +fd.get(k));
+  return { draft: { hg: n("hg"), ag: n("ag"), hp: n("hp"), ap: n("ap"), events: rows, note: (fd.get("notes") || "").trim() }, text: (document.querySelector("#sheet [name=text]") || {}).value || "" };
 }
 
 const form = () => document.getElementById("actaform");

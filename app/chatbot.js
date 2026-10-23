@@ -7,6 +7,7 @@
 import { esc } from "./util.js";
 import { CHAT } from "./config.js";
 import { standings, scorers } from "./league/standings.js";
+import { hasGroups, groupTables, champion } from "./league/bracket.js";
 import { dtime } from "./ui.js";
 
 export const LIMITS = { question: 300, context: 6000, perSession: 30, gapMs: 1500 };
@@ -17,7 +18,9 @@ const NO = "No tengo ese dato. Puedo contestar sobre la tabla de posiciones, los
 // Datos mínimos y ordenados que ve cualquier motor.
 export function view(d) {
   const t = d.tournament, name = new Map(d.teams.map((x) => [x.id, x.name]));
-  const rows = standings(t, d.teams, d.matches, d.events, d.adjust || []);
+  // En grupos, la posición es dentro de su grupo; en eliminación directa no hay tabla.
+  const rows = hasGroups(t) ? groupTables(t, d.teams, d.matches, d.events, d.adjust || []).flatMap((g) => g.rows.map((r) => ({ ...r, name: r.name, grp: g.group })))
+    : t.format === "knockout" ? [] : standings(t, d.teams, d.matches, d.events, d.adjust || []);
   const played = d.matches.filter((m) => m.status === "played").sort((a, b) => (b.starts_at || "").localeCompare(a.starts_at || ""));
   const next = d.matches.filter((m) => m.status === "scheduled").sort((a, b) => (a.starts_at || "~").localeCompare(b.starts_at || "~"));
   return { t, name, rows, played, next, sc: d.scorers ? scorers(d.teams, d.matches, d.events) : null };
@@ -50,10 +53,12 @@ export function localAnswer(q, d) {
     return `Victoria ${t.pts_win}, empate ${t.pts_draw}, derrota ${t.pts_loss}.` + ((t.tiebreakers || []).length ? " Desempates en orden: " + t.tiebreakers.join(", ") + "." : "");
   }
   if (row && has(n, "punto", "lugar", "posicion", "va ", "como va", "tabla", "clasific", "esta")) {
-    return `${row.name} va en el lugar ${row.pos} con ${row.pts} punto${row.pts === 1 ? "" : "s"} (${row.pj} jugado${row.pj === 1 ? "" : "s"}, ${row.g} ganado${row.g === 1 ? "" : "s"}, ${row.e} empatado${row.e === 1 ? "" : "s"}, ${row.p} perdido${row.p === 1 ? "" : "s"}; goles ${row.gf} a favor y ${row.gc} en contra).`;
+    return `${row.name} va en el lugar ${row.pos}${row.grp ? " del grupo " + row.grp : ""} con ${row.pts} punto${row.pts === 1 ? "" : "s"} (${row.pj} jugado${row.pj === 1 ? "" : "s"}, ${row.g} ganado${row.g === 1 ? "" : "s"}, ${row.e} empatado${row.e === 1 ? "" : "s"}, ${row.p} perdido${row.p === 1 ? "" : "s"}; goles ${row.gf} a favor y ${row.gc} en contra).`;
   }
+  if (has(n, "campeon", "gano el torneo", "ganador del torneo")) { const c = champion(d.matches); return c ? `El campeón es ${v.name.get(c)}.` : "Todavía no hay campeón."; }
   if (has(n, "lider", "primero", "primer lugar", "quien va", "tabla", "posicion", "clasific", "punta")) {
-    if (!v.rows.length) return "Todavía no hay equipos en la tabla.";
+    if (!v.rows.length) return t.format === "knockout" ? "Este torneo es de eliminación directa: no hay tabla. Pregúntame por los próximos partidos o el campeón." : "Todavía no hay equipos en la tabla.";
+    if (v.rows.some((r) => r.grp)) return "Líderes de grupo: " + v.rows.filter((r) => r.pos === 1).map((r) => `grupo ${r.grp}: ${r.name} (${r.pts} pts)`).join("; ") + ".";
     return "Tabla: " + v.rows.slice(0, 3).map((r) => `${r.pos}. ${r.name} (${r.pts} pts)`).join("; ") + (v.rows.length > 3 ? `; hay ${v.rows.length} equipos en total.` : ".");
   }
   if (row) return `${row.name} va en el lugar ${row.pos} con ${row.pts} puntos. Pregúntame también por su próximo partido o su último resultado.`;

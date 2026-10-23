@@ -682,3 +682,15 @@ details.privacy summary { cursor: pointer; font-weight: 600; min-height: 30px; d
 details.danger { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
 details.danger summary { cursor: pointer; color: var(--muted); min-height: 30px; display: flex; align-items: center; }
 .pub-priv { margin-top: 12px; }
+
+/* Grupos y eliminatorias */
+.tbl tr.q td:first-child { box-shadow: inset 3px 0 0 var(--red); }
+.bracket { display: grid; gap: 14px; }
+.br-round h3 { margin: 4px 0 6px; }
+.br-m { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; background: var(--panel); }
+.br-m span { overflow-wrap: anywhere; }
+.br-m span:last-child { text-align: right; }
+.br-m span.w { font-weight: 700; color: var(--fg); }
+.br-m b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.champ { font-size: 17px; margin: 10px 0 0; }
+.grp-sel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
