@@ -516,6 +516,15 @@
         ],
         "duda": []
       }
+    },
+    {
+      "id": "j14",
+      "jornada": "J14",
+      "date": "2026-11-01T09:10:00-08:00",
+      "rival": "Cañoneros",
+      "home": false,
+      "venue": "Reforma",
+      "score": null
     }
   ],
   "evaluations": []
