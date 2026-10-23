@@ -7,7 +7,11 @@
 //   clubs/<club>/players.json       -> jugadores del club (un jugador puede estar en varios equipos)
 //   clubs/<club>/teams/<team>.json  -> equipo: plantel con dorsales, finanzas y alineaciones
 
+import { on, init, api } from "./cloud.js";
+
 const BASE = new URL("../data/", import.meta.url);
+// Equipos creados en la app: si el archivo no existe, se leen de la base de datos.
+async function viaDB(fn, ...a) { if (!on) return null; await init(); return api[fn](...a); }
 
 async function getJSON(path) {
   const url = new URL(path, BASE);
@@ -24,10 +28,22 @@ export async function loadClubs() {
 }
 
 export async function loadClub(clubId) {
-  const [club, players] = await Promise.all([getJSON(`clubs/${clubId}/club.json`), getJSON(`clubs/${clubId}/players.json`)]);
-  return { club, players: players.players };
+  try {
+    const [club, players] = await Promise.all([getJSON(`clubs/${clubId}/club.json`), getJSON(`clubs/${clubId}/players.json`)]);
+    return { club, players: players.players };
+  } catch (e) {
+    const r = await viaDB("dbClub", clubId);
+    if (!r) throw e;
+    return { club: r.club, players: r.players };
+  }
 }
 
 export async function loadTeam(clubId, teamId) {
-  return getJSON(`clubs/${clubId}/teams/${teamId}.json`);
+  try {
+    return await getJSON(`clubs/${clubId}/teams/${teamId}.json`);
+  } catch (e) {
+    const t = await viaDB("dbTeam", clubId, teamId);
+    if (!t) throw e;
+    return { ...t, db: true };
+  }
 }

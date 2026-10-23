@@ -21,6 +21,7 @@ const VIEWS = {
   alineacion: { m: alineacion, label: "Alineación" },
   finanzas: { m: finanzas, label: "Finanzas", needs: "finance" },
 };
+const GENERIC = new URL("../icons/escudo-generico.svg", import.meta.url).href;
 const app = document.getElementById("app");
 const cache = {};
 let installEvt = null;
@@ -53,8 +54,8 @@ async function getCtx(clubId, teamId) {
       clubId, club, team, players, live,
       ratings: computeRatings(team, players, club.rating),
       playersById: Object.fromEntries(players.map((p) => [p.id, p])),
-      crest: assetURL(clubId, club.crest),
-      watermark: assetURL(clubId, club.watermark || club.crest),
+      crest: club.crest ? assetURL(clubId, club.crest) : GENERIC,
+      watermark: club.watermark || club.crest ? assetURL(clubId, club.watermark || club.crest) : GENERIC,
       asset: (f) => (/^(https?:|data:)/.test(f) ? f : assetURL(clubId, f)),
       key: "app:" + k,
     };

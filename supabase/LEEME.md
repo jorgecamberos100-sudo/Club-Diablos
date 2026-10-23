@@ -40,3 +40,9 @@ Agrega `?demo` antes del `#` del enlace (por ejemplo `.../Club-Diablos/?demo#/di
 - Panel de liga: `#/liga/<liga>/inicio`. Quien crea la liga queda como superadministrador.
 - Planes: tabla `plans`. Funciones (`features`) y límites (`limits`) se cambian ahí, sin tocar la app. Los precios quedan vacíos hasta decidirlos.
 - Dar Pro a un equipo a mano: agrega una fila en `subscriptions` con `subject_type` = team, `subject_id` = club/equipo (ej. `diablos/domingos`) y `plan_id` = team-pro. Nadie puede darse Pro desde la app.
+
+## Equipos creados en la app
+- Desde `#/cuenta` se crea un equipo (fútbol 7 u 11) y se agregan jugadores en su Plantel. Se guardan en las tablas `club_docs` y `team_docs`, con la misma forma que los archivos de `data/clubs`.
+- Diablos y el club de ejemplo siguen leyéndose de archivos; la base solo se consulta si el archivo no existe.
+- Límites: el plan gratis permite 1 equipo por cuenta y 30 jugadores. Se cambian en la tabla `plans` (`limits`), y un equipo con plan Pro (fila en `subscriptions`) sube ambos.
+- Vuelve a correr `schema.sql` completo para agregar estas tablas.

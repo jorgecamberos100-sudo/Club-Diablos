@@ -23,6 +23,11 @@ const ERR = {
   "provider is not enabled": "La entrada con Google todavía no está activada. Avísale a Metra.",
   "payments_amount": "Escribe una cantidad mayor a cero.",
   "Escribe el nombre de la liga": "Escribe el nombre de la liga.",
+  "Escribe el nombre del equipo": "Escribe el nombre del equipo.",
+  "Elige el formato": "Elige el formato del equipo.",
+  "máximo de equipos": "Tu plan ya llegó al máximo de equipos.",
+  "límite de jugadores": "Tu plan llegó al límite de jugadores.",
+  "Escribe el nombre del jugador": "Escribe el nombre del jugador.",
 };
 
 // Al volver de Google se regresa a la misma sección de la app.
@@ -118,6 +123,11 @@ async function supa() {
       return { ...l, me: a };
     },
     async plans() { return ok(await sb.from("plans").select("*").order("tier")); },
+    // ----- equipos en la base de datos -----
+    async dbClub(id) { const r = ok(await sb.from("club_docs").select("club, players").eq("id", id).maybeSingle()); return r ? { club: r.club, players: r.players } : null; },
+    async dbTeam(c, t) { const r = ok(await sb.from("team_docs").select("data").eq("club_id", c).eq("team_id", t).maybeSingle()); return r ? r.data : null; },
+    async createTeam(name, format) { return ok(await sb.rpc("create_team", { nm: name, fmt: format })); },
+    async addPlayer(c, t, { name, number, pos }) { return ok(await sb.rpc("add_player", { c, t, nm: name, num: number || "", pos: pos || "" })); },
     async entitlement(st, sid) { return ok(await sb.rpc("entitlement", { st, sid })) || defaultPlan(st); },
     // ----- pagos -----
     async paid(c, t) { return ok(await sb.rpc("team_paid", { c, t })) || []; },
@@ -154,7 +164,7 @@ async function supa() {
 function demo() {
   const K = "demo-db";
   const load = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch (e) { return {}; } };
-  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [] }, load());
+  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [] }, load());
   const dataURL = (f) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
   const save = (d) => { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ } };
   const cur = (d) => { const u = d.users.find((x) => x.id === d.session); if (!u) throw new Error("Inicia sesión primero"); return u; };
@@ -263,6 +273,33 @@ function demo() {
       const l = d.leagues.find((x) => x.id === id); return a && l ? { ...l, me: { role: a.role, perms: a.perms } } : null;
     },
     async plans() { return DEFAULTS; },
+    // ----- equipos en la base de datos (navegador) -----
+    async dbClub(id) { const r = db().clubdocs.find((x) => x.id === id); return r ? { club: r.club, players: r.players } : null; },
+    async dbTeam(c, t) { const r = db().teamdocs.find((x) => x.club_id === c && x.team_id === t); return r ? r.data : null; },
+    async createTeam(name, format) {
+      const d = db(); const u = cur(d);
+      ensure(name && name.trim().length > 1, "Escribe el nombre del equipo"); ensure([7, 11].includes(format), "Elige el formato");
+      const mine = d.members.filter((m) => m.user_id === u.id && m.status === "approved" && m.role === "admin");
+      let cap = (DEFAULTS.find((p) => p.id === "team-free").limits.teams) || 1;
+      for (const m of mine) { const e = await this.entitlement("team", m.club_id + "/" + m.team_id); cap = Math.max(cap, e.limits && e.limits.teams != null ? e.limits.teams : 1e6); }
+      ensure(mine.length < cap, "máximo de equipos");
+      const base = name.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+      let id = !base || ["cuenta", "liga", "diablos", "ejemplo"].includes(base) ? "equipo" : base, n = 1;
+      while (d.clubdocs.some((x) => x.id === id) || ["cuenta", "liga", "diablos", "ejemplo"].includes(id)) id = (base || "equipo").slice(0, 36) + "-" + ++n;
+      d.clubdocs.push({ id, owner: u.id, players: [], club: { id, name: name.trim().slice(0, 60), shortName: name.trim().slice(0, 24), crest: "", contact: "el administrador",
+        teams: [{ id: "principal", name: "Principal" }], theme: { colors: { bg: "#0e1110", panel: "#151a18", raise: "#1c2321", line: "#2a3330", text: "#ffffff", muted: "#a0aaa6", primary: "#1f9d61", primarySoft: "#3fd18a", onPrimary: "#ffffff" }, card: "escudo", pattern: "franjas" } } });
+      d.teamdocs.push({ club_id: id, team_id: "principal", data: { id: "principal", name: "Principal", competition: "", format, roster: [], matches: [], evaluations: [], lineups: [] } });
+      d.members.push({ club_id: id, team_id: "principal", user_id: u.id, player_id: null, display_name: u.email.split("@")[0], role: "admin", status: "approved", created_at: new Date().toISOString() });
+      save(d); return { club: id, team: "principal" };
+    },
+    async addPlayer(c, t, { name, number, pos }) {
+      const d = db(); ensure(isAdmin(d, c, t)); ensure(name && name.trim().length > 1, "Escribe el nombre del jugador");
+      const cd = d.clubdocs.find((x) => x.id === c), td = d.teamdocs.find((x) => x.club_id === c && x.team_id === t); ensure(cd && td, "Este equipo se administra desde archivos");
+      const e = await this.entitlement("team", c + "/" + t); ensure(e.limits.players == null || td.data.roster.length < e.limits.players, "límite de jugadores");
+      const pid = "p" + (cd.players.length + 1);
+      cd.players.push({ id: pid, name: name.trim().slice(0, 40), positions: pos ? [pos] : [], photo: null, attrs: null }); td.data.roster.push({ player: pid, number: String(number || "").slice(0, 3) });
+      save(d); return pid;
+    },
     async entitlement(st, sid) {
       const s = db().subs.filter((x) => x.subject_type === st && x.subject_id === sid && x.status === "active")
         .map((x) => ({ ...DEFAULTS.find((p) => p.id === x.plan_id), source: x.source })).sort((a, b) => b.tier - a.tier)[0];

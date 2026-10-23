@@ -81,7 +81,10 @@ async function teamsCard() {
   const name = (c) => (clubs.find((x) => x.id === c) || {}).name || c;
   const ents = await Promise.all(mine.map((m) => api.entitlement("team", m.club_id + "/" + m.team_id).catch(() => null)));
   const rows = mine.map((m, i) => `<a class="cl-row" href="#/${esc(m.club_id)}/${esc(m.team_id)}/inicio"><span><b>${esc(name(m.club_id))}</b><small>${esc(m.team_id)}</small></span><span class="chip ok">${esc(ents[i] ? ents[i].name : "")}</span></a>`).join("");
-  return card("Mis equipos", rows || `<p>Todavía no administras ningún equipo. Abre el enlace de tu equipo y entra con esta cuenta: la primera cuenta de un equipo queda como administrador.</p><p class="hint">Crear un equipo nuevo desde aquí llega en la siguiente etapa.</p>`);
+  const form = `<form data-pf="team" class="fld"><label>${mine.length ? "Crear otro equipo" : "Crea tu equipo"}<input name="nm" placeholder="Nombre del equipo" maxlength="60" required></label>
+    <div class="pick fmt"><label class="pick-o"><input type="radio" name="fmt" value="7" checked><span><b>Fútbol 7</b></span></label><label class="pick-o"><input type="radio" name="fmt" value="11"><span><b>Fútbol 11</b></span></label></div>
+    <button class="btn" type="submit">Crear equipo</button><p class="msg" role="alert" hidden></p></form>`;
+  return card("Mis equipos", `${rows}${rows ? "" : `<p>Todavía no administras ningún equipo. Si ya existe, abre su enlace y entra con esta cuenta.</p>`}${form}<p class="hint">Los formatos de fútbol 5, 6, 8 y 9 llegan después.</p>`);
 }
 
 async function leaguesCard() {
@@ -138,6 +141,11 @@ function wire(app) {
         await api.setRoles(roles);
         // Si solo eligió liga y aún no tiene una, la pantalla siguiente le pide crearla.
         return window.__reload();
+      }
+      if (f.dataset.pf === "team") {
+        const fd = new FormData(f), r = await api.createTeam(fd.get("nm").trim(), +fd.get("fmt"));
+        location.hash = `#/${r.club}/${r.team}/plantel`;
+        return;
       }
       if (f.dataset.pf === "league") {
         const lid = await api.createLeague(new FormData(f).get("nm").trim());

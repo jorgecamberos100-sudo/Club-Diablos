@@ -383,3 +383,86 @@ grant update (name, settings) on public.leagues to authenticated;
 grant select on public.plans to anon, authenticated;
 grant execute on function public.set_roles(text[]), public.create_league(text), public.my_teams(), public.my_leagues(),
   public.entitlement(text,text), public.is_league_admin(text,text) to authenticated;
+
+-- ============ Equipos en la base de datos (etapa 2) ============
+-- Los equipos que se crean en la app viven aquí, con la MISMA forma que los archivos de data/clubs.
+-- La app lee primero los archivos (Diablos y el club de ejemplo) y, si no existe, la base.
+create table if not exists public.club_docs (
+  id text primary key,
+  owner uuid not null references auth.users(id),
+  club jsonb not null,                              -- como club.json
+  players jsonb not null default '[]',              -- como players.json
+  created_at timestamptz not null default now()
+);
+create table if not exists public.team_docs (
+  club_id text not null references public.club_docs(id) on delete cascade,
+  team_id text not null,
+  data jsonb not null,                              -- como teams/<equipo>.json
+  primary key (club_id, team_id)
+);
+alter table public.club_docs enable row level security;
+alter table public.team_docs enable row level security;
+drop policy if exists club_docs_read on public.club_docs;
+create policy club_docs_read on public.club_docs for select using (true);
+drop policy if exists team_docs_read on public.team_docs;
+create policy team_docs_read on public.team_docs for select using (true);
+grant select on public.club_docs, public.team_docs to anon, authenticated;   -- escribir solo por funciones
+
+create or replace function public.slugify(s text) returns text language sql immutable as $$
+  select trim(both '-' from regexp_replace(lower(translate(trim(s), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunaeiouun')), '[^a-z0-9]+', '-', 'g')) $$;
+
+-- Cuántos equipos puede administrar esta cuenta: el mayor límite "teams" entre sus planes (sin dato = sin límite).
+create or replace function public.team_cap() returns int
+language sql stable security definer set search_path = public as $$
+  select greatest(
+    coalesce((select (limits->>'teams')::int from plans where id = 'team-free'), 1),
+    coalesce((select max(coalesce((entitlement('team', m.club_id || '/' || m.team_id)->'limits'->>'teams')::int, 1000000))
+              from members m where m.user_id = auth.uid() and m.status = 'approved' and m.role = 'admin'), 0)) $$;
+
+-- Crear equipo: queda como administrador quien lo crea. fmt = jugadores por lado (hoy 7 u 11).
+create or replace function public.create_team(nm text, fmt int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare base text; cid text; n int := 1; who text;
+begin
+  if auth.uid() is null then raise exception 'Inicia sesión primero'; end if;
+  if nm is null or length(trim(nm)) < 2 then raise exception 'Escribe el nombre del equipo'; end if;
+  if fmt not in (7, 11) then raise exception 'Elige el formato del equipo'; end if;
+  if (select count(*) from members where user_id = auth.uid() and status = 'approved' and role = 'admin') >= team_cap()
+    then raise exception 'Ya tienes el máximo de equipos de tu plan'; end if;
+  base := slugify(nm);
+  if base in ('', 'cuenta', 'liga', 'diablos', 'ejemplo') then base := 'equipo'; end if;
+  cid := left(base, 40);
+  while exists (select 1 from club_docs where id = cid) or cid in ('cuenta', 'liga', 'diablos', 'ejemplo') loop n := n + 1; cid := left(base, 36) || '-' || n; end loop;
+  insert into club_docs (id, owner, club) values (cid, auth.uid(), jsonb_build_object(
+    'id', cid, 'name', left(trim(nm), 60), 'shortName', left(trim(nm), 24), 'crest', '', 'contact', 'el administrador',
+    'teams', jsonb_build_array(jsonb_build_object('id', 'principal', 'name', 'Principal')),
+    'theme', jsonb_build_object('colors', jsonb_build_object('bg', '#0e1110', 'panel', '#151a18', 'raise', '#1c2321', 'line', '#2a3330',
+      'text', '#ffffff', 'muted', '#a0aaa6', 'primary', '#1f9d61', 'primarySoft', '#3fd18a', 'onPrimary', '#ffffff'), 'card', 'escudo', 'pattern', 'franjas')));
+  insert into team_docs (club_id, team_id, data) values (cid, 'principal', jsonb_build_object(
+    'id', 'principal', 'name', 'Principal', 'competition', '', 'format', fmt, 'roster', '[]'::jsonb, 'matches', '[]'::jsonb, 'evaluations', '[]'::jsonb, 'lineups', '[]'::jsonb));
+  select coalesce(nullif(split_part(email, '@', 1), ''), 'Administrador') into who from auth.users where id = auth.uid();
+  insert into members (club_id, team_id, user_id, display_name, role, status) values (cid, 'principal', auth.uid(), left(who, 60), 'admin', 'approved');
+  return jsonb_build_object('club', cid, 'team', 'principal');
+end $$;
+
+-- Agregar un jugador al plantel (sin que tenga cuenta). Respeta el límite "players" del plan del equipo.
+create or replace function public.add_player(c text, t text, nm text, num text, pos text) returns text
+language plpgsql security definer set search_path = public as $$
+declare pid text; lim int; cnt int;
+begin
+  if not is_admin(c, t) then raise exception 'Sin permiso'; end if;
+  if nm is null or length(trim(nm)) < 2 then raise exception 'Escribe el nombre del jugador'; end if;
+  if pos is not null and pos <> '' and pos not in ('POR','LAT','DFC','MCD','MCO','EXT','DC') then raise exception 'Posición no válida'; end if;
+  select jsonb_array_length(data->'roster') into cnt from team_docs where club_id = c and team_id = t;
+  if cnt is null then raise exception 'Este equipo se administra desde archivos'; end if;
+  lim := (entitlement('team', c || '/' || t)->'limits'->>'players')::int;
+  if lim is not null and cnt >= lim then raise exception 'Tu plan llegó al límite de jugadores'; end if;
+  select 'p' || (jsonb_array_length(players) + 1) into pid from club_docs where id = c;
+  update club_docs set players = players || jsonb_build_array(jsonb_build_object('id', pid, 'name', left(trim(nm), 40),
+    'positions', case when coalesce(pos, '') = '' then '[]'::jsonb else jsonb_build_array(pos) end, 'photo', null, 'attrs', null)) where id = c;
+  update team_docs set data = jsonb_set(data, '{roster}', (data->'roster') || jsonb_build_array(jsonb_build_object('player', pid, 'number', left(coalesce(num, ''), 3))))
+    where club_id = c and team_id = t;
+  return pid;
+end $$;
+
+grant execute on function public.create_team(text,int), public.add_player(text,text,text,text,text), public.team_cap() to authenticated;

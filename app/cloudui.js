@@ -94,6 +94,7 @@ export function mount(root, ctx, view) {
     const parts = availCard(ctx) + accountCard(ctx);
     if (hero) hero.insertAdjacentHTML("afterend", parts); else root.insertAdjacentHTML("afterbegin", parts);
   } else if (html) root.insertAdjacentHTML("afterbegin", html);
+  if (view === "plantel" && ctx.live.admin && ctx.team.db) root.insertAdjacentHTML("afterbegin", `<section class="s cl-card"><h2>Tu plantel</h2><p>${ctx.team.roster.length ? ctx.team.roster.length + " jugadores." : "Aún no hay jugadores."} Agrégalos aquí; no necesitan cuenta.</p><div class="row-acts"><button type="button" class="btn" data-cl="addp">Agregar jugador</button></div></section>`);
   if (view === "partidos" && !ctx.live.user) root.insertAdjacentHTML("afterbegin", `<section class="s cl-card"><p class="hint">Entra desde Inicio para calificar los partidos.</p></section>`);
   root.addEventListener("click", (e) => { const t = e.target.closest("[data-cl]"); if (t && !t.closest("#sheet")) act(ctx, t.dataset.cl, t); });
   const L = ctx.live;
@@ -173,6 +174,15 @@ function act(ctx, a, el) {
     const f = new FormData(el), scores = {};
     [...el.querySelectorAll("input[type=range]")].forEach((r) => { scores[r.dataset.t] = +r.value; });
     await api.saveMatchVotes(c, t, el.dataset.m, scores, f.get("mvp") || null); close(); reload();
+  });
+  if (a === "addp") return open("Agregar jugador", "Sin cuenta: tú lo registras.", `<form data-form="addp" class="fld"><label>Nombre<input name="nm" maxlength="40" required autocomplete="off"></label>
+    <label>Dorsal<input name="num" inputmode="numeric" maxlength="3" autocomplete="off"></label>
+    <label>Posición<select name="pos"><option value="">Sin definir</option>${Object.entries(POS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></label>
+    <button class="btn" type="submit">Agregar</button><p class="hint ok-note"></p></form>`);
+  if (a === "submit-addp") return guard(async () => {
+    const f = new FormData(el), nm = (f.get("nm") || "").trim();
+    await api.addPlayer(c, t, { name: nm, number: (f.get("num") || "").trim(), pos: f.get("pos") });
+    el.reset(); el.querySelector(".ok-note").textContent = "Agregado: " + nm + ". Puedes agregar otro."; el.querySelector("input").focus(); reload();
   });
   if (a === "attrs") return attrsList(ctx);
   if (a === "attr") return attrSheet(ctx, el.dataset.p);
