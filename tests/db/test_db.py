@@ -624,6 +624,26 @@ try:
     _, outb = H.psql(f=H.os.path.join(H.HERE, "..", "..", "supabase", "verificar.sql")); bad = {l.split("|")[0]: l.split("|")[2] for l in outb.splitlines() if l.count("|") >= 2}
     check("la verificación detecta una tabla sin RLS y una función abierta de más", bad["1"].startswith("REVISAR") and "chat_usage" in bad["1"] and bad["2"].startswith("REVISAR") and "forget_player" in bad["2"], bad)
     q("srv", "alter table public.chat_usage enable row level security; revoke execute on function public.forget_player(text,uuid) from anon")
+    print("Matriz de acceso: nadie lee ni cambia datos ajenos (paso 10 de la prueba integral)")
+    PRIV = ["league_players", "player_registrations", "registration_links", "sanctions", "disputes", "league_charges", "league_movements", "audit_log", "acta_uploads",
+            "admin_invites", "league_invites", "tournaments", "tournament_teams", "league_matches", "match_events", "leagues", "league_contracts", "chat_usage", "rate_limits", "app_secret", "schema_migrations"]
+    owner_sees = [t for t in PRIV if val("ana", f"select count(*) from public.{t}") not in ("0",) and not val("ana", f"select count(*) from public.{t}").startswith("ERR")]
+    check("control: la dueña de la liga sí ve sus datos privados", len(owner_sees) >= 14, owner_sees)
+    leaks = {}
+    for who in ("anon", "cris", "dana"):
+        for t in PRIV:
+            cond = {"leagues": f"id = '{L}'", "rate_limits": "true", "app_secret": "true", "schema_migrations": "true"}.get(t, f"league_id = '{L}'")
+            o = val(who, f"select count(*) from public.{t} where {cond}")
+            if not (o == "0" or o.startswith("ERR")): leaks[(who, t)] = o
+    check("ninguna cuenta ajena (ni sin cuenta) lee datos privados de la liga", not leaks, leaks)
+    before = {t: val("srv", f"select count(*) from public.{t}") for t in PRIV}
+    for who in ("anon", "cris", "dana", "fran"):
+        for t in PRIV:
+            val(who, f"delete from public.{t}"); val(who, f"update public.{t} set league_id = league_id" if t not in ("leagues", "rate_limits", "app_secret", "schema_migrations", "chat_usage") else f"select 1")
+    after = {t: val("srv", f"select count(*) from public.{t}") for t in PRIV}
+    check("nadie borra ni cambia filas escribiendo directo en las tablas (todo pasa por funciones)", before == after, {t: (before[t], after[t]) for t in PRIV if before[t] != after[t]})
+    check("nadie se da Pro ni contratos escribiendo directo", all(val(w, f"insert into public.subscriptions (subject_type, subject_id, plan_id) values ('team','los-halcones/principal','team-pro')").startswith("ERR") for w in ("anon", "beto", "ana"))
+          and all(val(w, f"insert into public.league_contracts (league_id, pro_slots) values ('{L}', 99)").startswith("ERR") for w in ("anon", "ana")))
 except BaseException:
     import traceback; traceback.print_exc(); import harness; harness.failed += 1; print("  FALLA la prueba se interrumpió con una excepción (arriba)")
 finally:
