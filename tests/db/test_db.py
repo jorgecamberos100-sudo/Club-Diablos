@@ -533,14 +533,14 @@ try:
     check("delegado: un duplicado no dice en qué equipo está la persona", dd == {"error": "data", "message": "Ese jugador ya está inscrito en este torneo"}, dd)
     check("oficina (la liga) sí ve el equipo", fails("gus", f"""select office_register('{L}','{Ag}','{P(name="Juan Pérez", birth_date="2000-05-01")}')""", "ya está inscrito en Lobos"))
     # --- topes de frecuencia que no se deshacen con errores
-    r = [json.loads(IP("9.9.9.9", "select register_by_link('AAAA-BBBB-CCCC','{}')")) for _ in range(11)]
-    check("enlace: tope por persona (IP) aunque cada intento falle", r[9] == {"error": "invalid"} and r[10] == {"error": "rate"}, r[-2:])
+    nr = IP("9.9.9.9", "select count(*) from generate_series(1,31) g where register_by_link('AAAA-BBBB-CCCC','{}')->>'error' = 'rate'")
+    check("enlace: tope por persona (IP), 30 cada 10 minutos, aunque cada intento falle", nr == "1", nr)
     check("enlace: otra persona no queda bloqueada", json.loads(IP("9.9.9.8", "select register_by_link('AAAA-BBBB-CCCC','{}')")) == {"error": "invalid"})
-    lk4 = val("gus", f"select create_reg_link('{L}','{Ag}', 200, 7)")
-    rr = [json.loads(IP(f"10.1.{i}.1", f"""select register_by_link('{lk4}','{P(name="Z")}')""")) for i in range(41)]
-    check("enlace: tope por enlace aunque cambien de IP", rr[39].get("error") == "data" and rr[40] == {"error": "rate"}, rr[-2:])
+    lk4 = val("gus", f"select create_reg_link('{L}','{Ag}', 5, 7)")
+    rr = [json.loads(IP(f"10.1.{i}.1", f"""select register_by_link('{lk4}','{P(name="Z")}')""")) for i in range(61)]
+    check("enlace: tope por enlace aunque cambien de IP (3 intentos por cupo, mínimo 60 por hora)", rr[59].get("error") == "data" and rr[60] == {"error": "rate"}, rr[-2:])
     check("enlace: datos enormes se rechazan", json.loads(IP("7.7.7.7", f"""select register_by_link('{lk3}','{P(name="X" * 4000, birth_date="1990-01-01")}')""")).get("error") == "data")
-    check("info del enlace: tope por persona", IP("6.6.6.6", "select count(*) from generate_series(1,31) g where reg_link_info('AAAA-BBBB-CCCC')->>'error' = 'rate'") == "1")
+    check("info del enlace: tope por persona", IP("6.6.6.6", "select count(*) from generate_series(1,61) g where reg_link_info('AAAA-BBBB-CCCC')->>'error' = 'rate'") == "1")
     check("página pública: tope por persona", IP("5.5.5.5", f"select count(*) from generate_series(1,601) g where public_league('{L}')->>'error' = 'rate'") == "1")
     check("las IPs no se guardan: solo una huella", val("srv", "select count(*) from rate_limits where k like '%9.9.9.9%' or k like '%10.1.%'") == "0" and val("srv", "select count(*) from rate_limits where bucket='reglink-ip' and length(k)=64") != "0")
     check("nadie lee los contadores ni el secreto", val("gus", "select count(*) from rate_limits").startswith("ERR") or val("gus", "select count(*) from rate_limits") == "0")

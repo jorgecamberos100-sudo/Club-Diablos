@@ -1874,7 +1874,7 @@ create or replace function public.reg_link_info(p_code text) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare cid text := upper(regexp_replace(left(coalesce(p_code, ''), 40), '[^A-Za-z0-9]', '', 'g')); x record; pv jsonb;
 begin
-  if not rate_ok('reglink-info', client_key(), 30, 600) then return jsonb_build_object('error', 'rate'); end if;
+  if not rate_ok('reglink-info', client_key(), 60, 600) then return jsonb_build_object('error', 'rate'); end if;
   select rl.*, lg.name as lname, lg.settings as lset, tn.name as tname, tt.name as team into x from registration_links rl join leagues lg on lg.id = rl.league_id join tournament_teams tt on tt.id = rl.team_id join tournaments tn on tn.id = tt.tournament_id
    where rl.code = substr(cid, 1, 4) || '-' || substr(cid, 5, 4) || '-' || substr(cid, 9, 4) and rl.active and rl.expires_at > now() and rl.uses < rl.max_uses and tt.status = 'active' and tn.status <> 'finished';
   if x.code is null then return jsonb_build_object('error', 'invalid'); end if;
@@ -1888,11 +1888,12 @@ language plpgsql security definer set search_path = public as $$
 declare cid text := upper(regexp_replace(left(coalesce(p_code, ''), 40), '[^A-Za-z0-9]', '', 'g')); rl registration_links; tt tournament_teams; pid uuid; rid uuid; cons jsonb;
 begin
   -- Los topes se cuentan ANTES de cualquier error (los errores se devuelven, no se lanzan, para que el conteo no se deshaga).
-  if not rate_ok('reglink-ip', client_key(), 10, 600) then return jsonb_build_object('error', 'rate'); end if;
+  -- Topes pensados para equipos que se registran juntos desde la misma red (misma IP): 30 intentos cada 10 minutos.
+  if not rate_ok('reglink-ip', client_key(), 30, 600) then return jsonb_build_object('error', 'rate'); end if;
   if p is null or jsonb_typeof(p) <> 'object' or length(p::text) > 3000 then return jsonb_build_object('error', 'data', 'message', 'Datos no válidos'); end if;
   select * into rl from registration_links where code = substr(cid, 1, 4) || '-' || substr(cid, 5, 4) || '-' || substr(cid, 9, 4) and active and expires_at > now() and uses < max_uses for update;
   if rl.code is null then return jsonb_build_object('error', 'invalid'); end if;
-  if not rate_ok('reglink-code', rl.code, 40, 3600) then return jsonb_build_object('error', 'rate'); end if;
+  if not rate_ok('reglink-code', rl.code, greatest(60, rl.max_uses * 3), 3600) then return jsonb_build_object('error', 'rate'); end if;
   select * into tt from tournament_teams where id = rl.team_id and status = 'active';
   if tt.id is null or (select status from tournaments where id = tt.tournament_id) = 'finished' then return jsonb_build_object('error', 'invalid'); end if;
   begin

@@ -8,14 +8,16 @@ Importante: todo lo de Supabase se probó contra un PostgreSQL local con un simu
 | 1. Cuentas, roles, ligas, planes configurables | Hecho y probado | Planes en tabla `plans`; la app pregunta `can()`, nunca "¿es Pro?". |
 | 1b. Invitaciones y Pro por contrato de liga | Hecho y probado | Código aleatorio de 48 bits, límite de intentos; el Pro de la liga es derivado y se quita solo al desvincular o vencer el contrato. |
 | 2. Gestión de equipos y jugadores | Hecho y probado | Equipos en base de datos con las mismas pantallas que los de archivo; Diablos y el club de ejemplo no se tocan. |
-| 3. Torneos, inscripción, calendario, resultados, tabla, goleo | Hecho y probado | Ver detalle abajo. |
-| 4. Administradores con permisos, sanciones, objeciones y protestas, finanzas de liga, bitácora, reportes | Hecho y probado | Ver detalle abajo. Los reportes salen como CSV (abre en Excel); falta PDF. |
+| 3. Torneos, inscripción, calendario, resultados, tabla, goleo | Hecho y probado | Ver detalle abajo. Desde la etapa 10 también grupos y eliminatorias. |
+| 4. Administradores con permisos, sanciones, objeciones y protestas, finanzas de liga, bitácora, reportes | Hecho y probado | Ver detalle abajo. Reportes en CSV y, desde la etapa 10, para imprimir o guardar como PDF. |
 | 5. Registro de jugadores, padrón central, credenciales | Hecho y probado | Ver detalle abajo. `match_events.player_id` sigue sin enlazarse al padrón (los goleadores se escriben a mano). |
 | 6. Página pública y componente incrustable | Hecho y probado (demo + SQL local) | Ver detalle abajo. |
 | 7a. Acta por foto con confirmación humana | Hecho y probado salvo el OCR real | Captura a mano e intérprete de texto probados; OCR en el celular y servicio propio **sin probar** (ver `docs/ACTAS.md`). |
 | 7b. Asistente por liga | Motor local hecho y probado; servicio con modelo **no desplegado** | Cupo diario en base de datos probado. Ver `docs/ASISTENTE.md`. |
 | 7c. WhatsApp oficial | Solo documentado, no implementado | `docs/WHATSAPP.md`. |
 | 8. Pulido móvil, guía de activación, revisión independiente | Hecho | `supabase/LEEME.md`; prueba móvil a 360 px; revisión por un agente aparte (abajo). |
+| 9. Seguridad, privacidad y preparación para Supabase real | Hecho y probado (local + demo) | Ver «Etapa 9». **Pendiente: probar en un proyecto real** (`supabase/LEEME.md` §6). |
+| 10. Grupos y eliminatorias, reportes PDF, exportaciones | Hecho y probado (local + demo) | Ver «Etapa 10». |
 
 ## Etapa 3 en detalle
 - Base de datos (`supabase/schema.sql`, sección "Etapa 5 del producto"): `tournaments`, `tournament_teams`, `league_matches`, `match_events`; todas con RLS (solo lectura para administradores de la liga) y escritura únicamente por funciones con permiso (`tournaments`, `schedule`, `results`).
@@ -59,18 +61,18 @@ Importante: todo lo de Supabase se probó contra un PostgreSQL local con un simu
 ## Límites conocidos de la etapa 5
 - Quien se registra por enlace no sube foto (un formulario anónimo con subida de archivos es un riesgo de abuso): la agrega el delegado o la liga al aprobar.
 - La credencial no lleva código QR ni hay una página para verificarla; el código es solo una referencia. Se puede agregar con la página pública.
-- Los menores de edad se marcan como «Menor», pero el consentimiento del tutor lo gestiona la liga fuera de la app (ver aviso de privacidad en la guía de activación).
+- Desde la etapa 9 la app pide y guarda el consentimiento (y el del tutor para menores); la validez legal del aviso la revisa la liga.
 - Las fotos solo se probaron con el almacenamiento simulado (modo demo) y con las políticas de storage cargadas en PostgreSQL local; falta una prueba real contra un proyecto de Supabase.
 
 ## Límites conocidos de la etapa 4
 - Los delegados de los equipos todavía no presentan objeciones ellos mismos desde su cuenta: las registra un administrador de la liga.
 - La evidencia de una sanción es texto o enlace; subir la foto o el archivo llega con el almacenamiento de imágenes (etapas 5 y 7).
 - Las suspensiones se registran y se ven, pero no bloquean automáticamente la captura de goles/alineaciones de ese jugador.
-- Reportes en PDF o impresos de la tabla/finanzas: pendiente (CSV sí).
+- ~~Reportes en PDF~~: resuelto en la etapa 10 (imprimir o guardar como PDF).
 
 ## Límites conocidos de la etapa 3
 - El cobro de la cuota de inscripción solo se muestra; su seguimiento llega con las finanzas de la liga (etapa 4).
-- Eliminatorias y grupos no existen todavía: solo liguilla todos contra todos (el calendario manual permite armar cualquier cruce).
+- ~~Eliminatorias y grupos~~: resuelto en la etapa 10.
 - La tarjeta amarilla/roja alimenta el desempate de juego limpio, pero aún no genera sanciones automáticas.
 - Los nombres de jugadores en el acta son texto libre hasta que exista el padrón de la etapa 5.
 
@@ -88,21 +90,38 @@ Un agente aparte, sin haber visto el trabajo, revisó el repositorio y encontró
 - La opción «aprobación de delegados» **no se aplicaba** (todo lo que llega por delegado o enlace siempre espera aprobación). Se quitó la casilla y se dejó el texto honesto; no se automatiza porque un enlace abierto no debe activar jugadores sin revisión.
 - El simulador de pruebas ahora imita los privilegios por omisión de Supabase; así dos pruebas que pasaban "por falta de permisos" se reescribieron para comprobar que los datos no cambian.
 
-## Límites conocidos que quedan (de la revisión, sin corregir)
-- `register_by_link` (sin cuenta) deja sondear si una persona ya está inscrita en otro equipo, sin límite de intentos.
-- El logo de liga acepta cualquier dominio con la forma de una URL de Storage; los almacenes `actas` y `player-photos` no limitan tamaño/tipo ni revisan el plan al subir.
-- Cualquier visitante puede agotar el cupo diario del asistente; el día cuenta en UTC.
-- Reaplicar `schema.sql` vuelve a agregar `actas` al plan base aunque se haya quitado; las funciones nuevas no se agregan solas a planes ya existentes.
-- Paridad demo/SQL con diferencias menores (formato del marcador de actas, validación de ruta, marca de liga con `data:`); el demo no simula el cupo del asistente.
-- Pruebas con checks constantes (`True`) en `test_public.py` y `test_actas.py`; no hay prueba de navegador con HTML en nombres.
-- Tesseract.js se carga desde un CDN sin integridad, y no se verificó de dónde descarga el idioma.
-- Google Fonts se carga también en la página pública.
+## Etapa 9 en detalle (seguridad, privacidad y preparación para producción, 23 oct 2026)
+- **Registro por enlace sin sondeo:** quien ya está inscrito recibe exactamente la misma respuesta que alguien nuevo; no se crea nada y la liga lo ve en la bitácora («registro duplicado»). Un envío por enlace o por delegado nunca modifica a una persona que ya existe en el padrón. Al delegado no se le dice en qué equipo está la persona.
+- **Topes de frecuencia en la base de datos**, contados antes de cualquier error (los errores se devuelven, no se lanzan, para que el conteo no se deshaga): enlace de registro 30 intentos cada 10 min por red y hasta 3 por cupo por hora por enlace; información del enlace 60 cada 10 min; página pública 600 cada 10 min; asistente 20 por hora por persona y el tope diario de la liga (el día cuenta en la zona horaria de la liga); delegado 60 por hora. La IP se toma de `X-Forwarded-For` (guía de Supabase) y se guarda solo como huella con un secreto; los topes por enlace, liga y cuenta no dependen de la IP. Tamaño máximo de los datos de registro: 3 KB.
+- **Archivos:** cada almacén tiene tope (1 a 5 MB) y solo admite JPG, PNG o WEBP; la ruta, el permiso y el plan se validan al subir (`storage_can_write`); las actas solo para partidos de esa liga; el almacén público ya no se puede listar. En el navegador se rechaza antes de subir lo que no es foto.
+- **Privacidad por omisión:** la página pública no publica nombres (la liga elige «iniciales» o «completo»); si la liga marca que hay menores, la base impide publicarlos; hora y cancha se pueden ocultar. El reglamento escrito ya no sale en la API pública. El logo de la liga solo puede ser un archivo de nuestro almacén.
+- **Aviso de privacidad y consentimiento:** cada liga publica un aviso versionado (plantilla con partes [entre corchetes] por completar; no es asesoría legal). Sin aviso no se registra a nadie. Quien se registra por enlace lo acepta; la liga o el delegado declaran el consentimiento; para menores de 18 años se exigen nombre y autorización de madre, padre o tutor. Queda guardado con la versión. Si el aviso cambia, lo aceptado antes ya no vale en el enlace.
+- **Datos mínimos:** el documento de identidad ya no se pide por omisión; la fecha de nacimiento es obligatoria (sin ella no se sabe si es menor). **Derecho a borrar:** «Borrar sus datos personales» deja un registro anónimo y elimina la foto.
+- **Finanzas de equipos de la app privadas** por omisión (solo jugadores aprobados); el administrador puede abrirlas. Diablos y el ejemplo siguen como siempre.
+- **Preparación para Supabase:** `supabase/verificar.sql` (10 revisiones de solo lectura, probadas también en negativo), `tests/check_secrets.sh` (sin claves secretas en archivos ni historial), migraciones de datos de una sola vez (`schema_migrations`), reaplicar el esquema con datos sin cambiar ninguna fila (probado), registro con «Confirm email» encendido, guía con clave publicable y pasos verificados en la documentación de Supabase.
+- **Prueba integral** de los 10 flujos (`tests/e2e/test_integral.py`, con control positivo) y **matriz de acceso** en la base (anon, cuenta sin rol, otra liga y administrador limitado no leen ni escriben datos ajenos).
+
+## Etapa 10 en detalle (formatos y reportes)
+- Formatos: liga, grupos, eliminación directa, y grupos con eliminación (pasan 1 a 4 por grupo). Sorteo equilibrado de grupos, tablas por grupo con los clasificados marcados, eliminatoria sembrada (el 1 y el 2 solo pueden cruzarse en la final; 1º de un grupo contra 2º de otro), siguiente ronda con los ganadores, penales en empates de eliminatoria y campeón.
+- La base valida que los partidos de grupo sean del mismo grupo, que la eliminatoria espere a que terminen los grupos, que cada ronda sea entre los ganadores, los penales, y que no se corrija una llave si la siguiente ronda ya está armada. Los torneos que ya existían siguen como liga.
+- Reportes para imprimir o «Guardar como PDF»: tabla (con grupos y llaves), calendario, goleo, saldos de finanzas, sanciones y planillas por equipo para el día de partido (sin datos personales). Exportación CSV de tabla, calendario y goleo.
+- Pruebas: 19 unitarias de llaves, 8 de reportes, 21 de base de datos y 23 de navegador (formatos y reportes).
+
+## Riesgos que siguen abiertos
+- **Nada se ha probado contra un proyecto real de Supabase** (correo, Google, almacenamiento, cabecera `X-Forwarded-For`, Advisors). Es lo primero antes de usarlo con datos reales.
+- Si Supabase no pasara la IP en `X-Forwarded-For`, los topes por persona se volverían comunes para todos los visitantes (más estrictos); los topes por enlace y por liga siguen. Está en la lista de comprobación.
+- Cualquier persona puede gastar el tope diario del asistente de una liga (solo afecta al servicio con modelo, que no existe todavía; las respuestas locales siguen).
+- `profiles.photo_url` y el escudo de equipos de la app guardan una URL completa (funciones de equipo anteriores): no se restringió el dominio como se hizo con el logo de liga.
+- Tesseract.js (lectura en el celular) se descarga de un CDN sin verificación de integridad y descarga sus datos de idioma de servidores de terceros; no se probó.
+- supabase-js está fijado en 2.45.4. Supabase indica que cualquier versión funciona con la clave publicable, pero no se pudo comprobar aquí: si el inicio de sesión falla con la clave publicable, actualizar la versión es lo siguiente a revisar.
+- La plantilla del aviso de privacidad no es un documento legal; el consentimiento de menores lo declara la liga o el delegado (la app guarda quién lo declaró).
+- Paridad demo/SQL con diferencias menores conocidas (formato del marcador de actas, ruta de archivos, el demo no simula topes por IP).
 
 ## Lista priorizada de pendientes
-1. **Activar Supabase real y hacer la lista de comprobación de `supabase/LEEME.md` §6** (nada de esto corrió contra un proyecto real).
-2. Probar OCR con actas reales y decidir si vale un servicio de pago.
-3. Aviso de privacidad y consentimiento de menores (la liga lo gestiona fuera de la app).
-4. Límite de intentos y topes de subida en registro por enlace y almacenes.
-5. Precios y planes reales (hoy configurables y vacíos).
-6. Reportes en PDF; eliminatorias y grupos; sanciones que bloqueen alineaciones.
-7. Avisos por WhatsApp oficial (`docs/WHATSAPP.md`) si la liga lo quiere y acepta el costo por mensaje.
+1. **Activar Supabase real y completar `supabase/LEEME.md` §6** (incluye la prueba de topes por IP y el Security Advisor). Sin esto no declarar la app lista para producción.
+2. Revisión legal del aviso de privacidad y del flujo de consentimiento de menores por parte del responsable de cada liga.
+3. Probar el OCR con actas reales; decidir si vale un servicio de lectura.
+4. Restringir también las URLs de escudos y fotos de perfil de los equipos de la app a nuestro almacén.
+5. Enlazar goles y tarjetas al padrón (hoy son texto) para que las suspensiones bloqueen alineaciones.
+6. Precios y planes reales (hoy configurables y vacíos).
+7. Avisos por WhatsApp oficial (`docs/WHATSAPP.md`) si la liga acepta el costo por mensaje.

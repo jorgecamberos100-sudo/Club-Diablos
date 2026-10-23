@@ -56,7 +56,7 @@ Esto **no** se pudo probar sin un proyecto real. Usa dos navegadores (o uno norm
 - [ ] Subir la foto de un acta, revisar y confirmar; en **Storage > actas** el archivo sigue ahí.
 - [ ] Con una cuenta administradora que solo tenga «calendario»: no puede capturar resultados, ver finanzas ni el padrón.
 - [ ] Intentar subir un archivo que no sea foto (por ejemplo un PDF) como foto o acta: se rechaza. (Las fotos grandes la app las reduce antes de subir.)
-- [ ] Topes por IP: abrir muchas veces seguidas un enlace de registro falso desde la misma conexión; después de unos 30 intentos debe decir «Espera un momento». Si **nunca** lo dice, Supabase no está pasando la IP (`X-Forwarded-For`) y solo quedan los topes por enlace y por liga: anótalo.
+- [ ] Topes por IP: abrir muchas veces seguidas un enlace de registro falso desde la misma conexión; después de unos 60 intentos en 10 minutos debe decir «Espera un momento». Si **nunca** lo dice, Supabase no está pasando la IP (`X-Forwarded-For`) y solo quedan los topes por enlace y por liga: anótalo.
 - [ ] **Advisors** (seguridad) en el panel de Supabase: sin errores de tablas sin RLS. Si marca funciones `SECURITY DEFINER` ejecutables, deben ser solo las de la lista de abajo.
 - [ ] Volver a correr `verificar.sql`: todo OK.
 

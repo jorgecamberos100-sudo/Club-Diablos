@@ -867,7 +867,7 @@ function demo() {
       const d = db();
       if (!p || typeof p !== "object" || JSON.stringify(p).length > 3000) return { error: "data", message: "Datos no válidos" };
       const rl = liveLink(d, code); if (!rl) return { error: "invalid" };
-      if (!demoRate(d, "reglink-code:" + rl.code, 40, 3600)) { save(d); return { error: "rate" }; }
+      if (!demoRate(d, "reglink-code:" + rl.code, Math.max(60, rl.max_uses * 3), 3600)) { save(d); return { error: "rate" }; }
       const t = d.ttems.find((x) => x.id === rl.team_id);
       try {
         const cons = consentCheck(d, rl.league_id, p, "link"), pl = upsertPlayer(d, rl.league_id, p, "pending", false);
