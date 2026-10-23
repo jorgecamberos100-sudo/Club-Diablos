@@ -13,6 +13,7 @@ import { mount, wireSheet } from "./cloudui.js";
 import { restoreRoute, on } from "./cloud.js";
 import { renderPlatform } from "./platform.js";
 import { renderPublic } from "./public.js";
+import { mountChat } from "./chatbot.js";
 
 // Orden de la barra inferior. Finanzas va al final: lo primero es el juego.
 const VIEWS = {
@@ -72,7 +73,7 @@ async function route() {
     // Mi cuenta y panel de liga: rutas propias, fuera de los equipos.
     if (club === "p" || club === "embed") {
       current = null;
-      await renderPublic(app, location.hash.replace(/^#\/?/, "").split("/"));
+      await renderPublic(app, location.hash.replace(/^#\/?/, "").split("/"), { chatMount: mountChat });
       window.scrollTo(0, 0);
       return;
     }

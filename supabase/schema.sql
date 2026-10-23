@@ -2021,3 +2021,43 @@ end $$;
 
 revoke all on function public.create_acta(text,uuid,text), public.save_acta_draft(text,uuid,jsonb,text,text), public.confirm_acta(text,uuid), public.discard_acta(text,uuid,text) from public, anon;
 grant execute on function public.create_acta(text,uuid,text), public.save_acta_draft(text,uuid,jsonb,text,text), public.confirm_acta(text,uuid), public.discard_acta(text,uuid,text) to authenticated;
+
+-- =====================================================================================================
+-- Etapa 7b: control de costo del asistente de la liga.
+-- El asistente solo ve los datos públicos (public_tournament). Cada pregunta que cueste dinero (un modelo de lenguaje
+-- detrás de un servicio propio) debe pasar antes por chat_take: tope diario por liga que fija la propia liga.
+-- La respuesta local por reglas no cuesta y no pasa por aquí.
+-- =====================================================================================================
+create table if not exists public.chat_usage (
+  league_id text not null references public.leagues(id) on delete cascade,
+  day date not null default current_date,
+  n int not null default 0,
+  primary key (league_id, day)
+);
+alter table public.chat_usage enable row level security;   -- sin políticas: nadie la lee ni escribe directo
+
+create or replace function public.chat_take(l text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare ps jsonb := public_settings(l); lim int; cnt int;
+begin
+  if not exists (select 1 from leagues where id = l) or not (ps->>'enabled')::boolean or not (ps->>'chat')::boolean or not league_feature(l, 'public_page') then
+    return jsonb_build_object('ok', false, 'error', 'off'); end if;
+  lim := (ps->>'chat_daily')::int;
+  if lim <= 0 then return jsonb_build_object('ok', false, 'error', 'limit', 'limit', lim); end if;
+  insert into chat_usage as u (league_id, day, n) values (l, current_date, 1)
+    on conflict (league_id, day) do update set n = u.n + 1 where u.n < lim returning u.n into cnt;
+  if cnt is null then return jsonb_build_object('ok', false, 'error', 'limit', 'limit', lim); end if;
+  return jsonb_build_object('ok', true, 'remaining', lim - cnt, 'limit', lim);
+end $$;
+revoke all on function public.chat_take(text) from public;
+grant execute on function public.chat_take(text) to anon, authenticated;
+
+-- Uso de hoy, para que la liga vea cuánto lleva (solo administradores con permiso de ajustes).
+create or replace function public.chat_usage_today(l text) returns int
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_league_admin(l, 'settings') then raise exception 'Sin permiso'; end if;
+  return coalesce((select n from chat_usage where league_id = l and day = current_date), 0);
+end $$;
+revoke all on function public.chat_usage_today(text) from public, anon;
+grant execute on function public.chat_usage_today(text) to authenticated;

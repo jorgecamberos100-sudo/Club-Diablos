@@ -27,7 +27,7 @@ async def main():
 
     # activar
     await pg.goto(B + f"#/liga/{lid}/ajustes"); await pg.reload(); await pg.wait_for_selector("form[data-lf=pub]")
-    await pg.check("form[data-lf=pub] input[name=enabled]"); await pg.click("form[data-lf=pub] button[type=submit]"); await toast(pg, "Página pública guardada")
+    await pg.check("form[data-lf=pub] input[name=enabled]"); await pg.check("form[data-lf=pub] input[name=chat]"); await pg.click("form[data-lf=pub] button[type=submit]"); await toast(pg, "Página pública guardada")
     await pg.goto(pub); await pg.reload(); await pg.wait_for_selector("text=Todavía no hay torneos publicados"); check("con la página activa, un borrador no aparece", True)
 
     # publicar el torneo
@@ -40,6 +40,12 @@ async def main():
     check("sin cuenta no hay botones de administración", await pg.locator("text=Resultado").count() == 0 and await pg.locator(".tabbar").count() == 0)
     await pg.click("[data-pt=calendario]"); await pg.wait_for_selector("h3:text-is('J3')"); check("calendario público con marcador", "2 - 1" in await pg.inner_text("body"))
     await pg.click("[data-pt=goleo]"); await pg.wait_for_selector("table.tbl"); check("goleo público con nombres", "Pepe" in await pg.inner_text("table.tbl"))
+    await pg.wait_for_selector(".chat"); await pg.click(".chat-ideas button >> nth=0"); await pg.wait_for_selector(".chat-bot")
+    check("el asistente responde con los datos públicos", "Tabla" in await pg.inner_text(".chat-bot") and "Rayos" in await pg.inner_text(".chat-bot"), await pg.inner_text(".chat-log"))
+    await pg.wait_for_timeout(1600); await pg.fill(".chat-form input[name=q]", "¿Quién ganará el mundial?"); await pg.click(".chat-form button"); await pg.wait_for_selector(".chat-bot >> nth=1")
+    check("lo que no sabe, lo dice", "No tengo ese dato" in await pg.locator(".chat-bot").nth(1).inner_text())
+    await pg.fill(".chat-form input[name=q]", "otra"); await pg.click(".chat-form button"); await pg.wait_for_selector(".chat-bot:has-text('Un momento')")
+    check("hay freno entre preguntas seguidas", True)
     check("no se fuga el id de usuario ni el correo", "ana@liga.com" not in await pg.content())
 
     # quitar nombres de goleadores
@@ -50,6 +56,7 @@ async def main():
 
     # integrable
     await pg.goto(B + f"#/embed/{lid}/{tid}/tabla"); await pg.reload(); await pg.wait_for_selector("table.tbl")
+    check("la versión integrable no lleva asistente", await pg.locator(".chat").count() == 0)
     check("la versión integrable no lleva encabezado ni barra", await pg.locator("header.top").count() == 0 and await pg.locator(".tabbar").count() == 0)
     check("el color de la liga se aplica", await pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--red').trim()") != "")
     check("la tabla integrable cabe en el móvil", await pg.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 1)

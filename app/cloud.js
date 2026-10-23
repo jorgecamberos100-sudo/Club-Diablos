@@ -214,6 +214,7 @@ async function supa() {
     async publicLeague(l) { return ok(await sb.rpc("public_league", { l })); },
     async publicTournament(l, tid) { return ok(await sb.rpc("public_tournament", { l, tid })); },
     async publicState(l) { return ok(await sb.rpc("public_page_state", { l })); },
+    async chatUsage(l) { return ok(await sb.rpc("chat_usage_today", { l })); },
     async setPublicPage(l, enabled, scorers, chat, chatDaily) { ok(await sb.rpc("set_public_page", { l, enabled, scorers, chat: !!chat, chat_daily: chatDaily ?? 100 })); },
     // ----- actas desde foto: el original queda guardado; nada es oficial hasta confirmar -----
     async uploadActa(l, mid, blob) {
@@ -651,6 +652,7 @@ function demo() {
       lg.settings = { ...(lg.settings || {}), brand: { color: color.toLowerCase(), logo: blob ? await dataURL(blob) : cur.logo || null } }; log(d, l, "league.brand", { color: color.toLowerCase(), logo_changed: !!blob }); save(d);
     },
     async publicState(l) { const d = db(); ensure(isLeagueAdmin(d, l)); return pubSettings(d, l); },
+    async chatUsage(l) { const d = db(); ensure(isLeagueAdmin(d, l, "settings")); return (d.chatUse || {})[l + "|" + new Date().toISOString().slice(0, 10)] || 0; },
     async setPublicPage(l, enabled, scorers, chat, chatDaily) {
       const d = db(); ensure(isLeagueAdmin(d, l, "settings")); chatDaily = chatDaily ?? 100; ensure(typeof enabled === "boolean" && typeof scorers === "boolean" && chatDaily >= 0 && chatDaily <= 5000, "Datos no válidos");
       if (enabled) await lneed(l, "public_page"); const lg = d.leagues.find((x) => x.id === l); lg.settings = { ...(lg.settings || {}), public: { enabled, scorers, chat: !!chat, chat_daily: chatDaily } };

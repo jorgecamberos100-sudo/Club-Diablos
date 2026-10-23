@@ -34,7 +34,8 @@ export async function render(ctx) {
       <form data-lf="pub" class="fld"><label class="opt"><input type="checkbox" name="enabled"${ps.enabled ? " checked" : ""}><span>Página pública activa</span></label>
       <label class="opt"><input type="checkbox" name="scorers"${ps.scorers ? " checked" : ""}><span>Mostrar nombres de goleadores</span></label>
       <label class="opt"><input type="checkbox" name="chat"${ps.chat ? " checked" : ""}><span>Asistente de preguntas en la página</span></label>
-      <label>Preguntas al asistente por día (máximo)<input name="daily" type="number" min="0" max="5000" value="${ps.chat_daily}"></label><button class="btn" type="submit">Guardar</button></form>`
+      <label>Preguntas al asistente por día (máximo)<input name="daily" type="number" min="0" max="5000" value="${ps.chat_daily}"></label>
+      <p class="hint">Las respuestas por reglas no cuestan. El tope aplica al servicio con modelo de lenguaje, si tu liga lo configura${ps.chat ? "; hoy lleva " + (await api.chatUsage(ctx.id)) + " pregunta(s) contadas" : ""}.</p><button class="btn" type="submit">Guardar</button></form>`
       + (ps.enabled ? `<h3>Enlace</h3><div class="cl-row static"><span><b class="code" style="font-size:14px">${esc(link)}</b></span><span class="acts">${btn("Copiar", `data-la="copy" data-v="${esc(link)}"`, "ghost")}<a class="btn sm ghost" href="${esc(waLink("Tabla y calendario de " + ctx.l.name + ": " + link))}" target="_blank" rel="noopener">WhatsApp</a></span></div>
         <h3>Para tu sitio web</h3>${ts.length ? ts.map((t) => `<p class="hint">${esc(t.name)}</p><textarea readonly rows="3" class="snip" aria-label="Código para ${esc(t.name)}">${esc(snip(t))}</textarea>${btn("Copiar código", `data-la="copy" data-v="${esc(snip(t))}"`, "ghost")}`).join("") : `<p class="hint">Publica un torneo para obtener su código.</p>`}
         <p class="hint">Cambia «tabla» por «calendario» o «goleo» en el código para mostrar otra parte.</p>` : ""));
