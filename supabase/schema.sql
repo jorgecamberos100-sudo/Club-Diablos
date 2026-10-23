@@ -185,3 +185,55 @@ revoke insert, update, delete on public.profiles, public.results from anon;
 grant execute on function public.join_team(text,text,text,text), public.claimed(text,text),
   public.team_votes(text,text), public.team_availability(text,text) to authenticated;
 grant execute on function public.claimed(text,text) to anon;
+
+-- ============ Pagos ============
+-- El jugador reporta su pago con comprobante (queda pendiente); el administrador lo aprueba con un toque.
+-- El administrador también registra pagos en efectivo, uniformes y lo que se paga a la liga (kind = 'salida').
+create table if not exists public.payments (
+  id uuid primary key default gen_random_uuid(),
+  club_id text not null, team_id text not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  player_id text,
+  kind text not null check (kind in ('cuota','uniforme','salida')),
+  item text,
+  amount numeric(10,2) not null check (amount > 0 and amount <= 50000),
+  detail text check (detail is null or length(detail) <= 120),
+  receipt text,
+  status text not null default 'pending' check (status in ('pending','approved','rejected')),
+  created_at timestamptz not null default now(),
+  decided_at timestamptz
+);
+create index if not exists payments_team on public.payments (club_id, team_id, status);
+
+-- Pagos aprobados, sin comprobantes ni cuentas (para que cualquiera vea las cuentas del equipo).
+create or replace function public.team_paid(c text, t text)
+returns table (kind text, item text, player_id text, amount numeric, detail text, decided_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select kind, item, player_id, amount, detail, decided_at from payments
+  where club_id = c and team_id = t and status = 'approved' order by decided_at $$;
+
+alter table public.payments enable row level security;
+drop policy if exists pay_read on public.payments;
+create policy pay_read on public.payments for select using (user_id = auth.uid() or is_admin(club_id, team_id));
+drop policy if exists pay_insert on public.payments;
+create policy pay_insert on public.payments for insert with check (
+  user_id = auth.uid() and (
+    is_admin(club_id, team_id)
+    or (status = 'pending' and decided_at is null and kind in ('cuota','uniforme')
+        and is_member(club_id, team_id) and player_id = my_player(club_id, team_id))));
+drop policy if exists pay_decide on public.payments;
+create policy pay_decide on public.payments for update using (is_admin(club_id, team_id)) with check (is_admin(club_id, team_id));
+
+grant select, insert, update on public.payments to authenticated;
+grant execute on function public.team_paid(text,text) to anon, authenticated;
+
+-- Comprobantes: privados. Ruta club/equipo/usuario/archivo. Los ve quien lo subió y el administrador.
+insert into storage.buckets (id, name, public) values ('receipts', 'receipts', false) on conflict (id) do nothing;
+drop policy if exists receipts_write on storage.objects;
+create policy receipts_write on storage.objects for insert with check (
+  bucket_id = 'receipts' and (storage.foldername(name))[3] = auth.uid()::text
+  and is_member((storage.foldername(name))[1], (storage.foldername(name))[2]));
+drop policy if exists receipts_read on storage.objects;
+create policy receipts_read on storage.objects for select using (
+  bucket_id = 'receipts' and ((storage.foldername(name))[3] = auth.uid()::text
+  or is_admin((storage.foldername(name))[1], (storage.foldername(name))[2])));

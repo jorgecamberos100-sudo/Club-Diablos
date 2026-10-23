@@ -10,6 +10,7 @@ import * as alineacion from "./views/alineacion.js";
 import * as finanzas from "./views/cuentas.js";
 import { enrich } from "./live.js";
 import { mount, wireSheet } from "./cloudui.js";
+import { restoreRoute } from "./cloud.js";
 
 // Orden de la barra inferior. Finanzas va al final: lo primero es el juego.
 const VIEWS = {
@@ -103,6 +104,9 @@ async function route() {
 }
 
 window.addEventListener("hashchange", () => { document.getElementById("sheet").hidden = true; route(); });
+// Al volver de entrar con Google, regresa a la sección donde estaba.
+const back = restoreRoute();
+if (back && back.back && !location.hash) history.replaceState(null, "", location.pathname + location.search + back.back);
 route();
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});

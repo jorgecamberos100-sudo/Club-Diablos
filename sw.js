@@ -1,5 +1,5 @@
 // Siempre pide la versión más nueva a internet; la copia guardada solo se usa sin conexión.
-const CACHE = "app-v3";
+const CACHE = "app-v4";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {

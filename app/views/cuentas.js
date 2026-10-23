@@ -20,12 +20,18 @@ function mineHtml(ctx, C, mine) {
   else { big = "Estás al corriente"; cls = "ok"; }
   const multa = c.multa ? `<b>${money(C.share)}</b>` : `<span class="why">No aplica${c.why ? " · " + esc(c.why) : ""}</span>`;
   const contacto = esc(ctx.club.contact || "el administrador");
+  const L = ctx.live, mineLive = L && L.approved && L.member.player_id === c.player;
   const nota = c.saldo < -0.005
-    ? `<p class="hint">Para pagar, avísale a ${contacto} por privado y mándale tu comprobante para que lo registre.</p>`
+    ? (L && !L.error ? (mineLive ? "" : `<p class="hint">¿Ya pagaste? Entra con Google en Inicio y manda tu comprobante desde aquí; tu cuenta se actualiza sola.</p>`)
+      : `<p class="hint">Para pagar, avísale a ${contacto} por privado y mándale tu comprobante para que lo registre.</p>`)
     : c.saldo > 0.005 ? `<p class="hint">Diste de más: ese dinero queda a tu favor y se regresa o se aplica a lo que acuerdes con ${contacto}.</p>` : "";
+  const ST = { pending: ["due", "En revisión"], rejected: ["na", "No aprobado"] };
+  const pays = mineLive ? L.myPays.filter((p) => ST[p.status]).slice(0, 5) : [];
+  const payBox = mineLive ? `${pays.length ? `<ul class="acct flat mypays">${pays.map((p) => `<li><span>${p.kind === "uniforme" ? "Uniforme" : "Pago"} ${money(p.amount)}</span><span class="chip ${ST[p.status][0]}">${ST[p.status][1]}</span></li>`).join("")}</ul>` : ""}
+    <button type="button" class="btn pay-go" data-cl="pay">Ya pagué · mandar comprobante</button>` : "";
   return `<div class="mine ${cls}"><div class="mine-big">${esc(big)}</div>
     <ul class="acct flat"><li><span>Cuota</span><b>${money(fin.cuota)}</b></li><li><span>Multa</span>${multa}</li>
-    <li class="sum"><span>Te toca en total</span><b>${money(c.toca)}</b></li><li><span>Has dado</span><b>${money(c.aportado || 0)}</b></li></ul>${nota}</div>`;
+    <li class="sum"><span>Te toca en total</span><b>${money(c.toca)}</b></li><li><span>Has dado</span><b>${money(c.aportado || 0)}</b></li></ul>${nota}${payBox}</div>`;
 }
 
 function faqHtml(ctx, C, q) {
@@ -69,7 +75,7 @@ export function render(ctx) {
   const num = Object.fromEntries(ctx.team.roster.map((r) => [r.player, r.number]));
   C.cuentas.forEach((c) => { c.number = num[c.player] || ""; });
   const vars = textVars(fin, C, ctx.club.contact);
-  const mine = store(ctx.key + ":mine") || "";
+  const mine = (ctx.live && ctx.live.approved && ctx.live.member.player_id) || store(ctx.key + ":mine") || "";
   let h = "";
 
   h += `<p class="updated">Cuentas actualizadas el ${esc(fecha(fin.updated))}</p>`;

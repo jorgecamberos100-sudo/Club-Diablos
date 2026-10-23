@@ -19,7 +19,20 @@ const ERR = {
   "User already registered": "Ese correo ya tiene cuenta. Toca «Ya tengo cuenta».",
   "Password should be at least": "La contraseña debe tener al menos 6 caracteres.",
   "Unable to validate email": "Escribe un correo válido.",
+  "provider is not enabled": "La entrada con Google todavía no está activada. Avísale a Metra.",
+  "payments_amount": "Escribe una cantidad mayor a cero.",
 };
+
+// Al volver de Google se regresa a la misma sección de la app.
+const BACK = "auth:back";
+export function restoreRoute() {
+  try {
+    const u = new URL(location.href), back = localStorage.getItem(BACK);
+    if (u.searchParams.has("code") || u.searchParams.has("error")) return { back, clean: () => { try { localStorage.removeItem(BACK); } catch (e) { /* nada */ } history.replaceState(null, "", location.pathname + location.hash); } };
+  } catch (e) { /* sin almacenamiento */ }
+  return null;
+}
+const rpath = (c, t, u) => `${c}/${t}/${u}/${Date.now()}.jpg`;
 export function friendly(e) {
   const m = (e && (e.message || e.details)) || String(e);
   const k = Object.keys(ERR).find((x) => m.includes(x));
@@ -29,7 +42,9 @@ export function friendly(e) {
 // ---------- Supabase ----------
 async function supa() {
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm");
-  const sb = createClient(CLOUD.url, CLOUD.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+  const sb = createClient(CLOUD.url, CLOUD.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "pkce" } });
+  const back = restoreRoute();
+  if (back) { await sb.auth.getSession(); back.clean(); }
   const ok = ({ data, error }) => { if (error) throw error; return data; };
   const uid = async () => { const { data } = await sb.auth.getSession(); return data.session ? data.session.user.id : null; };
   const me = async (c, t) => {
@@ -43,6 +58,10 @@ async function supa() {
       if (!data.session) throw new Error("Unable to validate email: la cuenta necesita confirmar correo; desactiva «Confirm email» en Supabase.");
     },
     async signIn(email, pw) { ok(await sb.auth.signInWithPassword({ email, password: pw })); },
+    async signInGoogle() {
+      try { localStorage.setItem(BACK, location.hash); } catch (e) { /* sin almacenamiento */ }
+      ok(await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } }));
+    },
     async signOut() { await sb.auth.signOut(); },
     membership: me,
     async claimed(c, t) { return ok(await sb.rpc("claimed", { c, t })) || []; },
@@ -84,6 +103,34 @@ async function supa() {
       if (rows.length) ok(await sb.from("match_votes").insert(rows));
       if (mvp) ok(await sb.from("mvp_votes").insert({ club_id: c, team_id: t, match_id: match, voter: u, target: mvp }));
     },
+    // ----- pagos -----
+    async paid(c, t) { return ok(await sb.rpc("team_paid", { c, t })) || []; },
+    async myPayments(c, t) {
+      const u = await uid(); if (!u) return [];
+      return ok(await sb.from("payments").select("*").eq("club_id", c).eq("team_id", t).eq("user_id", u).neq("kind", "salida").order("created_at", { ascending: false }).limit(20));
+    },
+    async pendingPayments(c, t) {
+      const rows = ok(await sb.from("payments").select("*").eq("club_id", c).eq("team_id", t).eq("status", "pending").order("created_at"));
+      await Promise.all(rows.filter((r) => r.receipt).map(async (r) => {
+        const { data } = await sb.storage.from("receipts").createSignedUrl(r.receipt, 3600); r.receipt_url = data ? data.signedUrl : null;
+      }));
+      return rows;
+    },
+    async reportPayment(c, t, { kind, amount, detail, file }) {
+      const m = await me(c, t); if (!m || m.status !== "approved" || !m.player_id) throw new Error("Sin permiso");
+      if (!(amount > 0)) throw new Error("payments_amount");
+      let receipt = null;
+      if (file) { receipt = rpath(c, t, m.user_id); ok(await sb.storage.from("receipts").upload(receipt, file, { contentType: "image/jpeg" })); }
+      ok(await sb.from("payments").insert({ club_id: c, team_id: t, user_id: m.user_id, player_id: m.player_id, kind, amount, detail: detail || null, receipt }));
+    },
+    async adminPayment(c, t, { kind, item, player, amount, detail }) {
+      if (!(amount > 0)) throw new Error("payments_amount");
+      const u = await uid(), now = new Date().toISOString();
+      ok(await sb.from("payments").insert({ club_id: c, team_id: t, user_id: u, player_id: player || null, kind, item: item || null, amount, detail: detail || null, status: "approved", decided_at: now }));
+    },
+    async decidePayment(c, t, id, status) {
+      ok(await sb.from("payments").update({ status, decided_at: new Date().toISOString() }).eq("club_id", c).eq("team_id", t).eq("id", id));
+    },
   };
 }
 
@@ -91,7 +138,8 @@ async function supa() {
 function demo() {
   const K = "demo-db";
   const load = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch (e) { return {}; } };
-  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [] }, load());
+  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [] }, load());
+  const dataURL = (f) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
   const save = (d) => { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ } };
   const cur = (d) => { const u = d.users.find((x) => x.id === d.session); if (!u) throw new Error("Inicia sesión primero"); return u; };
   const same = (c, t) => (x) => x.club_id === c && x.team_id === t;
@@ -108,6 +156,12 @@ function demo() {
       const u = { id: "u" + (d.users.length + 1) + Math.random().toString(36).slice(2, 6), email, pw }; d.users.push(u); d.session = u.id; save(d);
     },
     async signIn(email, pw) { const d = db(); const u = d.users.find((x) => x.email === email && x.pw === pw); ensure(u, "Invalid login credentials"); d.session = u.id; save(d); },
+    // En la prueba, "Google" crea una cuenta nueva al instante.
+    async signInGoogle() {
+      const d = db(), n = d.users.length + 1;
+      const u = { id: "g" + n + Math.random().toString(36).slice(2, 6), email: "jugador" + n + "@gmail.com", pw: null }; d.users.push(u); d.session = u.id; save(d);
+      setTimeout(() => window.__reload && window.__reload(), 0);
+    },
     async signOut() { const d = db(); d.session = null; save(d); },
     async membership(c, t) { const d = db(); return d.session ? mem(d, c, t) || null : null; },
     async claimed(c, t) { return db().members.filter((m) => same(c, t)(m) && m.player_id && m.status !== "rejected").map((m) => m.player_id); },
@@ -165,5 +219,20 @@ function demo() {
       if (mvp) { ensure(mvp !== m.player_id); d.mvp.push({ club_id: c, team_id: t, match, voter: m.user_id, target: mvp }); }
       save(d);
     },
+    // ----- pagos -----
+    async paid(c, t) { return db().pays.filter((p) => same(c, t)(p) && p.status === "approved").map(({ kind, item, player_id, amount, detail, decided_at }) => ({ kind, item, player_id, amount, detail, decided_at })); },
+    async myPayments(c, t) { const d = db(); return d.pays.filter((p) => same(c, t)(p) && p.user_id === d.session && p.kind !== "salida").reverse().slice(0, 20); },
+    async pendingPayments(c, t) { const d = db(); ensure(isAdmin(d, c, t)); return d.pays.filter((p) => same(c, t)(p) && p.status === "pending").map((p) => ({ ...p, receipt_url: p.receipt })); },
+    async reportPayment(c, t, { kind, amount, detail, file }) {
+      const d = db(); const m = approved(d, c, t); ensure(m && m.player_id); ensure(amount > 0, "payments_amount");
+      d.pays.push({ id: "p" + Date.now(), club_id: c, team_id: t, user_id: m.user_id, player_id: m.player_id, kind, amount, detail: detail || null, receipt: file ? await dataURL(file) : null, status: "pending", created_at: new Date().toISOString(), decided_at: null });
+      save(d);
+    },
+    async adminPayment(c, t, { kind, item, player, amount, detail }) {
+      const d = db(); ensure(isAdmin(d, c, t)); ensure(amount > 0, "payments_amount"); const now = new Date().toISOString();
+      d.pays.push({ id: "p" + Date.now(), club_id: c, team_id: t, user_id: d.session, player_id: player || null, kind, item: item || null, amount, detail: detail || null, receipt: null, status: "approved", created_at: now, decided_at: now });
+      save(d);
+    },
+    async decidePayment(c, t, id, status) { const d = db(); ensure(isAdmin(d, c, t)); const p = d.pays.find((x) => x.id === id); p.status = status; p.decided_at = new Date().toISOString(); save(d); },
   };
 }

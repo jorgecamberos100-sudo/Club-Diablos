@@ -1,15 +1,35 @@
-# Activar cuentas y votos (4 pasos, una sola vez)
+# Activar cuentas con Google y pagos (una sola vez)
 
-1. Entra a https://supabase.com con tu cuenta y crea un proyecto nuevo (plan gratis). Elige región cercana (por ejemplo, West US) y guarda la contraseña de la base de datos.
-2. En el proyecto: **SQL Editor > New query**, pega todo `supabase/schema.sql` y toca **Run**. Se puede correr varias veces sin problema.
-3. **Authentication > Sign In / Providers > Email**: apaga **Confirm email** y guarda. (Así los jugadores entran sin esperar un correo.)
-4. **Project Settings > API**: copia **Project URL** y la clave **anon public**. Esos dos datos se ponen en `app/config.js`.
-   Nunca uses ni compartas la clave **service_role**.
+Mientras `app/config.js` esté vacío, la app funciona como siempre, sin cuentas. Para activarlas:
 
-## Cómo funciona
-- La primera cuenta que pide entrar a un equipo sin administrador queda como administrador. Regístrate tú primero, antes de mandar el enlace al grupo.
-- Los jugadores crean cuenta, eligen su nombre en la lista y quedan pendientes hasta que el administrador los aprueba.
-- Solo el administrador anota resultados y aprueba entradas. Cada jugador edita solo lo suyo. Los votos son anónimos y nadie vota por sí mismo.
+## 1. Supabase (la base de datos, plan gratis)
+1. Entra a https://supabase.com y crea un proyecto nuevo (región West US). Guarda la contraseña de la base de datos.
+2. **SQL Editor > New query**: pega todo `supabase/schema.sql` y toca **Run**. Se puede volver a correr sin problema cada vez que el archivo cambie.
+3. **Authentication > URL Configuration**:
+   - Site URL: `https://jorgecamberos100-sudo.github.io/Club-Diablos/`
+   - Redirect URLs: agrega `https://jorgecamberos100-sudo.github.io/Club-Diablos/**`
+4. **Authentication > Sign In / Providers > Email**: apaga **Confirm email** (para quien entre con correo en vez de Google).
+
+## 2. Google (para entrar con un toque)
+1. Entra a https://console.cloud.google.com con tu cuenta de Google y crea un proyecto ("Club Diablos").
+2. **APIs y servicios > Pantalla de consentimiento de OAuth**: tipo **Externo**, nombre "Club Diablos", tu correo. Publica la app (botón **Publicar app**) para que cualquiera pueda entrar.
+3. **APIs y servicios > Credenciales > Crear credenciales > ID de cliente de OAuth**: tipo **Aplicación web**. En **URI de redireccionamiento autorizados** pega la que te da Supabase en **Authentication > Sign In / Providers > Google** (termina en `/auth/v1/callback`).
+4. Copia el **ID de cliente** y el **Secreto**, pégalos en Supabase en **Authentication > Sign In / Providers > Google**, actívalo y guarda.
+
+## 3. Conectar la app
+En Supabase, **Project Settings > API**: copia **Project URL** y la clave **anon public** y ponlas en `app/config.js`.
+La clave anon es pública y es segura ahí. Nunca uses ni compartas la clave **service_role**.
+
+## 4. Primer uso
+- Entra tú primero con Google y elige tu nombre: la primera cuenta queda como administrador.
+- Después manda el enlace al grupo. Cada jugador toca **Continuar con Google**, elige su nombre y tú lo apruebas con un toque.
+
+## Pagos
+- El jugador, en **Finanzas > Mi cuenta**, toca **Ya pagué**, pone la cantidad y la foto del comprobante. Queda en revisión.
+- En **Inicio** te aparece el aviso de pagos por revisar. Al aprobar, su cuenta, la caja y lo que falta se actualizan solos.
+- En el **Panel de administrador** registras pagos en efectivo, uniformes y lo que pagas a la liga.
+- Los comprobantes son privados: solo los ven quien lo subió y el administrador.
+- Las cifras de los archivos del equipo siguen siendo la base; los pagos de la app se suman encima. Ya no hace falta editar `aportado` a mano.
 
 ## Probar sin servidor
-Agrega `?demo` antes del `#` del enlace (por ejemplo `.../club-diablos/?demo#/diablos/domingos/inicio`). Todo se guarda solo en ese navegador.
+Agrega `?demo` antes del `#` del enlace (por ejemplo `.../Club-Diablos/?demo#/diablos/domingos/inicio`). Todo se guarda solo en ese navegador.

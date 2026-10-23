@@ -39,4 +39,4 @@ Votos de compañeros, nunca del administrador ni de uno mismo:
 - Mínimo 3 votos; con 5 o más se quitan el más alto y el más bajo.
 
 ## Cuentas y datos en vivo
-Ver `supabase/LEEME.md`. Con `app/config.js` vacío la app funciona sin cuentas. `app/cloud.js` tiene dos motores (Supabase y demo) con la misma interfaz; `app/live.js` mezcla resultados, votos y fotos con los archivos del equipo; `app/cloudui.js` tiene las pantallas.
+Ver `supabase/LEEME.md` (entrar con Google y pagos con comprobante). Con `app/config.js` vacío la app funciona sin cuentas. `app/cloud.js` tiene dos motores (Supabase y demo) con la misma interfaz; `app/live.js` mezcla resultados, votos y fotos con los archivos del equipo; `app/cloudui.js` tiene las pantallas.

@@ -3,11 +3,19 @@ import { esc } from "./util.js";
 import { api, friendly } from "./cloud.js";
 import { POS, ATTRS } from "./views/plantel.js";
 import { nextMatch, sorted, versus, whenText } from "./matches.js";
+import { calc } from "./finance.js";
 
 const sheet = () => document.getElementById("sheet");
 const ANS = [["va", "Voy"], ["duda", "Duda"], ["no", "No voy"]];
 const active = (ctx) => ctx.team.roster.filter((r) => r.status !== "congelado" && ctx.playersById[r.player]);
 const nameOf = (ctx, id) => (ctx.playersById[id] || {}).name || id;
+const money = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-MX");
+const KIND = { cuota: "Cuota", uniforme: "Uniforme", salida: "Pago a la liga" };
+const ST = { pending: ["due", "En revisión"], approved: ["ok", "Aprobado"], rejected: ["na", "No aprobado"] };
+const dshort = (d) => new Date(d).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+const contact = (ctx) => esc(((ctx.club.contact || "el administrador").split(" (")[0]));
+const GOOGLE = `<svg class="g" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
+export const googleBtn = () => `<button type="button" class="gbtn" data-cl="google">${GOOGLE}<span>Continuar con Google</span></button>`;
 
 function open(title, sub, body) {
   const h = sheet();
@@ -24,15 +32,17 @@ const say = (t) => { const m = sheet().querySelector(".msg"); if (m) { m.textCon
 function accountCard(ctx) {
   const L = ctx.live;
   if (L.error) return `<section class="s cl-card"><h2>Tu cuenta</h2><p class="hint">No se pudo conectar con el servidor. Revisa tu conexión.</p></section>`;
-  if (!L.user) return `<section class="s cl-card"><h2>Entra al equipo</h2><p>Con tu cuenta confirmas asistencia, calificas a tus compañeros y subes tu foto.</p>
-    <div class="row-acts"><button type="button" class="btn" data-cl="auth-up">Crear cuenta</button><button type="button" class="btn ghost" data-cl="auth-in">Ya tengo cuenta</button></div></section>`;
+  if (!L.user) return `<section class="s cl-card"><h2>Entra al equipo</h2><p>Un toque con tu cuenta de Google. Con ella confirmas asistencia, mandas tu comprobante de pago y subes tu foto.</p>
+    ${googleBtn()}<button type="button" class="link" data-cl="auth-in">Entrar con correo</button></section>`;
   if (!L.member) return `<section class="s cl-card"><h2>Elige tu nombre</h2><p>Dinos quién eres en ${esc(ctx.team.name)}. Metra aprobará tu solicitud.</p>
     <div class="row-acts"><button type="button" class="btn" data-cl="join">Elegir mi nombre</button><button type="button" class="btn ghost" data-cl="out">Salir</button></div></section>`;
   if (L.member.status === "pending") return `<section class="s cl-card"><h2>Solicitud enviada</h2><p>Esperando que el administrador apruebe a <b>${esc(L.member.display_name)}</b>. Vuelve a abrir la app en un rato.</p>
     <div class="row-acts"><button type="button" class="btn ghost" data-cl="out">Salir</button></div></section>`;
   if (L.member.status === "rejected") return `<section class="s cl-card"><h2>Solicitud no aprobada</h2><p>Habla con el administrador del equipo.</p><div class="row-acts"><button type="button" class="btn ghost" data-cl="out">Salir</button></div></section>`;
-  return `<section class="s cl-card"><div class="cl-who"><b>${esc(L.member.display_name)}</b><span>${L.admin ? "Administrador" : "Jugador"}</span></div>
-    <div class="row-acts">${L.member.player_id ? '<button type="button" class="btn" data-cl="profile">Mi foto y posiciones</button>' : ""}${L.admin ? '<button type="button" class="btn" data-cl="admin">Panel de administrador</button>' : ""}<button type="button" class="btn ghost" data-cl="out">Salir</button></div></section>`;
+  const todo = L.admin ? L.pendingPays.length + L.pendingMembers.length : 0;
+  const alert = L.admin && todo ? `<button type="button" class="cl-alert" data-cl="admin"><b>${todo}</b><span>${[L.pendingPays.length ? L.pendingPays.length + (L.pendingPays.length === 1 ? " pago" : " pagos") + " por revisar" : "", L.pendingMembers.length ? L.pendingMembers.length + (L.pendingMembers.length === 1 ? " jugador" : " jugadores") + " por aprobar" : ""].filter(Boolean).join(" · ")}</span></button>` : "";
+  return `<section class="s cl-card"><div class="cl-who"><b>${esc(L.member.display_name)}</b><span>${L.admin ? "Administrador" : "Jugador"}</span></div>${alert}
+    <div class="row-acts">${L.member.player_id ? '<button type="button" class="btn" data-cl="profile">Mi foto y posiciones</button>' : ""}${L.admin ? `<button type="button" class="btn" data-cl="admin">Panel de administrador${todo ? ` <span class="badge">${todo}</span>` : ""}</button>` : ""}<button type="button" class="btn ghost" data-cl="out">Salir</button></div></section>`;
 }
 
 function availCard(ctx) {
@@ -86,6 +96,11 @@ export function mount(root, ctx, view) {
   } else if (html) root.insertAdjacentHTML("afterbegin", html);
   if (view === "partidos" && !ctx.live.user) root.insertAdjacentHTML("afterbegin", `<section class="s cl-card"><p class="hint">Entra desde Inicio para calificar los partidos.</p></section>`);
   root.addEventListener("click", (e) => { const t = e.target.closest("[data-cl]"); if (t && !t.closest("#sheet")) act(ctx, t.dataset.cl, t); });
+  const L = ctx.live;
+  if (view === "inicio" && L.user && !L.member && !L.error) {
+    let shown = false; try { shown = sessionStorage.getItem("join:shown") === L.user.id; sessionStorage.setItem("join:shown", L.user.id); } catch (e) { /* nada */ }
+    if (!shown) act(ctx, "join");
+  }
 }
 
 // ---------- Acciones ----------
@@ -95,6 +110,10 @@ export function wireSheet(ctxGet) {
   if (wired) return; wired = true;
   sheet().addEventListener("click", (e) => { const t = e.target.closest("[data-cl]"); if (t && t.closest(".cl, .bd")) act(ctxGet(), t.dataset.cl, t); });
   sheet().addEventListener("submit", (e) => { e.preventDefault(); const f = e.target.closest("form[data-form]"); if (f) act(ctxGet(), "submit-" + f.dataset.form, f); });
+  sheet().addEventListener("change", (e) => {
+    const f = e.target.closest("form[data-form]"); if (!f || e.target.name !== "kind") return;
+    const a = f.querySelector("[name=amount]"), v = f.dataset["a_" + e.target.value]; if (a && v != null) a.value = v;
+  });
 }
 
 async function guard(fn) { try { say(""); await fn(); } catch (e) { say(friendly(e)); } }
@@ -103,6 +122,7 @@ function act(ctx, a, el) {
   const c = ctx.clubId, t = ctx.team.id;
   if (a === "close") return close();
   if (a === "auth-in" || a === "auth-up") return authSheet(a === "auth-up");
+  if (a === "google") return guard(async () => { await api.signInGoogle(); });
   if (a === "submit-auth") return guard(async () => {
     const f = new FormData(el), up = el.dataset.up === "1";
     await (up ? api.signUp(f.get("email").trim().toLowerCase(), f.get("pw")) : api.signIn(f.get("email").trim().toLowerCase(), f.get("pw")));
@@ -121,8 +141,27 @@ function act(ctx, a, el) {
     const photo = file ? await shrink(file) : null;
     await api.saveProfile(c, ctx.live.member.player_id, { positions: f.getAll("pos"), photo }); close(); reload();
   });
-  if (a === "admin") return guard(async () => adminSheet(ctx, await api.pending(c, t)));
-  if (a === "ok" || a === "no") return guard(async () => { await api.decide(c, t, el.dataset.u, a === "ok" ? "approved" : "rejected"); adminSheet(ctx, await api.pending(c, t)); reload(true); });
+  const admin = async () => adminSheet(ctx, ...(await Promise.all([api.pending(c, t), ctx.team.finance ? api.pendingPayments(c, t) : []])));
+  if (a === "admin") return guard(admin);
+  if (a === "ok" || a === "no") return guard(async () => { await api.decide(c, t, el.dataset.u, a === "ok" ? "approved" : "rejected"); await admin(); reload(); });
+  if (a === "pok" || a === "pno") return guard(async () => { await api.decidePayment(c, t, el.dataset.id, a === "pok" ? "approved" : "rejected"); await admin(); reload(); });
+  if (a === "zoom") { el.classList.toggle("big"); return; }
+  if (a === "pay") return paySheet(ctx);
+  if (a === "submit-pay") return guard(async () => {
+    const f = new FormData(el), file = el.querySelector("input[type=file]").files[0], btn = el.querySelector("button[type=submit]");
+    btn.disabled = true; btn.textContent = "Enviando…";
+    try {
+      await api.reportPayment(c, t, { kind: f.get("kind"), amount: +f.get("amount"), detail: (f.get("detail") || "").trim(), file: file ? await shrink(file, 1400) : null });
+    } finally { btn.disabled = false; btn.textContent = "Mandar"; }
+    open("Listo", "", `<p>Tu pago quedó en revisión. Cuando ${contact(ctx)} lo apruebe, tu cuenta se actualiza sola.</p><button type="button" class="btn" data-cl="close">Entendido</button>`);
+    reload();
+  });
+  if (a === "reg") return regSheet(ctx, el.dataset.k);
+  if (a === "submit-reg") return guard(async () => {
+    const f = new FormData(el);
+    await api.adminPayment(c, t, { kind: el.dataset.k, item: f.get("item"), player: f.get("player"), amount: +f.get("amount"), detail: (f.get("detail") || "").trim() });
+    await admin(); say("Pago registrado."); reload();
+  });
   if (a === "result") return resultSheet(ctx, el.dataset.m);
   if (a === "submit-result") return guard(async () => {
     const f = new FormData(el), played = f.getAll("pl"), stats = {};
@@ -145,7 +184,7 @@ function act(ctx, a, el) {
 }
 
 function authSheet(up) {
-  open(up ? "Crear cuenta" : "Entrar", up ? "Usa un correo que revises y una contraseña de 6 o más caracteres." : "", `<form data-form="auth" data-up="${up ? 1 : 0}" class="fld">
+  open(up ? "Crear cuenta con correo" : "Entrar", up ? "Usa un correo que revises y una contraseña de 6 o más caracteres." : "Lo más fácil es con Google.", `${googleBtn()}<span class="or">o con correo</span><form data-form="auth" data-up="${up ? 1 : 0}" class="fld">
     <label>Correo<input name="email" type="email" inputmode="email" autocomplete="email" required></label>
     <label>Contraseña<input name="pw" type="password" minlength="6" autocomplete="${up ? "new-password" : "current-password"}" required></label>
     <button class="btn" type="submit">${up ? "Crear cuenta" : "Entrar"}</button>
@@ -169,13 +208,54 @@ function profileSheet(ctx) {
     <button class="btn" type="submit">Guardar</button></form>`);
 }
 
-async function adminSheet(ctx, pending) {
+function payRow(ctx, p) {
+  const img = p.receipt_url ? `<img class="rcpt" src="${esc(p.receipt_url)}" alt="Comprobante" data-cl="zoom">` : '<span class="rcpt none">Sin foto</span>';
+  return `<div class="pay-row">${img}<span class="pay-t"><b>${esc(nameOf(ctx, p.player_id))} · ${money(p.amount)}</b><small>${KIND[p.kind] || p.kind}${p.detail ? " · " + esc(p.detail) : ""} · ${dshort(p.created_at)}</small></span>
+    <span class="acts"><button type="button" class="btn" data-cl="pok" data-id="${esc(p.id)}">Aprobar</button><button type="button" class="btn ghost" data-cl="pno" data-id="${esc(p.id)}">Rechazar</button></span></div>`;
+}
+
+async function adminSheet(ctx, pending, pays = []) {
   const miss = sorted(ctx.team).filter((m) => !m.cloud && new Date(m.date) < new Date());
-  open("Panel de administrador", ctx.team.name, `<span class="lbl">Solicitudes para entrar (${pending.length})</span>
+  const fin = ctx.team.finance;
+  open("Panel de administrador", ctx.team.name, `${fin ? `<span class="lbl">Pagos por revisar (${pays.length})</span>
+    ${pays.map((p) => payRow(ctx, p)).join("") || '<p class="hint">No hay pagos por revisar.</p>'}
+    <span class="lbl">Registrar un pago</span>
+    <div class="reg-acts"><button type="button" class="btn ghost" data-cl="reg" data-k="cuota">De un jugador</button><button type="button" class="btn ghost" data-cl="reg" data-k="uniforme">Uniforme</button><button type="button" class="btn ghost" data-cl="reg" data-k="salida">A la liga o gasto</button></div>` : ""}
+    <span class="lbl">Solicitudes para entrar (${pending.length})</span>
     ${pending.map((m) => `<div class="cl-row static"><span><b>${esc(m.display_name)}</b><small>${m.player_id ? "Dice ser " + esc(nameOf(ctx, m.player_id)) : "No está en la lista"}</small></span>
       <span class="acts"><button type="button" class="btn" data-cl="ok" data-u="${esc(m.user_id)}">Aprobar</button><button type="button" class="btn ghost" data-cl="no" data-u="${esc(m.user_id)}">Rechazar</button></span></div>`).join("") || '<p class="hint">No hay solicitudes pendientes.</p>'}
     <span class="lbl">Partidos sin resultado</span>
     ${miss.map((m) => `<button type="button" class="cl-row" data-cl="result" data-m="${esc(m.id)}"><span><b>${esc(versus(m, ctx.club.name))}</b><small>${esc(m.jornada || "")}</small></span><span class="chip due">Anotar</span></button>`).join("") || '<p class="hint">No hay partidos pendientes de resultado.</p>'}`);
+}
+
+function paySheet(ctx) {
+  const fin = ctx.team.finance, me = ctx.live.member.player_id;
+  const C = calc(JSON.parse(JSON.stringify(fin)), ctx.playersById), c = C.cuentas.find((x) => x.player === me);
+  const owe = c ? Math.max(0, Math.round(-c.saldo)) : fin.cuota;
+  const unif = 480;
+  open("Mandar comprobante", `${contact(ctx)} lo revisa y tu cuenta se actualiza sola.`, `<form data-form="pay" class="fld" data-a_cuota="${owe || ""}" data-a_uniforme="${unif}">
+    <span class="lbl">¿Qué pagaste?</span>
+    <div class="pickgrid"><label class="opt"><input type="radio" name="kind" value="cuota" checked><span>${c && c.multa ? "Cuota y multa" : "Cuota"}</span></label><label class="opt"><input type="radio" name="kind" value="uniforme"><span>Uniforme</span></label></div>
+    <label>Cantidad<input name="amount" type="number" inputmode="numeric" min="1" step="1" value="${owe || ""}" required></label>
+    <label class="unif-only">Número, talla y manga<input name="detail" maxlength="100" placeholder="#18 · M · manga corta"></label>
+    <label>Foto del comprobante<input type="file" accept="image/*"></label>
+    <p class="hint">Si pagaste en efectivo, mándalo sin foto.</p>
+    <button class="btn" type="submit">Mandar</button></form>`);
+}
+
+function regSheet(ctx, k) {
+  const fin = ctx.team.finance;
+  const people = (k === "cuota" ? fin.cuentas.map((x) => x.player) : active(ctx).map((r) => r.player)).filter((id) => ctx.playersById[id])
+    .sort((a, b) => nameOf(ctx, a).localeCompare(nameOf(ctx, b), "es"));
+  const items = (fin.liga || []).concat(fin.gastos || []).map((x) => ({ ...x, falta: Math.max(0, x.costo - x.pagado) })).filter((x) => x.falta > 0);
+  const titles = { cuota: ["Pago de un jugador", "Cuota o multa, en efectivo o por transferencia."], uniforme: ["Uniforme", "Va en la cuenta aparte de uniformes."], salida: ["Pago a la liga o gasto", "Lo que salió de la caja."] };
+  open(titles[k][0], titles[k][1], `<form data-form="reg" data-k="${k}" class="fld">
+    ${k === "salida"
+      ? `<label>Concepto<select name="item" required>${items.map((x) => `<option value="${esc(x.k)}">${esc(x.label)} · faltan ${money(x.falta)}</option>`).join("")}</select></label>`
+      : `<label>Jugador<select name="player" required><option value="">Elige</option>${people.map((id) => `<option value="${esc(id)}">${esc(nameOf(ctx, id))}</option>`).join("")}</select></label>`}
+    <label>Cantidad<input name="amount" type="number" inputmode="numeric" min="1" step="1" required></label>
+    ${k === "uniforme" ? '<label>Número, talla y manga<input name="detail" maxlength="100" placeholder="#18 · M · manga corta"></label>' : ""}
+    <button class="btn" type="submit">Registrar</button><button type="button" class="link" data-cl="admin">Volver al panel</button></form>`);
 }
 
 function resultSheet(ctx, mid) {
@@ -214,11 +294,11 @@ function attrSheet(ctx, pid) {
 }
 
 // Reduce la foto antes de subirla (celdas de 600 px, JPG)
-function shrink(file) {
+function shrink(file, max = 600) {
   return new Promise((res, rej) => {
     const img = new Image(), url = URL.createObjectURL(file);
     img.onload = () => {
-      const s = Math.min(1, 600 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      const s = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas");
       c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
       c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
       c.toBlob((b) => (b ? res(b) : rej(new Error("foto"))), "image/jpeg", 0.82);
