@@ -53,9 +53,10 @@ function benchHtml(ctx, bench) {
   const A = att(ctx);
   const chip = (r) => `<span class="bch${conf(A, r.player) ? "" : " out"}">${r.number ? `<i>${esc(r.number)}</i>` : ""}${esc(ctx.playersById[r.player].name)}</span>`;
   if (!A) return `<div class="bench"><span class="lbl">Banca (${bench.length})</span><div class="bench-row">${bench.map(chip).join("") || '<span class="hint">Todos están en la cancha.</span>'}</div></div>`;
-  const yes = bench.filter((r) => conf(A, r.player)), no = bench.filter((r) => !conf(A, r.player));
+  const yes = bench.filter((r) => A.va.has(r.player)), nope = bench.filter((r) => A.no.has(r.player)), pend = bench.filter((r) => !A.va.has(r.player) && !A.no.has(r.player));
   return `<div class="bench"><span class="lbl">Confirmados en banca (${yes.length})</span><div class="bench-row">${yes.map(chip).join("") || '<span class="hint">Todos los confirmados están en la cancha.</span>'}</div>
-    <span class="lbl">Sin confirmar (${no.length})</span><div class="bench-row">${no.map(chip).join("") || '<span class="hint">Todos confirmaron.</span>'}</div></div>`;
+    <span class="lbl">Sin confirmar (${pend.length})</span><div class="bench-row">${pend.map(chip).join("") || '<span class="hint">Todos respondieron.</span>'}</div>
+    ${nope.length ? `<span class="lbl">No van (${nope.length})</span><div class="bench-row">${nope.map(chip).join("")}</div>` : ""}</div>`;
 }
 
 function refHtml(ctx) {
@@ -102,12 +103,14 @@ function picker(ctx, i) {
     return `<button type="button" class="pick" data-pick="${esc(x.p.id)}"><span class="pk-no">${esc(x.r.number || "–")}</span><span class="pk-n">${esc(x.p.name)}<span class="chips">${chips}</span></span>${j != null && j !== i ? `<span class="pk-st">En ${esc(FORMS[st.form].s[j].c)}</span>` : j === i ? '<span class="pk-st">Aquí</span>' : ""}</button>`;
   };
   const byFit = (x, y) => fits(y) - fits(x);
-  const yes = list.filter((x) => conf(A, x.p.id)).sort(byFit), no = list.filter((x) => !conf(A, x.p.id)).sort(byFit);
+  const yes = list.filter((x) => conf(A, x.p.id)).sort(byFit);
+  const rest = list.filter((x) => !conf(A, x.p.id));
+  const no = rest.filter((x) => A && A.no.has(x.p.id)).sort(byFit), pend = rest.filter((x) => !(A && A.no.has(x.p.id))).sort(byFit);
   const sec = (l, arr, dim) => (arr.length ? `<span class="lbl">${l}</span><div${dim ? ' class="dim"' : ""}>${arr.map(row).join("")}</div>` : "");
   return `<div class="bd" data-close="1"></div><div class="sp" role="dialog" aria-modal="true" aria-label="Elegir ${esc(slot.c)}">
     <div class="sp-h"><div><h3>${esc(slot.c)}</h3><p>${esc(slot.t.map((t) => POS[t] || t).join(" o "))}</p></div><button type="button" class="x" data-close="1" aria-label="Cerrar">${icon.close}</button></div>
     ${st.slots[i] ? `<button type="button" class="btn ghost" data-unpick="${i}">Dejar vacía esta posición</button>` : ""}
-    ${A ? sec(`Confirmados (${yes.length})`, yes, false) + sec(`Sin confirmar (${no.length})`, no, true) : sec("Jugadores", yes.concat(no), false)}</div>`;
+    ${A ? sec(`Confirmados (${yes.length})`, yes, false) + sec(`Sin confirmar (${pend.length})`, pend, true) + sec(`No van (${no.length})`, no, true) : sec("Jugadores", yes.concat(rest), false)}</div>`;
 }
 
 export function render(ctx) { return `<div id="lineup">${view(ctx)}</div>`; }
