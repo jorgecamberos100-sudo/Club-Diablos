@@ -497,8 +497,8 @@
       "venue": "Reforma",
       "score": null,
       "attendance": {
-        "source": "Encuesta del grupo",
-        "updated": "2026-10-22T08:19:00-07:00",
+        "source": "Encuesta del grupo y mensaje del chat",
+        "updated": "2026-10-25T07:35:00-07:00",
         "va": [
           "metra",
           "carlos",
@@ -509,7 +509,11 @@
           "irving",
           "dani",
           "chepo",
-          "corona"
+          "corona",
+          "alexis",
+          "mares",
+          "roman",
+          "arturo"
         ],
         "no": [
           "jorge"
