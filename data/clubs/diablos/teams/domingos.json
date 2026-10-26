@@ -116,17 +116,17 @@
         "k": "inscripcion",
         "label": "Inscripción del equipo",
         "costo": 2000,
-        "pagado": 1090,
+        "pagado": 1010,
         "desc": "Entrada a la Liga Reforma. Ya trae 12 credenciales.",
         "short": "Entrada a la liga, ya trae 12 credenciales"
       },
       {
         "k": "credenciales",
         "label": "Credenciales enmicadas",
-        "costo": 1570,
-        "pagado": 1570,
-        "desc": "11 credenciales extra a $80 cada una, y el enmicado de las 23 credenciales a $30 cada una.",
-        "short": "11 extra a $80 y el enmicado de las 23 a $30"
+        "costo": 1650,
+        "pagado": 1650,
+        "desc": "11 credenciales extra a $80, el enmicado de las 23 a $30 y la credencial de Isaías ($80).",
+        "short": "11 extra a $80, enmicado de 23 a $30 y la de Isaías"
       },
       {
         "k": "deposito",
