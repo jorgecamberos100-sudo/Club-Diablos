@@ -101,7 +101,7 @@
     }
   ],
   "finance": {
-    "updated": "2026-10-26T03:35:00Z",
+    "updated": "2026-10-26T04:40:00Z",
     "cuota": 300,
     "multa": {
       "total": 1450,
@@ -116,7 +116,7 @@
         "k": "inscripcion",
         "label": "Inscripción del equipo",
         "costo": 2000,
-        "pagado": 700,
+        "pagado": 1090,
         "desc": "Entrada a la Liga Reforma. Ya trae 12 credenciales.",
         "short": "Entrada a la liga, ya trae 12 credenciales"
       },
@@ -124,7 +124,7 @@
         "k": "credenciales",
         "label": "Credenciales enmicadas",
         "costo": 1570,
-        "pagado": 920,
+        "pagado": 1570,
         "desc": "11 credenciales extra a $80 cada una, y el enmicado de las 23 credenciales a $30 cada una.",
         "short": "11 extra a $80 y el enmicado de las 23 a $30"
       },
