@@ -101,7 +101,7 @@
     }
   ],
   "finance": {
-    "updated": "2026-10-23T04:20:00Z",
+    "updated": "2026-10-26T03:35:00Z",
     "cuota": 300,
     "multa": {
       "total": 1450,
@@ -250,7 +250,7 @@
       },
       {
         "player": "arturo",
-        "aportado": 250,
+        "aportado": 445,
         "multa": true,
         "why": ""
       },
