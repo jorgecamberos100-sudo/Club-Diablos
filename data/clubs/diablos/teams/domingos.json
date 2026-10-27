@@ -379,14 +379,15 @@
         "q": "¿Para qué es la cuota de {cuota}?",
         "k": "cuota para que es incluye cubre de donde sale 300",
         "a": [
-          "Cubre {cubreLista}. Todo junto son **{cubreTot}**, repartidos entre los {nPagan} que pagamos: {cuota} cada uno."
+          "De tu cuota de **{cuota}** va esto a cada concepto: {cuotaDesglose}.",
+          "En «A dónde va tu cuota» ves lo que cuesta cada cosa en total."
         ]
       },
       {
         "q": "¿Por qué la cuota subió de $250 a {cuota}?",
         "k": "subio aumento 250 300 cambio por que mas",
         "a": [
-          "Los $250 del inicio se calcularon con menos credenciales y sin contar al portero. Después se hicieron las 23 credenciales, todas enmicadas, y el equipo decidió cubrir lo del portero entre todos. Ya con todo contado, el reparto exacto es de {cuota}."
+          "Los $250 del inicio se calcularon con menos credenciales y sin contar al portero. Después se hicieron más credenciales, todas enmicadas, y el equipo decidió cubrir lo del portero entre todos. Con eso la cuota quedó en {cuota}."
         ]
       },
       {

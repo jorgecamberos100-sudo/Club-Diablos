@@ -712,3 +712,9 @@ details.danger summary { cursor: pointer; color: var(--muted); min-height: 30px;
 #print-root .rep .tbl-wrap { overflow: visible; }
 #print-root:empty { display: none; }
 #print-root .rep-page + .rep-page { break-before: page; }
+
+/* Desglose de la cuota en cada cuenta */
+.acct li.grp-h span:first-child { color: var(--fg); font-weight: 600; }
+.acct li.sub { padding-left: 12px; font-size: 13px; color: var(--muted); }
+.acct li.sub span:first-child { color: var(--muted); }
+.acct li.sub span:last-child { font-variant-numeric: tabular-nums; }

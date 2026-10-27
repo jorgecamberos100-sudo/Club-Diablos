@@ -22,7 +22,9 @@ export function calc(fin, playersById) {
     })
     .filter(Boolean);
   const cubre = fin.liga.filter((x) => x.k !== "multa").concat(fin.gastos);
+  const parte = reparto(fin.cuota, cubre);
   return {
+    parte,
     cuentas, nMulta, share, aportado, ligaPag, gastosPag, items, cubre,
     cubreTot: sum(cubre, (x) => x.costo),
     ingresos: sum(fin.ingresos || [], (x) => x.monto),
@@ -33,6 +35,18 @@ export function calc(fin, playersById) {
     ligaFalta: sum(fin.liga, (x) => Math.max(0, x.costo - x.pagado)),
     gastosFalta: sum(fin.gastos, (x) => Math.max(0, x.costo - x.pagado)),
   };
+}
+
+// A dónde va cada peso de la cuota: se reparte entre los conceptos según lo que cuesta cada uno.
+// Se redondea a pesos completos y los centavos sobrantes van a los conceptos con mayor residuo, para que la suma dé exacto.
+export function reparto(cuota, cubre) {
+  const tot = sum(cubre, (x) => x.costo);
+  if (!tot || !cuota) return [];
+  const raw = cubre.map((x) => ({ k: x.k, label: x.label, costo: x.costo, v: (cuota * x.costo) / tot }));
+  raw.forEach((r) => { r.monto = Math.floor(r.v); });
+  let rest = Math.round(cuota - sum(raw, (r) => r.monto));
+  raw.slice().sort((a, b) => (b.v - Math.floor(b.v)) - (a.v - Math.floor(a.v))).forEach((r) => { if (rest > 0) { r.monto += 1; rest -= 1; } });
+  return raw.map(({ k, label, costo, monto }) => ({ k, label, costo, monto }));
 }
 
 // Variables que pueden usar los textos de preguntas y secciones.
@@ -51,6 +65,7 @@ export function textVars(fin, C, contact) {
     gastosFalta: money(C.gastosFalta),
     falta: money(C.falta),
     cubreTot: money(C.cubreTot),
+    cuotaDesglose: C.parte.map((x) => x.label.toLowerCase() + " " + money(x.monto)).join(", "),
     cubreLista: C.cubre.map((x) => x.label.toLowerCase() + " " + money(x.costo)).join(", "),
     orden: C.items.map((o) => o.x.label.toLowerCase()).join(", "),
     deposito: money(dep ? dep.costo : 0),

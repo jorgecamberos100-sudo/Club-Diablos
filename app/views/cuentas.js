@@ -10,6 +10,16 @@ function status(c) {
   return '<span class="chip ok">Al corriente</span>';
 }
 
+// Desglose de lo que le toca a cada uno: cuota por concepto y multa.
+function desglose(C, fin, c) {
+  const cuota = `<li class="grp-h"><span>Cuota</span><b>${money(fin.cuota)}</b></li>` +
+    C.parte.map((x) => `<li class="sub"><span>${esc(x.label)}</span><span>${money(x.monto)}</span></li>`).join("");
+  const multa = c.multa
+    ? `<li class="grp-h"><span>Multa del 13 de septiembre</span><b>${money(C.share)}</b></li><li class="sub"><span>${money(fin.multa.total)} entre los ${C.nMulta} que no confirmaron</span><span></span></li>`
+    : `<li class="grp-h"><span>Multa</span><span class="why">No aplica${c.why ? " · " + esc(c.why) : ""}</span></li>`;
+  return cuota + multa;
+}
+
 function mineHtml(ctx, C, mine) {
   const fin = ctx.team.finance;
   const c = C.cuentas.find((x) => x.player === mine);
@@ -30,7 +40,7 @@ function mineHtml(ctx, C, mine) {
   const payBox = mineLive ? `${pays.length ? `<ul class="acct flat mypays">${pays.map((p) => `<li><span>${p.kind === "uniforme" ? "Uniforme" : "Pago"} ${money(p.amount)}</span><span class="chip ${ST[p.status][0]}">${ST[p.status][1]}</span></li>`).join("")}</ul>` : ""}
     <button type="button" class="btn pay-go" data-cl="pay">Ya pagué · mandar comprobante</button>` : "";
   return `<div class="mine ${cls}"><div class="mine-big">${esc(big)}</div>
-    <ul class="acct flat"><li><span>Cuota</span><b>${money(fin.cuota)}</b></li><li><span>Multa</span>${multa}</li>
+    <ul class="acct flat">${desglose(C, fin, c)}
     <li class="sum"><span>Te toca en total</span><b>${money(c.toca)}</b></li><li><span>Has dado</span><b>${money(c.aportado || 0)}</b></li></ul>${nota}${payBox}</div>`;
 }
 
@@ -66,7 +76,7 @@ function playerRow(c, C, fin) {
     : c.saldo < -0.005 ? `<li class="res due"><span>Le falta</span><b>${money(-c.saldo)}</b></li>`
     : '<li class="res ok"><span>Al corriente</span><b>$0</b></li>';
   return `<details class="pl2 ${c.saldo < -0.005 ? "due" : "ok"}"><summary><span class="dn">${esc(c.number || "–")}</span><span class="nm">${esc(c.name)}</span>${status(c)}<span class="ar" aria-hidden="true">▶</span></summary>
-    <ul class="acct"><li><span>Cuota</span><b>${money(fin.cuota)}</b></li>${multa}<li class="sum"><span>Le toca en total</span><b>${money(c.toca)}</b></li><li><span>Ha dado</span><b>${money(c.aportado || 0)}</b></li>${res}</ul></details>`;
+    <ul class="acct">${desglose(C, fin, c)}<li class="sum"><span>Le toca en total</span><b>${money(c.toca)}</b></li><li><span>Ha dado</span><b>${money(c.aportado || 0)}</b></li>${res}</ul></details>`;
 }
 
 export function render(ctx) {
@@ -118,9 +128,9 @@ export function render(ctx) {
     ${fin.porteroNota ? `<p>${esc(fin.porteroNota)}</p>` : ""}</section>`;
 
   /* cuota */
-  h += `<section class="s" id="cuota"><h2>Por qué la cuota es de ${money(fin.cuota)}</h2><p>${esc(fin.cuotaNota || "")}</p>
-    <div class="card"><ul class="rows">${C.cubre.map((x) => `<li><span class="t">${esc(x.label)}</span><span class="d">${esc(x.short || x.desc)}</span><span class="m"><b>${money(x.costo)}</b></span></li>`).join("")}
-    <li class="tot"><span class="t">Total</span><span class="d">Entre ${C.cuentas.length} jugadores = ${money(C.cuentas.length ? C.cubreTot / C.cuentas.length : 0)} cada uno</span><span class="m"><b>${money(C.cubreTot)}</b></span></li></ul></div></section>`;
+  h += `<section class="s" id="cuota"><h2>A dónde va tu cuota de ${money(fin.cuota)}</h2><p>Cada peso de la cuota se usa para esto. A la derecha, lo que pone cada uno; abajo de cada concepto, lo que cuesta en total.</p>
+    <div class="card"><ul class="rows">${C.parte.map((x) => { const y = C.cubre.find((z) => z.k === x.k) || {}; return `<li><span class="t">${esc(x.label)}</span><span class="d">${esc((y.short || y.desc || "").replace(/\.$/, ""))} · total ${money(x.costo)}</span><span class="m"><b>${money(x.monto)}</b></span></li>`; }).join("")}
+    <li class="tot"><span class="t">Tu cuota</span><span class="d">La pagan los ${C.cuentas.length} jugadores; el portero va becado</span><span class="m"><b>${money(fin.cuota)}</b></span></li></ul></div></section>`;
 
   /* multa */
   if (fin.multa && fin.multa.total) {
