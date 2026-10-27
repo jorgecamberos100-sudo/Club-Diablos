@@ -133,8 +133,8 @@
         "label": "Depósito de garantía",
         "costo": 1500,
         "pagado": 0,
-        "desc": "Si terminamos el torneo sin deber nada ni tirar partidos, la liga lo regresa.",
-        "short": "La liga lo regresa al final del torneo"
+        "desc": "Garantía que se queda con la liga mientras sigamos en ella. Se paga una sola vez y sirve para los torneos siguientes.",
+        "short": "Se paga una vez y sirve para los siguientes torneos"
       },
       {
         "k": "multa",
@@ -429,10 +429,10 @@
         ]
       },
       {
-        "q": "¿Para qué es el depósito y me lo regresan?",
+        "q": "¿Para qué es el depósito?",
         "k": "deposito garantia regresan devuelven 1500",
         "a": [
-          "Es un depósito de garantía de **{deposito}** que cobra la liga. Si terminamos el torneo sin deber nada y sin tirar partidos, la liga lo regresa. Por eso es importante confirmar a cada partido."
+          "Es una garantía de **{deposito}** que cobra la liga. Se queda con la liga mientras el equipo siga en ella y sirve para los torneos siguientes, así que se paga una sola vez. Para conservarla hay que terminar cada torneo sin deber nada ni tirar partidos; por eso es importante confirmar a cada partido."
         ]
       },
       {
@@ -480,7 +480,7 @@
     ],
     "ingresos": [
       {
-        "label": "Préstamo de Metra para las credenciales (se le regresa del depósito)",
+        "label": "Préstamo de Metra para las credenciales",
         "monto": 390
       }
     ]
