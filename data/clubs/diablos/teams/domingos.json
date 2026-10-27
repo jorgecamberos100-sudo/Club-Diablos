@@ -101,7 +101,7 @@
     }
   ],
   "finance": {
-    "updated": "2026-10-27T00:55:00Z",
+    "updated": "2026-10-27T01:05:00Z",
     "cuota": 300,
     "multa": {
       "total": 1450,
@@ -480,8 +480,8 @@
     ],
     "ingresos": [
       {
-        "label": "Metra cubre la diferencia de las credenciales",
-        "monto": 95
+        "label": "Préstamo de Metra para las credenciales (se le regresa del depósito)",
+        "monto": 390
       }
     ]
   },
