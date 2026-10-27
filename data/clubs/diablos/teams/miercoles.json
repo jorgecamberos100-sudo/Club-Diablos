@@ -1,0 +1,134 @@
+{
+  "id": "miercoles",
+  "name": "Miércoles",
+  "competition": "CDI · Fut 7",
+  "format": 7,
+  "roster": [
+    {
+      "player": "odvan",
+      "number": "16",
+      "positions": [
+        "POR"
+      ],
+      "note": "Portero becado",
+      "arbitraje": false
+    },
+    {
+      "player": "carrillo",
+      "number": "3",
+      "positions": []
+    },
+    {
+      "player": "jorge",
+      "number": "4",
+      "positions": []
+    },
+    {
+      "player": "corona",
+      "number": "5",
+      "positions": []
+    },
+    {
+      "player": "marco",
+      "number": "6",
+      "positions": []
+    },
+    {
+      "player": "chepo",
+      "number": "7",
+      "positions": []
+    },
+    {
+      "player": "lalo",
+      "number": "8",
+      "positions": []
+    },
+    {
+      "player": "tony",
+      "number": "10",
+      "positions": []
+    },
+    {
+      "player": "metra",
+      "number": "17",
+      "positions": []
+    },
+    {
+      "player": "dani",
+      "number": "19",
+      "positions": []
+    },
+    {
+      "player": "irving",
+      "number": "20",
+      "positions": []
+    },
+    {
+      "player": "kael",
+      "number": "21",
+      "positions": []
+    },
+    {
+      "player": "mares",
+      "number": "23",
+      "positions": []
+    },
+    {
+      "player": "ismael",
+      "number": "25",
+      "positions": []
+    },
+    {
+      "player": "roman",
+      "number": "27",
+      "positions": []
+    },
+    {
+      "player": "arturo",
+      "number": "28",
+      "positions": []
+    },
+    {
+      "player": "juan",
+      "number": "29",
+      "positions": []
+    },
+    {
+      "player": "isaias",
+      "number": "98",
+      "positions": []
+    },
+    {
+      "player": "humberto",
+      "number": "",
+      "positions": []
+    },
+    {
+      "player": "jesus",
+      "number": "",
+      "positions": []
+    },
+    {
+      "player": "pedro",
+      "number": "",
+      "positions": []
+    },
+    {
+      "player": "jordy",
+      "number": "",
+      "positions": []
+    }
+  ],
+  "lineups": [],
+  "matches": [
+    {
+      "id": "j18",
+      "jornada": "J18",
+      "date": "2026-10-28T19:50:00-07:00",
+      "rival": "Maquintor FC",
+      "venue": "CDI · Cancha 2",
+      "score": null
+    }
+  ],
+  "evaluations": []
+}

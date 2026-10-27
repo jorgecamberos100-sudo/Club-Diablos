@@ -9,6 +9,10 @@
   {
    "id": "domingos",
    "name": "Domingos"
+  },
+  {
+   "id": "miercoles",
+   "name": "Miércoles"
   }
  ],
  "theme": {

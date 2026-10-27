@@ -51,7 +51,10 @@ async function getCtx(clubId, teamId) {
   const k = clubId + "/" + teamId;
   if (!cache[k]) {
     const [base, team0] = await Promise.all([loadClub(clubId), loadTeam(clubId, teamId)]);
-    const { team, players, live } = await enrich(clubId, team0, base.players);
+    const { team, players: ps0, live } = await enrich(clubId, team0, base.players);
+    // Posiciones propias del equipo (p. ej. fut 7 con otras posiciones que el fut 11): las del plantel mandan.
+    const own = Object.fromEntries((team.roster || []).filter((r) => Array.isArray(r.positions)).map((r) => [r.player, r.positions]));
+    const players = ps0.map((p) => (own[p.id] ? { ...p, positions: own[p.id] } : p));
     const club = base.club;
     if (live && live.approved && live.member.player_id) store("app:" + k + ":mine", live.member.player_id);
     cache[k] = {
@@ -96,13 +99,10 @@ async function route() {
     const tabs = Object.entries(VIEWS).filter(([, v]) => !v.needs || ctx.team[v.needs]);
     if (!tabs.some(([k]) => k === view)) { location.replace(`#/${club}/${team}/inicio`); return; }
     const V = VIEWS[view].m;
-    const teams = (ctx.club.teams || [team]).map((t) => (typeof t === "string" ? { id: t, name: t } : t));
     app.innerHTML = `<header class="top">
         <img class="top-cr" src="${esc(ctx.crest)}" alt="Escudo de ${esc(ctx.club.name)}">
         <div class="top-t"><h1>${esc(ctx.club.name)}</h1>
-        ${teams.length > 1
-          ? `<select class="team-sel" aria-label="Equipo">${teams.map((t) => `<option value="${esc(t.id)}"${t.id === team ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`
-          : `<p>${esc(ctx.team.name)} · ${esc(ctx.team.competition || "")}</p>`}</div>
+        <p>${esc(ctx.team.name)} · ${esc(ctx.team.competition || "")}</p></div>
         ${on ? `<a class="top-acc" href="#/cuenta" aria-label="Mi cuenta">${icon.cuenta}</a>` : ""}
       </header>
       ${view === "inicio" ? installHint() : ""}
@@ -112,8 +112,6 @@ async function route() {
     V.bind(document.getElementById("view"), ctx);
     mount(document.getElementById("view"), ctx, view);
     wireSheet(() => current);
-    const sel = app.querySelector(".team-sel");
-    if (sel) sel.onchange = () => { location.hash = `#/${club}/${sel.value}/${view}`; };
     const ix = document.getElementById("install-x");
     if (ix) ix.onclick = () => { store("install:closed", 1); ix.parentElement.remove(); };
     const ig = document.getElementById("install-go");

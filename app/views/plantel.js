@@ -2,10 +2,10 @@
 import { esc, icon } from "../util.js";
 import { tierOf, DEFAULT_CFG } from "../rating.js";
 
-export const POS = { POR: "Portero", LAT: "Lateral", DFC: "Defensa central", MCD: "Medio defensivo", MCO: "Medio ofensivo", EXT: "Extremo", DC: "Delantero centro" };
+export const POS = { POR: "Portero", LAT: "Lateral", DFC: "Defensa central", MCD: "Medio defensivo", MCO: "Medio ofensivo", EXT: "Extremo", MI: "Medio izquierdo", MD: "Medio derecho", DC: "Delantero centro" };
 export const ATTRS = [["vel", "VEL", "Velocidad"], ["tir", "TIR", "Tiro"], ["pas", "PAS", "Pase"], ["reg", "REG", "Regate"], ["def", "DEF", "Defensa"], ["fis", "FÍS", "Físico"]];
 const LINES = [["todos", "Todos"], ["por", "Porteros"], ["def", "Defensas"], ["med", "Medios"], ["del", "Delanteros"]];
-const LINE_OF = { POR: "por", LAT: "def", DFC: "def", MCD: "med", MCO: "med", EXT: "del", DC: "del" };
+const LINE_OF = { POR: "por", LAT: "def", DFC: "def", MCD: "med", MCO: "med", EXT: "del", MI: "med", MD: "med", DC: "del" };
 
 export function card(p, r, ctx, opts = {}) {
   const R = ctx.ratings[p.id] || {};

@@ -5,15 +5,17 @@ import { nextMatch, whenText, versus, attendanceOf } from "../matches.js";
 
 const S = (c, t, x, y) => ({ c, t, x, y });
 const POR = ["POR"], LAT = ["LAT"], DFC = ["DFC"], MCD = ["MCD"], MCO = ["MCO"], MC = ["MCD", "MCO"], EXT = ["EXT"], DC = ["DC"], LD3 = ["LAT", "DFC"];
+// Fut 7: medio izquierdo y derecho; el medio del centro acepta a cualquiera de los medios.
+const MI = ["MI", "EXT"], MD = ["MD", "EXT"], MC7 = ["MI", "MD", "MCD", "MCO"];
 export const FORMS = {
   "4-3-3": { f: 11, s: [S("DC", DC, 50, 10), S("EI", EXT, 16, 19), S("ED", EXT, 84, 19), S("MCO", MCO, 29, 37), S("MCO", MCO, 71, 37), S("MCD", MCD, 50, 51), S("LI", LAT, 11, 68), S("DFC", DFC, 35, 72), S("DFC", DFC, 65, 72), S("LD", LAT, 89, 68), S("POR", POR, 50, 89)] },
   "4-4-2": { f: 11, s: [S("DC", DC, 36, 11), S("DC", DC, 64, 11), S("MI", EXT, 12, 36), S("MC", MC, 37, 43), S("MC", MC, 63, 43), S("MD", EXT, 88, 36), S("LI", LAT, 11, 68), S("DFC", DFC, 35, 72), S("DFC", DFC, 65, 72), S("LD", LAT, 89, 68), S("POR", POR, 50, 89)] },
   "4-2-3-1": { f: 11, s: [S("DC", DC, 50, 9), S("EI", EXT, 15, 27), S("MCO", MCO, 50, 30), S("ED", EXT, 85, 27), S("MCD", MCD, 33, 50), S("MCD", MCD, 67, 50), S("LI", LAT, 11, 68), S("DFC", DFC, 35, 72), S("DFC", DFC, 65, 72), S("LD", LAT, 89, 68), S("POR", POR, 50, 89)] },
   "3-5-2": { f: 11, s: [S("DC", DC, 36, 10), S("DC", DC, 64, 10), S("MC", MC, 31, 38), S("MC", MC, 69, 38), S("LI", LAT, 10, 52), S("MCD", MCD, 50, 53), S("LD", LAT, 90, 52), S("DFC", DFC, 25, 72), S("DFC", DFC, 50, 72), S("DFC", DFC, 75, 72), S("POR", POR, 50, 90)] },
   "5-3-2": { f: 11, s: [S("DC", DC, 36, 10), S("DC", DC, 64, 10), S("MCO", MCO, 28, 33), S("MCO", MCO, 72, 33), S("MCD", MCD, 50, 47), S("LI", LAT, 9, 60), S("DFC", DFC, 29, 72), S("DFC", DFC, 50, 72), S("DFC", DFC, 71, 72), S("LD", LAT, 91, 60), S("POR", POR, 50, 90)] },
-  "2-3-1": { f: 7, s: [S("DC", DC, 50, 13), S("EI", EXT, 15, 38), S("MC", MC, 50, 43), S("ED", EXT, 85, 38), S("DFC", DFC, 30, 70), S("DFC", DFC, 70, 70), S("POR", POR, 50, 89)] },
-  "3-2-1": { f: 7, s: [S("DC", DC, 50, 13), S("MC", MC, 31, 41), S("MC", MC, 69, 41), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
-  "3-1-2": { f: 7, s: [S("DC", DC, 34, 13), S("DC", DC, 66, 13), S("MC", MC, 50, 40), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
+  "2-3-1": { f: 7, s: [S("DC", DC, 50, 13), S("MI", MI, 15, 38), S("MC", MC7, 50, 43), S("MD", MD, 85, 38), S("DFC", DFC, 30, 70), S("DFC", DFC, 70, 70), S("POR", POR, 50, 89)] },
+  "3-2-1": { f: 7, s: [S("DC", DC, 50, 13), S("MI", MI, 31, 41), S("MD", MD, 69, 41), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
+  "3-1-2": { f: 7, s: [S("DC", DC, 34, 13), S("DC", DC, 66, 13), S("MC", MC7, 50, 40), S("LI", LD3, 14, 66), S("DFC", DFC, 50, 70), S("LD", LD3, 86, 66), S("POR", POR, 50, 89)] },
   // Fútbol 5, 6, 8 y 9 (el portero cuenta como uno de los jugadores).
   "2-1-1": { f: 5, s: [S("DC", DC, 50, 14), S("MC", MC, 50, 40), S("DFC", DFC, 30, 67), S("DFC", DFC, 70, 67), S("POR", POR, 50, 89)] },
   "1-2-1": { f: 5, s: [S("DC", DC, 50, 14), S("EI", EXT, 16, 41), S("ED", EXT, 84, 41), S("DFC", DFC, 50, 67), S("POR", POR, 50, 89)] },
