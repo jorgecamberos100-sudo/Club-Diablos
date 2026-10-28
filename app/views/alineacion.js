@@ -6,7 +6,7 @@ import { nextMatch, whenText, versus, attendanceOf } from "../matches.js";
 const S = (c, t, x, y) => ({ c, t, x, y });
 const POR = ["POR"], LAT = ["LAT"], DFC = ["DFC"], MCD = ["MCD"], MCO = ["MCO"], MC = ["MCD", "MCO"], EXT = ["EXT"], DC = ["DC"], LD3 = ["LAT", "DFC"];
 // Fut 7: medio izquierdo y derecho; el medio del centro acepta a cualquiera de los medios.
-const MI = ["MI", "EXT"], MD = ["MD", "EXT"], MC7 = ["MI", "MD", "MCD", "MCO"];
+const MI = ["MI", "EXT"], MD = ["MD", "EXT"], MC7 = ["MC", "MI", "MD", "MCD", "MCO"];
 export const FORMS = {
   "4-3-3": { f: 11, s: [S("DC", DC, 50, 10), S("EI", EXT, 16, 19), S("ED", EXT, 84, 19), S("MCO", MCO, 29, 37), S("MCO", MCO, 71, 37), S("MCD", MCD, 50, 51), S("LI", LAT, 11, 68), S("DFC", DFC, 35, 72), S("DFC", DFC, 65, 72), S("LD", LAT, 89, 68), S("POR", POR, 50, 89)] },
   "4-4-2": { f: 11, s: [S("DC", DC, 36, 11), S("DC", DC, 64, 11), S("MI", EXT, 12, 36), S("MC", MC, 37, 43), S("MC", MC, 63, 43), S("MD", EXT, 88, 36), S("LI", LAT, 11, 68), S("DFC", DFC, 35, 72), S("DFC", DFC, 65, 72), S("LD", LAT, 89, 68), S("POR", POR, 50, 89)] },

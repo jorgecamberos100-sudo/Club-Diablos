@@ -16,32 +16,48 @@
     {
       "player": "carrillo",
       "number": "3",
-      "positions": []
+      "positions": [
+        "DFC",
+        "MI"
+      ]
     },
     {
       "player": "jorge",
       "number": "4",
-      "positions": []
+      "positions": [
+        "DFC"
+      ]
     },
     {
       "player": "corona",
       "number": "5",
-      "positions": []
+      "positions": [
+        "DFC",
+        "DC"
+      ]
     },
     {
       "player": "marco",
       "number": "6",
-      "positions": []
+      "positions": [
+        "DFC",
+        "DC"
+      ]
     },
     {
       "player": "chepo",
       "number": "7",
-      "positions": []
+      "positions": [
+        "DC"
+      ]
     },
     {
       "player": "lalo",
       "number": "8",
-      "positions": []
+      "positions": [
+        "DC",
+        "MD"
+      ]
     },
     {
       "player": "tony",
@@ -51,17 +67,26 @@
     {
       "player": "metra",
       "number": "17",
-      "positions": []
+      "positions": [
+        "MC",
+        "DC"
+      ]
     },
     {
       "player": "dani",
       "number": "19",
-      "positions": []
+      "positions": [
+        "DFC",
+        "MC"
+      ]
     },
     {
       "player": "irving",
       "number": "20",
-      "positions": []
+      "positions": [
+        "MI",
+        "MD"
+      ]
     },
     {
       "player": "kael",
@@ -71,12 +96,20 @@
     {
       "player": "mares",
       "number": "23",
-      "positions": []
+      "positions": [
+        "DFC",
+        "MC"
+      ]
     },
     {
       "player": "ismael",
       "number": "25",
-      "positions": []
+      "positions": [
+        "MC",
+        "MI",
+        "DC",
+        "MD"
+      ]
     },
     {
       "player": "roman",
@@ -86,17 +119,26 @@
     {
       "player": "arturo",
       "number": "28",
-      "positions": []
+      "positions": [
+        "DFC",
+        "MI"
+      ]
     },
     {
       "player": "juan",
       "number": "29",
-      "positions": []
+      "positions": [
+        "DFC",
+        "MC"
+      ]
     },
     {
       "player": "isaias",
       "number": "98",
-      "positions": []
+      "positions": [
+        "DFC",
+        "MD"
+      ]
     },
     {
       "player": "humberto",
@@ -106,12 +148,18 @@
     {
       "player": "jesus",
       "number": "",
-      "positions": []
+      "positions": [
+        "MC",
+        "MI"
+      ]
     },
     {
       "player": "pedro",
       "number": "",
-      "positions": []
+      "positions": [
+        "MC",
+        "MI"
+      ]
     },
     {
       "player": "jordy",
