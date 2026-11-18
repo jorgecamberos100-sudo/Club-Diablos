@@ -404,6 +404,46 @@ try:
     check("sin la función del plan no hay registro", fails("gus", f"""select office_register('{L}','{Lo}','{P(name="Nuevo Jugador", birth_date="1999-09-09")}')""", "plan"))
     q("srv", "update plans set features = array_append(features, 'registration') where id = 'league-base'")
 
+    print("Planes de entrenamiento del jugador")
+    TP = lambda **k: json.dumps(k)
+    hugo = val("srv", "select id from league_players where norm='hugo paz'")
+    prof = {"position": "mediocampo", "role": "MCO", "format": 7, "focuses": ["pas", "res"], "days": 3, "minutes": 45, "attrs": {"vel": 6, "pas": 7}}
+    plan = {"version": 1, "banda": "adulto", "sesiones": []}
+    ident = lambda who, name="Hugo Paz", birth="2002-02-02": json.loads(val(who, f"select training_identify('{L}','{TP(name=name, birth_date=birth)}')"))
+    check("sin coincidencia no se revela nada", ident("anon", birth="2002-02-03").get("error") == "not_found" and ident("anon", name="Otro Nombre").get("error") == "not_found")
+    r = ident("anon")
+    check("con nombre y fecha correctos se identifica al jugador activo", r.get("name") == "Hugo Paz" and r.get("player_id") == hugo and r.get("team") == "Lobos" and r.get("profile") is None and r.get("plan") is None, r)
+    save_self = lambda who, payload: json.loads(val(who, f"select training_save_self('{L}','{payload}')"))
+    good = TP(name="Hugo Paz", birth_date="2002-02-02", profile=prof, plan=plan, hash="abc123")
+    check("el jugador guarda su perfil y su plan", save_self("anon", good) == {"ok": True}, save_self("anon", good))
+    r = ident("anon")
+    check("después de guardar, la identificación trae perfil y plan", r["profile"]["position"] == "mediocampo" and r["profile"]["focuses"] == ["pas", "res"] and r["profile"]["days"] == 3 and r["plan"]["version"] == 1, r)
+    check("guardar con otra fecha no encuentra al jugador ni cambia nada", save_self("anon", TP(name="Hugo Paz", birth_date="2002-02-03", profile=prof, plan=plan, hash="x")).get("error") == "not_found"
+          and ident("anon")["profile"]["focuses"] == ["pas", "res"])
+    bad_profiles = [
+        {**prof, "position": "arquero"},
+        {**prof, "role": "DC"},
+        {**prof, "focuses": ["pas", "tir", "vel", "reg"]},
+        {**prof, "focuses": ["pas", "magia"]},
+        {**prof, "days": 9},
+        {**prof, "minutes": 10},
+        {**prof, "format": 5},
+    ]
+    check("perfiles inválidos se rechazan sin guardar", all(save_self("anon", TP(name="Hugo Paz", birth_date="2002-02-02", profile=b, plan=plan, hash="x")).get("error") == "data" for b in bad_profiles)
+          and ident("anon")["profile"]["focuses"] == ["pas", "res"])
+    check("plan que no es objeto y huella ausente se rechazan", save_self("anon", TP(name="Hugo Paz", birth_date="2002-02-02", profile=prof, plan=[1, 2], hash="x")).get("error") == "data"
+          and save_self("anon", TP(name="Hugo Paz", birth_date="2002-02-02", profile=prof, plan=plan)).get("error") == "data")
+    check("la liga guarda el plan de un jugador con permiso de registro", json.loads(val("gus", f"select training_save('{L}','{hugo}','{TP(profile={**prof, 'focuses': ['tir']}, plan=plan, hash='def456')}')")) == {"ok": True}
+          and ident("anon")["profile"]["focuses"] == ["tir"])
+    check("sin permiso de registro no se guarda el plan de otro", fails("fran", f"select training_save('{L}','{hugo}','{TP(profile=prof, plan=plan, hash='x')}')", "sin permiso"))
+    check("sin cuenta no se guarda por la función de administrador", fails("anon", f"select training_save('{L}','{hugo}','{TP(profile=prof, plan=plan, hash='x')}')", "permission denied"))
+    check("el validador interno no se puede llamar directo", fails("ana", "select training_check('{}','{}','x')", "permission denied"))
+    check("nadie sin permiso lee los perfiles ni los planes en las tablas", val("anon", f"select count(*) from player_training_profiles where league_id='{L}'").startswith("ERR")
+          and val("cris", f"select count(*) from player_training_plans where league_id='{L}'") == "0"
+          and val("gus", f"select count(*) from player_training_profiles where league_id='{L}'") == "1")
+    check("nadie escribe directo en las tablas (todo pasa por funciones)", val("ana", f"insert into player_training_profiles (league_id, player_id, position, focuses, days_per_week, minutes) values ('{L}','{hugo}','portero',array['por'],2,30)").startswith("ERR")
+          and val("anon", f"delete from player_training_plans where league_id='{L}'").startswith("ERR"))
+
     print("Página pública (etapa 8)")
     SP = lambda **k: json.dumps(k)
     pub = lambda sql: json.loads(val("anon", sql))
@@ -493,7 +533,7 @@ try:
     q("srv", "update plans set features = array_append(features, 'public_page') where id = 'league-base'")
     print("Endurecimiento de funciones")
     anon_ok = val("srv", "select string_agg(p.proname, ',' order by p.proname) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f' and has_function_privilege('anon', p.oid, 'execute') and p.prorettype <> 'trigger'::regtype")
-    check("anon solo ejecuta las funciones públicas", anon_ok == "chat_take,claimed,public_league,public_tournament,reg_link_info,register_by_link,team_doc,team_paid", anon_ok)
+    check("anon solo ejecuta las funciones públicas", anon_ok == "chat_take,claimed,public_league,public_tournament,reg_link_info,register_by_link,team_doc,team_paid,training_identify,training_save_self", anon_ok)
     check("anon no puede llamar funciones de administración (ni siquiera para recibir el error de permiso)", fails("anon", f"select record_result('{L}','{UID['ana']}',1,0,'[]')", "permission denied") and fails("anon", f"select create_league('X')", "permission denied") and fails("anon", f"select league_admins_list('{L}')", "permission denied"))
     check("con sesión se sigue llamando lo de siempre", val("ana", f"select count(*) from league_admins_list('{L}')") != "" and not val("ana", f"select count(*) from league_admins_list('{L}')").startswith("ERR"))
     check("las funciones internas siguen cerradas para todos", fails("ana", f"select log_action('{L}','x','{{}}')", "permission denied"))
@@ -625,7 +665,7 @@ try:
     check("la verificación detecta una tabla sin RLS y una función abierta de más", bad["1"].startswith("REVISAR") and "chat_usage" in bad["1"] and bad["2"].startswith("REVISAR") and "forget_player" in bad["2"], bad)
     q("srv", "alter table public.chat_usage enable row level security; revoke execute on function public.forget_player(text,uuid) from anon")
     print("Matriz de acceso: nadie lee ni cambia datos ajenos (paso 10 de la prueba integral)")
-    PRIV = ["league_players", "player_registrations", "registration_links", "sanctions", "disputes", "league_charges", "league_movements", "audit_log", "acta_uploads",
+    PRIV = ["league_players", "player_registrations", "registration_links", "player_training_profiles", "player_training_plans", "sanctions", "disputes", "league_charges", "league_movements", "audit_log", "acta_uploads",
             "admin_invites", "league_invites", "tournaments", "tournament_teams", "league_matches", "match_events", "leagues", "league_contracts", "chat_usage", "rate_limits", "app_secret", "schema_migrations"]
     owner_sees = [t for t in PRIV if val("ana", f"select count(*) from public.{t}") not in ("0",) and not val("ana", f"select count(*) from public.{t}").startswith("ERR")]
     check("control: la dueña de la liga sí ve sus datos privados", len(owner_sees) >= 14, owner_sees)

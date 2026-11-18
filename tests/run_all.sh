@@ -15,7 +15,8 @@ run "Asistente de la liga" node tests/unit/test_chat.mjs
 run "Grupos y eliminatorias" node tests/unit/test_bracket.mjs
 run "Reportes imprimibles" node tests/unit/test_printout.mjs
 run "Calificación y MVP" node tests/unit/test_rating.mjs
+run "Planes de entrenamiento" node tests/unit/test_entrenamiento.mjs
 (sh tests/e2e/serve.sh >/dev/null 2>&1 &) ; sleep 1
-for t in test_links test_regress test_team test_tournaments test_league_admin test_players test_public test_actas test_mobile test_integral test_formats test_reports; do run "Navegador: $t" python3 tests/e2e/$t.py; done
+for t in test_links test_regress test_team test_tournaments test_league_admin test_players test_public test_actas test_mobile test_integral test_formats test_reports test_entrenamiento; do run "Navegador: $t" python3 tests/e2e/$t.py; done
 pkill -f "http.server 8765" 2>/dev/null
 [ $fail = 0 ] && echo "TODO EN VERDE" || echo "HAY FALLAS"; exit $fail

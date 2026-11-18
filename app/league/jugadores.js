@@ -42,7 +42,7 @@ export async function render(ctx) {
 
   const list = reg.players.map((p) => { const r = cur(p.id), a = age(p.birth_date), ph = photos.get(p.id), st = ST[p.status] || ["na", p.status || "—"];
     return `<div class="cl-row static pl" data-n="${esc(p.norm)}"><span class="pl-ph">${ph ? `<img src="${esc(ph)}" alt="">` : "·"}</span><span><b>${esc(p.name)}</b><small>${esc([a != null && a + " años", r && tname(r.team_id) + (r.number != null ? " #" + r.number : ""), r && r.status === "pending" && "Pendiente"].filter(Boolean).join(" · "))}</small></span>
-      <span class="acts">${a != null && a < 18 ? chip("Menor", "due") : ""}${chip(st[1], st[0])}${btn("Editar", `data-la="edit" data-id="${esc(p.id)}"`, "ghost")}
+      <span class="acts">${a != null && a < 18 ? chip("Menor", "due") : ""}${chip(st[1], st[0])}${btn("Editar", `data-la="edit" data-id="${esc(p.id)}"`, "ghost")}${btn("Plan", `data-la="plan" data-id="${esc(p.id)}"`, "ghost")}
       ${r && r.status === "active" ? btn("Credencial", `data-la="cred1" data-id="${esc(r.id)}"`, "ghost") : ""}${r ? btn("Baja", `data-la="rm" data-id="${esc(r.id)}"`, "ghost") : ""}</span></div>`; }).join("");
   const padron = card("Padrón de la liga", reg.players.length ? `<label class="fld-inline">Buscar<input type="search" data-search placeholder="Nombre del jugador" value="${esc(find)}"></label><div id="pl-list">${list}</div>` : empty("Todavía no hay jugadores."));
 
@@ -71,6 +71,7 @@ const photoInput = (rule) => (rule === "off" ? "" : `<label>Foto${rule === "requ
 
 export const actions = {
   async copy(ctx, el) { toast((await copyText(el.dataset.v)) ? "Enlace copiado" : "No se pudo copiar; selecciónalo y cópialo a mano.", false); },
+  async plan(ctx, el) { location.hash = `#/mi-entrenamiento/${ctx.id}/${el.dataset.id}`; },
   async rlink(ctx, el) { await api.revokeRegLink(ctx.id, el.dataset.v); toast("Enlace revocado"); done(ctx); },
   async reg() {
     const r = S.rules;

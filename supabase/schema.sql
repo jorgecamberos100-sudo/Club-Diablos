@@ -1696,6 +1696,134 @@ drop policy if exists pr_read on public.player_registrations; create policy pr_r
 drop policy if exists rl_read on public.registration_links; create policy rl_read on public.registration_links for select using (is_league_admin(league_id, 'registration'));
 grant select on public.league_players, public.player_registrations, public.registration_links to authenticated;
 
+-- Planes de entrenamiento del jugador. El perfil lo llena el propio jugador (posición, rol,
+-- formato, qué quiere mejorar, días y minutos); el plan lo genera la app por reglas locales
+-- (app/entrenamiento.js), sin modelo de lenguaje. Las escrituras pasan solo por funciones:
+-- el jugador se identifica con nombre + fecha de nacimiento (la misma identidad del padrón)
+-- y la liga lo hace con su permiso de registro.
+create table if not exists public.player_training_profiles (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  player_id uuid not null references public.league_players(id) on delete cascade,
+  position text not null check (position in ('portero','defensa','mediocampo','delantero')),
+  role text check (role is null or role in ('POR','DFC','LAT','MCD','MC','MCO','MI','MD','EXT','DC')),
+  format smallint check (format is null or format in (7,11)),
+  focuses text[] not null check (coalesce(array_length(focuses, 1), 0) between 1 and 3 and focuses <@ array['vel','tir','pas','reg','def','fis','res','agi','aer','por']),
+  days_per_week smallint not null default 3 check (days_per_week between 1 and 5),
+  minutes smallint not null default 45 check (minutes between 20 and 90),
+  self_attrs jsonb check (self_attrs is null or (jsonb_typeof(self_attrs) = 'object' and length(self_attrs::text) <= 500)),
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  unique (league_id, player_id)
+);
+create table if not exists public.player_training_plans (
+  id uuid primary key default gen_random_uuid(),
+  league_id text not null references public.leagues(id) on delete cascade,
+  player_id uuid not null references public.league_players(id) on delete cascade,
+  profile_hash text not null check (length(profile_hash) between 1 and 64),
+  plan jsonb not null check (jsonb_typeof(plan) = 'object' and length(plan::text) <= 20000),
+  generated_at timestamptz not null default now(),
+  unique (league_id, player_id)
+);
+alter table public.player_training_profiles enable row level security; alter table public.player_training_plans enable row level security;
+drop policy if exists tp_read on public.player_training_profiles; create policy tp_read on public.player_training_profiles for select using (is_league_admin(league_id, 'registration'));
+drop policy if exists tpl_read on public.player_training_plans; create policy tpl_read on public.player_training_plans for select using (is_league_admin(league_id, 'registration'));
+grant select on public.player_training_profiles, public.player_training_plans to authenticated;
+
+-- Validador interno (sin permisos para nadie): null si el perfil y el plan son válidos, o el mensaje del problema.
+create or replace function public.training_check(prof jsonb, plan jsonb, h text) returns text
+language plpgsql immutable set search_path = public as $$
+begin
+  if prof is null or jsonb_typeof(prof) <> 'object' then return 'Falta el perfil'; end if;
+  if not (prof->>'position' in ('portero','defensa','mediocampo','delantero')) then return 'Posición no válida'; end if;
+  if prof->>'role' is not null and not (prof->>'role' in ('POR','DFC','LAT','MCD','MC','MCO','MI','MD','EXT','DC')) then return 'Rol no válido'; end if;
+  if prof->>'role' is not null and not ((prof->>'role' = 'POR' and prof->>'position' = 'portero') or (prof->>'role' in ('DFC','LAT') and prof->>'position' = 'defensa') or (prof->>'role' in ('MCD','MC','MCO','MI','MD') and prof->>'position' = 'mediocampo') or (prof->>'role' in ('EXT','DC') and prof->>'position' = 'delantero')) then return 'El rol no corresponde a la posición'; end if;
+  if prof->>'format' is not null and not (prof->>'format' in ('7','11')) then return 'Formato no válido'; end if;
+  if jsonb_typeof(prof->'focuses') <> 'array' then return 'Elige de 1 a 3 cosas para mejorar'; end if;
+  if jsonb_array_length(prof->'focuses') < 1 or jsonb_array_length(prof->'focuses') > 3 then return 'Elige de 1 a 3 cosas para mejorar'; end if;
+  if exists (select 1 from jsonb_array_elements_text(prof->'focuses') f where f not in ('vel','tir','pas','reg','def','fis','res','agi','aer','por')) then return 'Hay cosas para mejorar no válidas'; end if;
+  if (select count(distinct f) from jsonb_array_elements_text(prof->'focuses') f) <> jsonb_array_length(prof->'focuses') then return 'Las cosas para mejorar no se repiten'; end if;
+  if prof->>'days' is null or (prof->>'days') !~ '^[1-5]$' then return 'Los días por semana son de 1 a 5'; end if;
+  if prof->>'minutes' is null or (prof->>'minutes') !~ '^\d+$' or (prof->>'minutes')::int not between 20 and 90 then return 'Los minutos por sesión son de 20 a 90'; end if;
+  if prof->'attrs' is not null and (jsonb_typeof(prof->'attrs') <> 'object' or length((prof->'attrs')::text) > 500) then return 'La autoevaluación no es válida'; end if;
+  if plan is null or jsonb_typeof(plan) <> 'object' or length(plan::text) > 20000 then return 'El plan no es válido'; end if;
+  if h is null or length(h) > 64 then return 'Falta la huella del perfil'; end if;
+  return null;
+end $$;
+revoke all on function public.training_check(jsonb,jsonb,text) from public, anon, authenticated;
+
+-- Identifica al jugador por nombre + fecha de nacimiento (la misma identidad del padrón) y
+-- devuelve su perfil y su plan guardados. No revela si el nombre existe: sin coincidencia
+-- activa responde igual que con datos mal formados.
+create or replace function public.training_identify(l text, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare pl league_players; team text; prof player_training_profiles; pln player_training_plans;
+begin
+  if not rate_ok('training-id', client_key(), 30, 600) then return jsonb_build_object('error', 'rate'); end if;
+  if p is null or jsonb_typeof(p) <> 'object' or length(p::text) > 1000 then return jsonb_build_object('error', 'data'); end if;
+  if (p->>'name') is null or (p->>'birth_date') !~ '^\d{4}-\d{2}-\d{2}$' then return jsonb_build_object('error', 'not_found'); end if;
+  select * into pl from league_players where league_id = l and norm = norm_name(p->>'name') and birth_date = (p->>'birth_date')::date and status = 'active';
+  if pl.id is null then return jsonb_build_object('error', 'not_found'); end if;
+  select tt.name into team from player_registrations pr join tournament_teams tt on tt.id = pr.team_id where pr.player_id = pl.id and pr.status = 'active' order by pr.created_at desc limit 1;
+  select * into prof from player_training_profiles where league_id = l and player_id = pl.id;
+  select * into pln from player_training_plans where league_id = l and player_id = pl.id;
+  return jsonb_build_object('player_id', pl.id, 'name', pl.name, 'birth_date', pl.birth_date, 'team', team,
+    'profile', case when prof.id is null then null else jsonb_build_object('position', prof.position, 'role', prof.role, 'format', prof.format, 'focuses', prof.focuses, 'days', prof.days_per_week, 'minutes', prof.minutes, 'attrs', prof.self_attrs) end,
+    'plan', case when pln.id is null then null else pln.plan end);
+end $$;
+
+-- Guarda el perfil y el plan del propio jugador: vuelve a verificar nombre + fecha de
+-- nacimiento en cada llamada. Quien sepa esos dos datos puede reescribir el plan de otro
+-- (igual que puede mandar un registro duplicado por enlace); el plan no lleva datos sensibles.
+create or replace function public.training_save_self(l text, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare pl league_players; prof jsonb; plan jsonb; h text; bad text;
+begin
+  if not rate_ok('training-save', client_key(), 30, 600) then return jsonb_build_object('error', 'rate'); end if;
+  if p is null or jsonb_typeof(p) <> 'object' or length(p::text) > 25000 then return jsonb_build_object('error', 'data'); end if;
+  if (p->>'name') is null or (p->>'birth_date') !~ '^\d{4}-\d{2}-\d{2}$' then return jsonb_build_object('error', 'not_found'); end if;
+  select * into pl from league_players where league_id = l and norm = norm_name(p->>'name') and birth_date = (p->>'birth_date')::date and status = 'active';
+  if pl.id is null then return jsonb_build_object('error', 'not_found'); end if;
+  prof := p->'profile'; plan := p->'plan'; h := p->>'hash';
+  bad := training_check(prof, plan, h);
+  if bad is not null then return jsonb_build_object('error', 'data', 'message', bad); end if;
+  begin
+    insert into player_training_profiles (league_id, player_id, position, role, format, focuses, days_per_week, minutes, self_attrs)
+    values (l, pl.id, prof->>'position', nullif(prof->>'role', ''), case when prof->>'format' is null then null else (prof->>'format')::smallint end,
+      array(select jsonb_array_elements_text(prof->'focuses')), (prof->>'days')::smallint, (prof->>'minutes')::smallint, prof->'attrs')
+    on conflict (league_id, player_id) do update set position = excluded.position, role = excluded.role, format = excluded.format, focuses = excluded.focuses, days_per_week = excluded.days_per_week, minutes = excluded.minutes, self_attrs = excluded.self_attrs, updated_at = now();
+    insert into player_training_plans (league_id, player_id, profile_hash, plan) values (l, pl.id, h, plan)
+    on conflict (league_id, player_id) do update set profile_hash = excluded.profile_hash, plan = excluded.plan, generated_at = now();
+  exception when others then
+    return jsonb_build_object('error', 'data', 'message', case when sqlstate = 'P0001' then sqlerrm else 'Datos no válidos' end);
+  end;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Guarda el perfil y el plan de un jugador como administrador de la liga (permiso de registro).
+create or replace function public.training_save(l text, pid uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare pl league_players; prof jsonb; plan jsonb; h text; bad text;
+begin
+  if not is_league_admin(l, 'registration') then raise exception 'Sin permiso'; end if;
+  if p is null or jsonb_typeof(p) <> 'object' or length(p::text) > 25000 then return jsonb_build_object('error', 'data'); end if;
+  select * into pl from league_players where id = pid and league_id = l;
+  if pl.id is null then raise exception 'Jugador no encontrado'; end if;
+  prof := p->'profile'; plan := p->'plan'; h := p->>'hash';
+  bad := training_check(prof, plan, h);
+  if bad is not null then return jsonb_build_object('error', 'data', 'message', bad); end if;
+  insert into player_training_profiles (league_id, player_id, position, role, format, focuses, days_per_week, minutes, self_attrs)
+  values (l, pl.id, prof->>'position', nullif(prof->>'role', ''), case when prof->>'format' is null then null else (prof->>'format')::smallint end,
+    array(select jsonb_array_elements_text(prof->'focuses')), (prof->>'days')::smallint, (prof->>'minutes')::smallint, prof->'attrs')
+  on conflict (league_id, player_id) do update set position = excluded.position, role = excluded.role, format = excluded.format, focuses = excluded.focuses, days_per_week = excluded.days_per_week, minutes = excluded.minutes, self_attrs = excluded.self_attrs, updated_at = now();
+  insert into player_training_plans (league_id, player_id, profile_hash, plan) values (l, pl.id, h, plan)
+  on conflict (league_id, player_id) do update set profile_hash = excluded.profile_hash, plan = excluded.plan, generated_at = now();
+  return jsonb_build_object('ok', true);
+end $$;
+grant execute on function public.training_save(text,uuid,jsonb) to authenticated;
+-- Las dos siguientes las usa el propio jugador, sin cuenta.
+grant execute on function public.training_identify(text,jsonb), public.training_save_self(text,jsonb) to anon, authenticated;
+
+
 -- Fotos de jugadores: bucket PRIVADO (a diferencia de los escudos). Se leen con enlaces firmados temporales y solo los administradores con permiso de registro.
 insert into storage.buckets (id, name, public) values ('player-photos', 'player-photos', false) on conflict (id) do nothing;
 drop policy if exists pphotos_write on storage.objects;
@@ -2435,4 +2563,4 @@ begin
   end loop;
 end $$;
 grant execute on function public.claimed(text,text), public.team_paid(text,text), public.team_doc(text,text), public.reg_link_info(text), public.register_by_link(text,jsonb),
-  public.public_league(text), public.public_tournament(text,uuid), public.chat_take(text) to anon;
+  public.public_league(text), public.public_tournament(text,uuid), public.chat_take(text), public.training_identify(text,jsonb), public.training_save_self(text,jsonb) to anon;

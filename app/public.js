@@ -71,9 +71,10 @@ export async function renderPublic(app, [kind, l, tid, tab], { chatMount } = {})
   const cur = tabs.some(([k]) => k === tab) ? tab : "tabla";
   const pre = embed ? "#/embed" : "#/p";
   const body = cur === "tabla" ? tablaHTML(d.tournament, d) : cur === "calendario" ? calendarioHTML(d) : cur === "llaves" ? llavesHTML(d) : goleoHTML(d);
+  const trainLink = embed ? "" : `<p class="row-acts"><a class="btn sm ghost" href="#/mi-entrenamiento/${esc(l)}">Mi plan de entrenamiento</a></p>`;
   const switcher = T.length > 1 && !embed ? `<label class="fld-inline">Torneo<select class="pub-t" aria-label="Torneo">${T.map((x) => `<option value="${esc(x.id)}"${x.id === tid ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>` : "";
   app.innerHTML = head + `<div class="view pub">${switcher}<div class="seg-tabs" role="tablist">${tabs.map(([k, v]) => `<button type="button" role="tab" aria-selected="${k === cur}" data-pt="${k}">${v}</button>`).join("")}</div>
-    <section class="s cl-card" aria-live="polite">${body}</section>${embed ? `<p class="hint pub-foot">${esc(lg.league.name)} · ${esc(d.tournament.name)}</p>` : ""}<div id="pub-chat"></div>${!embed && lg.privacy ? `<div class="pub-priv">${noticeHTML(lg.privacy)}</div>` : ""}</div>`;
+    <section class="s cl-card" aria-live="polite">${body}</section>${trainLink}${embed ? `<p class="hint pub-foot">${esc(lg.league.name)} · ${esc(d.tournament.name)}</p>` : ""}<div id="pub-chat"></div>${!embed && lg.privacy ? `<div class="pub-priv">${noticeHTML(lg.privacy)}</div>` : ""}</div>`;
   app.querySelectorAll("[data-pt]").forEach((b) => (b.onclick = () => { location.hash = `${pre}/${l}/${tid}/${b.dataset.pt}`; }));
   const sel = app.querySelector(".pub-t"); if (sel) sel.onchange = () => { location.hash = `#/p/${l}/${sel.value}/${cur}`; };
   if (!embed && lg.chat && chatMount) chatMount(document.getElementById("pub-chat"), l, d);

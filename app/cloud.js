@@ -289,6 +289,19 @@ async function supa() {
     async revokeRegLink(l, c) { ok(await sb.rpc("revoke_reg_link", { l, c })); },
     async regLinkInfo(code) { return ok(await sb.rpc("reg_link_info", { p_code: code })); },
     async registerByLink(code, p) { return ok(await sb.rpc("register_by_link", { p_code: code, p })); },   // devuelve {ok} o {error: invalid|rate|data, message}
+    // ----- planes de entrenamiento del jugador (mismas reglas que las funciones SQL) -----
+    async trainingIdentify(l, p) { return ok(await sb.rpc("training_identify", { l, p })); },   // {player_id, name, birth_date, team, profile, plan} o {error: not_found|rate|data}
+    async trainingSaveSelf(l, p) { return ok(await sb.rpc("training_save_self", { l, p })); },   // {ok} o {error, message}
+    async trainingSave(l, pid, p) { return ok(await sb.rpc("training_save", { l, pid, p })); },
+    async trainingGet(l, pid) {
+      const [pl, prof, pln] = await Promise.all([
+        ok(await sb.from("league_players").select("id,name,birth_date").eq("id", pid).eq("league_id", l).maybeSingle()),
+        ok(await sb.from("player_training_profiles").select("*").eq("league_id", l).eq("player_id", pid).maybeSingle()),
+        ok(await sb.from("player_training_plans").select("plan").eq("league_id", l).eq("player_id", pid).maybeSingle()),
+      ]);
+      if (!pl) return null;
+      return { player_id: pl.id, name: pl.name, birth_date: pl.birth_date, team: null, profile: prof ? { position: prof.position, role: prof.role, format: prof.format, focuses: prof.focuses, days: prof.days_per_week, minutes: prof.minutes, attrs: prof.self_attrs } : null, plan: pln ? pln.plan : null };
+    },
     async delegateTargets(c, t) { return ok(await sb.rpc("delegate_targets", { c, t })); },
     async delegateRegister(c, t, tt, p) { const r = ok(await sb.rpc("delegate_register", { c, t, ttid: tt, p })); if (r && r.error) throw new Error(r.message || "Datos no válidos"); return r; },
     async delegateRegistrations(c, t) { return ok(await sb.rpc("delegate_registrations", { c, t })); },
@@ -372,7 +385,7 @@ async function supa() {
 function demo() {
   const K = "demo-db";
   const load = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch (e) { return {}; } };
-  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [], contracts: [], invites: [], lteams: [], attempts: [], audit: [], tourn: [], ttems: [], lmatches: [], mevents: [], ainv: [], sanc: [], disp: [], chg: [], mov: [], lplayers: [], lregs: [], rlinks: [] }, load());
+  const db = () => Object.assign({ users: [], session: null, members: [], profiles: [], avail: [], results: [], attr: [], rating: [], mvp: [], pays: [], accounts: [], leagues: [], ladmins: [], subs: [], clubdocs: [], teamdocs: [], contracts: [], invites: [], lteams: [], attempts: [], audit: [], tourn: [], ttems: [], lmatches: [], mevents: [], ainv: [], sanc: [], disp: [], chg: [], mov: [], lplayers: [], lregs: [], rlinks: [], tprof: [], tplans: [] }, load());
   const dataURL = (f) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
   const save = (d) => { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ } };
   const cur = (d) => { const u = d.users.find((x) => x.id === d.session); if (!u) throw new Error("Inicia sesión primero"); return u; };
@@ -409,6 +422,37 @@ function demo() {
     if (ex) { if (update) { ex.doc_id = ex.doc_id || (dn ? String(p.doc_id).trim().slice(0, 30) : null); ex.doc_norm = ex.doc_norm || dn; ex.birth_date = ex.birth_date || bd; } return ex; }
     const x = { id: uuid(), league_id: l, name: nm, norm: normName(nm), birth_date: bd, doc_id: dn ? String(p.doc_id).trim().slice(0, 30) : null, doc_norm: dn, photo_path: null, status: st, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     d.lplayers.push(x); return x;
+  };
+  // Planes de entrenamiento: mismo espejo que training_check en SQL.
+  const TRAIN_FOCUS = ["vel", "tir", "pas", "reg", "def", "fis", "res", "agi", "aer", "por"];
+  const TRAIN_ROL_LINEA = { POR: "portero", DFC: "defensa", LAT: "defensa", MCD: "mediocampo", MC: "mediocampo", MCO: "mediocampo", MI: "mediocampo", MD: "mediocampo", EXT: "delantero", DC: "delantero" };
+  const trainBad = (prof, plan, h) => {
+    if (!prof || typeof prof !== "object") return "Falta el perfil";
+    if (!["portero", "defensa", "mediocampo", "delantero"].includes(prof.position)) return "Posición no válida";
+    if (prof.role != null && !(prof.role in TRAIN_ROL_LINEA)) return "Rol no válido";
+    if (prof.role && TRAIN_ROL_LINEA[prof.role] !== prof.position) return "El rol no corresponde a la posición";
+    if (prof.format != null && ![7, 11].includes(prof.format)) return "Formato no válido";
+    if (!Array.isArray(prof.focuses) || prof.focuses.length < 1 || prof.focuses.length > 3 || prof.focuses.some((f) => !TRAIN_FOCUS.includes(f)) || new Set(prof.focuses).size !== prof.focuses.length) return "Elige de 1 a 3 cosas para mejorar";
+    if (!Number.isInteger(prof.days) || prof.days < 1 || prof.days > 5) return "Los días por semana son de 1 a 5";
+    if (!Number.isInteger(prof.minutes) || prof.minutes < 20 || prof.minutes > 90) return "Los minutos por sesión son de 20 a 90";
+    if (prof.attrs != null && (typeof prof.attrs !== "object" || JSON.stringify(prof.attrs).length > 500)) return "La autoevaluación no es válida";
+    if (!plan || typeof plan !== "object" || JSON.stringify(plan).length > 20000) return "El plan no es válido";
+    if (!h || h.length > 64) return "Falta la huella del perfil";
+    return null;
+  };
+  const trainUpsert = (d, l, pid, prof, plan, h) => {
+    const row = { league_id: l, player_id: pid, position: prof.position, role: prof.role || null, format: prof.format || null, focuses: prof.focuses, days_per_week: prof.days, minutes: prof.minutes, self_attrs: prof.attrs || null, updated_at: new Date().toISOString() };
+    const ex = d.tprof.find((x) => x.league_id === l && x.player_id === pid);
+    if (ex) Object.assign(ex, row); else d.tprof.push({ id: uuid(), ...row, created_at: new Date().toISOString() });
+    const px = d.tplans.find((x) => x.league_id === l && x.player_id === pid);
+    if (px) Object.assign(px, { profile_hash: h, plan, generated_at: new Date().toISOString() }); else d.tplans.push({ id: uuid(), league_id: l, player_id: pid, profile_hash: h, plan, generated_at: new Date().toISOString() });
+  };
+  const trainOut = (d, l, pl) => {
+    const r = d.lregs.find((x) => x.player_id === pl.id && x.status === "active");
+    const team = r && (d.ttems.find((x) => x.id === r.team_id) || {}).name;
+    const prof = d.tprof.find((x) => x.league_id === l && x.player_id === pl.id);
+    const pln = d.tplans.find((x) => x.league_id === l && x.player_id === pl.id);
+    return { player_id: pl.id, name: pl.name, birth_date: pl.birth_date, team: team || null, profile: prof ? { position: prof.position, role: prof.role, format: prof.format, focuses: prof.focuses, days: prof.days_per_week, minutes: prof.minutes, attrs: prof.self_attrs } : null, plan: pln ? pln.plan : null };
   };
   const canActivate = (d, l, pl) => { const r = regRules(d, l); ensure(r.photo !== "required" || pl.photo_path, "Falta la foto del jugador"); ensure(r.doc !== "required" || pl.doc_norm, "Falta el documento del jugador"); };
   const regConflict = (d, t, pl) => d.lregs.find((x) => x.tournament_id === t.tournament_id && x.player_id === pl.id && ["pending", "active"].includes(x.status));
@@ -875,6 +919,37 @@ function demo() {
         else { const r = addReg(d, rl.league_id, t, pl, null, "pending", "link", cons); log(d, rl.league_id, "player.submit", { player: pl.id, registration: r.id, team: t.id, via: "link", code_end: rl.code.slice(-4) }); }
       } catch (e) { const d2 = db(); d2.rate = d.rate; save(d2); return { error: "data", message: e.message }; }
       rl.uses++; save(d); return { ok: true, team: t.name };
+    },
+    // ----- planes de entrenamiento del jugador (mismas reglas que las funciones SQL) -----
+    async trainingIdentify(l, p) {
+      const d = db();
+      if (!demoRate(d, "training-id", 30, 600)) { save(d); return { error: "rate" }; }
+      if (!p || typeof p !== "object" || !p.name || !/^\d{4}-\d{2}-\d{2}$/.test(p.birth_date || "")) return { error: "not_found" };
+      const pl = d.lplayers.find((x) => x.league_id === l && x.norm === normName(p.name) && x.birth_date === p.birth_date && x.status === "active");
+      if (!pl) return { error: "not_found" };
+      return trainOut(d, l, pl);
+    },
+    async trainingSaveSelf(l, p) {
+      const d = db();
+      if (!demoRate(d, "training-save", 30, 600)) { save(d); return { error: "rate" }; }
+      if (!p || typeof p !== "object" || !p.name || !/^\d{4}-\d{2}-\d{2}$/.test(p.birth_date || "")) return { error: "not_found" };
+      const pl = d.lplayers.find((x) => x.league_id === l && x.norm === normName(p.name) && x.birth_date === p.birth_date && x.status === "active");
+      if (!pl) return { error: "not_found" };
+      const bad = trainBad(p.profile, p.plan, p.hash);
+      if (bad) return { error: "data", message: bad };
+      trainUpsert(d, l, pl.id, p.profile, p.plan, p.hash); save(d); return { ok: true };
+    },
+    async trainingSave(l, pid, p) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "registration"));
+      const pl = d.lplayers.find((x) => x.id === pid && x.league_id === l); ensure(pl, "Jugador no encontrado");
+      const bad = trainBad(p.profile, p.plan, p.hash);
+      if (bad) return { error: "data", message: bad };
+      trainUpsert(d, l, pid, p.profile, p.plan, p.hash); save(d); return { ok: true };
+    },
+    async trainingGet(l, pid) {
+      const d = db(); ensure(isLeagueAdmin(d, l, "registration"));
+      const pl = d.lplayers.find((x) => x.id === pid && x.league_id === l); if (!pl) return null;
+      return trainOut(d, l, pl);
     },
     async delegateTargets(c, t) {
       const d = db(); ensure(isAdmin(d, c, t));

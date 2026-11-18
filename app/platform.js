@@ -133,7 +133,8 @@ async function registro(app, code) {
     ${r.doc === "off" ? "" : `<label>Documento de identidad${r.doc === "required" ? " (obligatorio)" : " (opcional)"}<input name="doc" maxlength="30"${r.doc === "required" ? " required" : ""}></label>`}
     <p class="hint">Tu registro queda pendiente hasta que la liga lo apruebe.${r.photo === "off" ? "" : " La foto la toma tu delegado o la liga."} Tus datos solo los ve la administración de la liga.</p>
     ${consentFields(info.privacy, "self")}
-    <button class="btn" type="submit"${info.privacy ? "" : " disabled"}>Enviar mi registro</button><p class="msg" role="alert" hidden></p></form>`));
+    <button class="btn" type="submit"${info.privacy ? "" : " disabled"}>Enviar mi registro</button><p class="msg" role="alert" hidden></p></form>
+    <p class="hint">¿Ya te registraste antes? <a href="#/mi-entrenamiento">Arma tu plan de entrenamiento</a> mientras la liga aprueba tu registro.</p>`));
 }
 
 // ---------- Panel de liga ----------
