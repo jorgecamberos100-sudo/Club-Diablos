@@ -44,8 +44,11 @@ export function goleoHTML(d) {
 }
 
 function brandTheme(lg) {
-  applyTheme({ name: lg.name, theme: { colors: themeFrom(/^#[0-9a-f]{6}$/i.test(lg.brand.color) ? lg.brand.color : "#c8102e"), card: "recta", pattern: "liso" } });
-  document.title = lg.name;
+  const brand = (lg && lg.brand) || {};
+  const col = /^#[0-9a-f]{6}$/i.test(brand.color) ? brand.color : "#c8102e";
+  const name = (lg && lg.name) || "Liga";
+  applyTheme({ name, theme: { colors: themeFrom(col), card: "recta", pattern: "liso" } });
+  document.title = name;
 }
 
 export async function renderPublic(app, [kind, l, tid, tab], { chatMount } = {}) {

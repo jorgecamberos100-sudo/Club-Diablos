@@ -81,8 +81,10 @@ export function scorers(teams, matches, events) {
   const S = new Map();
   for (const e of events || []) {
     if (e.kind !== "goal" || !played.has(e.match_id)) continue;
-    const k = e.team_id + "|" + e.player.trim().toLowerCase();
-    const s = S.get(k) || { player: e.player.trim(), team_id: e.team_id, team: name.get(e.team_id) || "", goals: 0 };
+    const pName = String(e.player || "").trim();
+    if (!pName) continue;
+    const k = e.team_id + "|" + pName.toLowerCase();
+    const s = S.get(k) || { player: pName, team_id: e.team_id, team: name.get(e.team_id) || "", goals: 0 };
     s.goals += e.n || 1; S.set(k, s);
   }
   return [...S.values()].sort((a, b) => b.goals - a.goals || a.player.localeCompare(b.player, "es"));
