@@ -147,19 +147,19 @@ async function league(app, user, id, sec) {
   }
   document.title = l.name;
   const S = SECTIONS[sec];
-  const can2 = (perm) => l.me.role === "owner" || (l.me.perms || []).includes("*") || (l.me.perms || []).includes(perm);
+  const can2 = (perm) => (l.me && l.me.role === "owner") || (l.me && (l.me.perms || []).includes("*")) || (l.me && (l.me.perms || []).includes(perm));
   curLeague = { id, l, ent, user, can: can2, sec, reload: () => window.__reload() };
   torneos.wireSheets(() => curLeague);
   let body;
   if (MODULES[sec]) {
     try { body = await MODULES[sec].render(curLeague); } catch (e) { console.error(e); body = card(S.label, `<p class="hint">${esc(friendly(e))}</p>`); }
   } else if (sec === "inicio") {
-    body = card("Tu liga", `<div class="cl-who"><b>${esc(l.name)}</b><span>${esc(ROLE_NAME[l.me.role] || "")}</span></div><p class="hint">Plan: ${esc(ent ? ent.name : "—")}</p>`)
+    body = card("Tu liga", `<div class="cl-who"><b>${esc(l.name)}</b><span>${esc(ROLE_NAME[l.me?.role] || "")}</span></div><p class="hint">Plan: ${esc(ent ? ent.name : "—")}</p>`)
       + card("Cómo se arma", `<ol class="steps">${Object.entries(SECTIONS).filter(([k]) => k !== "inicio").map(([k, s]) => `<li><a href="#/liga/${esc(id)}/${k}"><b>${esc(s.label)}</b></a><small>${esc(s.txt)}</small></li>`).join("")}</ol>`);
   } else {
     body = card(S.label, `<p>${esc(S.txt)}</p><p class="hint">Esta sección se construye en las siguientes etapas.</p>
       <ul class="feat">${S.f.map((f) => `<li><span>${esc(FEATURES[f])}</span><span class="chip ${can(ent, f) ? "ok" : "due"}">${can(ent, f) ? "En tu plan" : "No incluido"}</span></li>`).join("")}</ul>`);
-    if (sec === "ajustes") body += card("Administradores", `<div class="cl-row static"><span><b>${esc(user.email)}</b><small>${esc(ROLE_NAME[l.me.role] || "")}</small></span></div><p class="hint">Invitar administradores con permisos y revocarlos llega en la siguiente etapa.</p>`);
+    if (sec === "ajustes") body += card("Administradores", `<div class="cl-row static"><span><b>${esc(user.email)}</b><small>${esc(ROLE_NAME[l.me?.role] || "")}</small></span></div><p class="hint">Invitar administradores con permisos y revocarlos llega en la siguiente etapa.</p>`);
   }
   const tabs = Object.entries(SECTIONS);
   app.innerHTML = shell(l.name, "Panel de liga", body, acc)

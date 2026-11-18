@@ -5,7 +5,7 @@ import { row, chip, empty, toast, dshort } from "../ui.js";
 import * as sheet from "../sheet.js";
 import { consentFields, consentFrom } from "../consent.js";
 
-const ST = { pending: ["due", "Pendiente"], active: ["ok", "Activo"], rejected: ["na", "Rechazado"] };
+const ST = { pending: ["due", "Pendiente"], active: ["ok", "Activo"], rejected: ["na", "Rechazado"], removed: ["na", "Baja"] };
 let ctx = null;
 
 export async function open(c, t) {
@@ -20,7 +20,7 @@ export async function open(c, t) {
       <p class="hint">La liga revisa y aprueba cada registro; si pide foto, te la solicitará o la tomará en oficina.</p>
       ${consentFields(pv || null, "attest")}
       <button class="btn" type="submit"${pv ? "" : " disabled"}>Enviar a la liga</button></form>`;
-  sheet.open("Registrar jugadores en la liga", "", body + (mine.length ? `<h3>Lo que has enviado</h3>${mine.map((m) => row(m.name, `${m.team} · ${dshort(m.created_at)}${m.number != null ? " · #" + m.number : ""}`, chip(ST[m.status][1], ST[m.status][0]))).join("")}` : ""));
+  sheet.open("Registrar jugadores en la liga", "", body + (mine.length ? `<h3>Lo que has enviado</h3>${mine.map((m) => { const st = ST[m.status] || ["na", m.status || "—"]; return row(m.name, `${m.team} · ${dshort(m.created_at)}${m.number != null ? " · #" + m.number : ""}`, chip(st[1], st[0])); }).join("")}` : ""));
 }
 sheet.wireNs("d", () => {}, (k, f, fd) => {
   sheet.guard(async () => {

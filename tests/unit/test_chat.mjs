@@ -26,6 +26,9 @@ check("no revela nada fuera de los datos recibidos", !/@|\d{10}/.test(A("dame el
 check("pregunta vacía", A("   ") === "Escribe tu pregunta.");
 check("equipo sin partidos pendientes", A("¿Cuándo juega Lobos?").includes("Lobos") && !A("¿Cuándo juega Lobos?").includes("undefined"), A("¿Cuándo juega Lobos?"));
 check("pregunta enorme no revienta", typeof A("a ".repeat(5000)) === "string");
+const unassigned = { tournament: { name: "Copa", format: "knockout" }, teams: [{ id: "t1", name: "Tigres" }], matches: [{ id: "m1", round: "Final", home_id: null, away_id: "t1", status: "scheduled", starts_at: "2026-11-20T10:00:00Z" }] };
+check("partido con rival por definir no muestra undefined", localAnswer("próximos partidos", unassigned).includes("Por definir vs Tigres"), localAnswer("próximos partidos", unassigned));
+check("datos sin equipos ni partidos no revienta en error", typeof localAnswer("¿Quién va primero?", { tournament: { name: "Vacio" } }) === "string");
 
 // contexto acotado
 const big = D(); big.teams = Array.from({ length: 300 }, (_, i) => ({ id: "x" + i, name: "Equipo número " + i }));
