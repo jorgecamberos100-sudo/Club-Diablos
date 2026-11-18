@@ -34,6 +34,7 @@ async def main():
     # --- 3. Jugador de la liga: se identifica y guarda su plan
     await signup(pg, "ana@liga.com", ["league"])
     await pg.fill("input[name=nm]", "Liga Reforma"); await pg.click("text=Crear liga"); await pg.wait_for_selector(".tabbar")
+    await set_league_plan(pg, "liga-reforma"); await pg.reload(); await pg.wait_for_selector(".tabbar")   # la liga demo necesita Liga Pro para el registro de jugadores
     await tab(pg, "Torneos"); await pg.click("text=Nuevo torneo"); await pg.fill("#sheet input[name=name]", "Apertura"); await pg.fill("#sheet input[name=season]", "Otoño 2026"); await pg.click("#sheet button[type=submit]"); await pg.wait_for_selector("text=Inscribir equipo")
     await pg.fill("form[data-lf=addteam] input[name=name]", "Lobos"); await pg.click("form[data-lf=addteam] button[type=submit]"); await pg.wait_for_selector(".cl-row:has-text('Lobos')")
     await tab(pg, "Ajustes"); await pg.wait_for_selector("form[data-lf=privacy]"); await pg.click("button:text-is('Usar plantilla para revisar')")
