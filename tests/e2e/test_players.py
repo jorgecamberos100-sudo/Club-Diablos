@@ -13,6 +13,7 @@ async def main():
     # --- la liga, su torneo y una invitación para equipos
     await signup(pg, "ana@liga.com", ["league"])
     await pg.fill("input[name=nm]", "Liga Reforma"); await pg.click("text=Crear liga"); await pg.wait_for_selector(".tabbar")
+    await set_league_plan(pg, "liga-reforma"); await pg.reload(); await pg.wait_for_selector(".tabbar")   # la liga demo necesita Liga Pro para el registro de jugadores
     check("siete secciones caben en el móvil sin desbordar", await pg.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 1)
     await tab(pg, "Equipos"); await pg.fill("form[data-lf=invite] input[name=label]", "Otoño"); await pg.click("text=Crear código"); await pg.wait_for_selector(".code"); code = await pg.inner_text(".code")
     await tab(pg, "Torneos"); await pg.click("text=Nuevo torneo"); await pg.fill("#sheet input[name=name]", "Apertura"); await pg.fill("#sheet input[name=season]", "Otoño 2026"); await pg.click("#sheet button[type=submit]"); await pg.wait_for_selector("text=Inscribir equipo")

@@ -9,6 +9,7 @@ async def main():
     p, br, pg = await browser()
     await signup(pg, "ana@liga.com", ["league"])
     await pg.fill("input[name=nm]", "Liga Reforma"); await pg.click("text=Crear liga"); await pg.wait_for_selector(".tabbar")
+    await set_league_plan(pg, "liga-reforma"); await pg.reload(); await pg.wait_for_selector(".tabbar")   # la liga demo necesita Liga Pro para la página pública
     lid = pg.url.split("#/liga/")[1].split("/")[0]
     await tab(pg, "Torneos"); await pg.click("text=Nuevo torneo"); await pg.fill("#sheet input[name=name]", 'Apertura "A"'); await pg.fill("#sheet input[name=season]", "Otoño 2026"); await pg.click("#sheet button[type=submit]"); await pg.wait_for_selector("text=Inscribir equipo")
     tid = (await pg.evaluate("JSON.parse(localStorage.getItem('demo-db')).tourn[0].id"))

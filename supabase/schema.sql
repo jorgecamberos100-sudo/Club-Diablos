@@ -240,7 +240,11 @@ create policy receipts_read on storage.objects for select using (
 
 -- ============ Cuentas, planes y ligas (etapa 1 del producto) ============
 -- Una cuenta puede organizar equipos, ligas o ambos. Los planes y sus límites viven en la tabla
--- "plans": se cambian ahí (Table Editor de Supabase) sin tocar la app. Ningún precio está decidido.
+-- "plans": se cambian ahí (Table Editor de Supabase) sin tocar la app.
+-- Precios decididos (nov 2026, modelo de negocio con la competencia verificada en vivo):
+-- Free $0, Pro Equipo $49/mes, Pro Liga $999/mes, Liga + Equipos $1,499/mes,
+-- Enterprise desde $4,999/mes (por cotización). Anual = mensual x 12. El cobro
+-- (Stripe/PayPal) aún no existe: las suscripciones las crea la plataforma (manual).
 -- La suscripción a la plataforma (subscriptions) está separada de las finanzas internas (payments).
 
 create table if not exists public.accounts (
@@ -260,13 +264,19 @@ create table if not exists public.plans (
   is_default boolean not null default false,        -- plan que recibe quien no tiene suscripción
   active boolean not null default true
 );
-insert into public.plans (id, audience, name, tier, features, limits, is_default) values
+insert into public.plans (id, audience, name, tier, features, limits, price_monthly, price_annual, is_default) values
   ('team-free', 'team', 'Equipo Gratis', 0,
-     array['roster','attendance','matches','lineup'], '{"teams": 1, "players": 30}', true),
+     array['roster','attendance','matches','lineup'], '{"teams": 1, "players": 30}', 0, 0, true),
   ('team-pro', 'team', 'Equipo Pro', 1,
-     array['roster','attendance','matches','lineup','ratings','finance','receipts','stats','themes','share_capture'], '{"teams": 5, "players": null}', false),
-  ('league-base', 'league', 'Liga', 1,
-     array['league_panel','tournaments','schedule','standings','sanctions','league_finance','registration','credentials','public_page','actas','team_pro_grant'], '{"tournaments": null, "admins": 5, "pro_teams_included": 0}', true)
+     array['roster','attendance','matches','lineup','ratings','finance','receipts','stats','themes','share_capture'], '{"teams": 5, "players": null}', 49, 588, false),
+  ('league-free', 'league', 'Liga Gratis', 0,
+     array['league_panel','tournaments','schedule','standings'], '{"tournaments": 1, "admins": 2, "pro_teams_included": 0}', 0, 0, true),
+  ('league-pro', 'league', 'Liga Pro', 2,
+     array['league_panel','tournaments','schedule','standings','sanctions','league_finance','registration','credentials','public_page','actas','team_pro_grant'], '{"tournaments": null, "admins": 5, "pro_teams_included": 0}', 999, 11988, false),
+  ('league-plus', 'league', 'Liga + Equipos', 3,
+     array['league_panel','tournaments','schedule','standings','sanctions','league_finance','registration','credentials','public_page','actas','team_pro_grant'], '{"tournaments": null, "admins": 10, "pro_teams_included": null}', 1499, 17988, false),
+  ('league-enterprise', 'league', 'Enterprise', 4,
+     array['league_panel','tournaments','schedule','standings','sanctions','league_finance','registration','credentials','public_page','actas','team_pro_grant'], '{"tournaments": null, "admins": null, "pro_teams_included": null}', 4999, 59988, false)
 on conflict (id) do nothing;
 
 -- subject: 'team' -> 'club/equipo'; 'league' -> id de la liga. source 'league' = Pro pagado por la liga.
@@ -2086,7 +2096,7 @@ grant execute on function public.public_league(text), public.public_tournament(t
 -- =====================================================================================================
 do $$ begin
   if not exists (select 1 from public.schema_migrations where id = '2026-10-plan-actas') then
-    update public.plans set features = array_append(features, 'actas') where id = 'league-base' and not ('actas' = any(features));
+    update public.plans set features = array_append(features, 'actas') where id in ('league-pro', 'league-plus', 'league-enterprise') and not ('actas' = any(features));
     insert into public.schema_migrations (id) values ('2026-10-plan-actas');
   end if;
 end $$;

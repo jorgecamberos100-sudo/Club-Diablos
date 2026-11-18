@@ -21,6 +21,7 @@ async def main():
     await signup(pg, "ana@liga.com", ["league"])
     await pg.fill("input[name=nm]", "Liga Reforma Metropolitana del Norte"); await pg.click("text=Crear liga"); await pg.wait_for_selector(".tabbar")
     lid = pg.url.split("#/liga/")[1].split("/")[0]
+    await set_league_plan(pg, lid); await pg.reload(); await pg.wait_for_selector(".tabbar")   # la liga demo necesita Liga Pro para actas y página pública
     await pg.click(".tabbar >> text=Torneos"); await pg.click("text=Nuevo torneo"); await pg.fill("#sheet input[name=name]", "Apertura 2026 Categoría Libre Varonil"); await pg.click("#sheet button[type=submit]"); await pg.wait_for_selector("text=Inscribir equipo")
     tid = await pg.evaluate("JSON.parse(localStorage.getItem('demo-db')).tourn[0].id")
     for n in ["Los Rayos del Norte", "Lobos FC", "Águilas Doradas", "Toros"]:

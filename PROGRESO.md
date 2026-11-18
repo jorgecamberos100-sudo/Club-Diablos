@@ -123,5 +123,5 @@ Un agente aparte, sin haber visto el trabajo, revisó el repositorio y encontró
 3. Probar el OCR con actas reales; decidir si vale un servicio de lectura.
 4. Restringir también las URLs de escudos y fotos de perfil de los equipos de la app a nuestro almacén.
 5. Enlazar goles y tarjetas al padrón (hoy son texto) para que las suspensiones bloqueen alineaciones.
-6. Precios y planes reales (hoy configurables y vacíos).
+6. ~~Precios y planes reales~~ — Hecho (nov 2026): precios decididos y sembrados en `plans` (Free $0, Pro Equipo $49/mes, Pro Liga $999/mes, Liga + Equipos $1,499/mes, Enterprise desde $4,999/mes por cotización; anual = mensual × 12) y visibles en Mi cuenta y en el panel de liga. Falta el cobro: checkout con Stripe/PayPal aún no existe; las suscripciones las crea la plataforma.
 7. Avisos por WhatsApp oficial (`docs/WHATSAPP.md`) si la liga acepta el costo por mensaje.
