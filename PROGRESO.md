@@ -19,6 +19,12 @@ Importante: todo lo de Supabase se probó contra un PostgreSQL local con un simu
 | 9. Seguridad, privacidad y preparación para Supabase real | Hecho y probado (local + demo) | Ver «Etapa 9». **Pendiente: probar en un proyecto real** (`supabase/LEEME.md` §6). |
 | 10. Grupos y eliminatorias, reportes PDF, exportaciones | Hecho y probado (local + demo) | Ver «Etapa 10». |
 
+## Entrar con Google (FutSfera)
+- El botón «Continuar con Google» (logo G) está en Mi cuenta, en la hoja de Entrar y en la de Crear cuenta, y en la tarjeta de cuenta de cada equipo; el correo y contraseña sigue como alternativa («o con correo»).
+- Con Supabase activo usa `signInWithOAuth({ provider: 'google' })` (PKCE); al volver, la app restaura la sección donde estaba. Si el proveedor no está activado en Supabase, la app avisa «La entrada con Google todavía no está activada».
+- En modo de prueba (`?demo`) el botón crea una cuenta de prueba al instante. Sin nube no aparece ningún botón de Google.
+- Pruebas: `tests/e2e/test_auth_google.py` (modo demo). Falta fuera del código: activar el proyecto Supabase y habilitar el proveedor Google con su Client ID/Secret y las redirect URLs — ver `supabase/LEEME.md` §3 y §6. Nada de esto se ha probado contra un proyecto real.
+
 ## Etapa 3 en detalle
 - Base de datos (`supabase/schema.sql`, sección "Etapa 5 del producto"): `tournaments`, `tournament_teams`, `league_matches`, `match_events`; todas con RLS (solo lectura para administradores de la liga) y escritura únicamente por funciones con permiso (`tournaments`, `schedule`, `results`).
 - Reglas aplicadas en la base, no solo en pantalla: un equipo no juega dos veces por jornada; los equipos deben estar inscritos y activos; el marcador y los goles de los jugadores deben cuadrar; un torneo terminado no se modifica; un partido jugado no se borra ni reprograma (se corrige con el resultado, y queda el antes y el después en la bitácora); un equipo con partidos jugados se retira, no se borra; límites y funciones salen del plan (`tournaments`, `schedule`).
