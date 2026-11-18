@@ -12,6 +12,7 @@ async def main():
     p, br, pg = await browser()
     await signup(pg, "ana@liga.com", ["league"])
     await pg.fill("input[name=nm]", "Liga Reforma"); await pg.click("text=Crear liga"); await pg.wait_for_selector(".tabbar")
+    await set_league_plan(pg, "liga-reforma"); await pg.reload(); await pg.wait_for_selector(".tabbar")   # la liga demo necesita Liga Pro para las actas
     await tab(pg, "Torneos"); await pg.click("text=Nuevo torneo"); await pg.fill("#sheet input[name=name]", "Apertura"); await pg.click("#sheet button[type=submit]"); await pg.wait_for_selector("text=Inscribir equipo")
     for n in ["Rayos", "Lobos"]:
         await pg.fill("form[data-lf=addteam] input[name=name]", n); await pg.click("form[data-lf=addteam] button[type=submit]"); await pg.wait_for_selector(f".cl-row:has-text('{n}')")

@@ -31,6 +31,12 @@ async def signin(pg, email):
 async def signout(pg):
     await pg.goto(B + "#/cuenta"); await pg.wait_for_selector("button:text-is('Salir')"); await pg.click("button:text-is('Salir')"); await pg.wait_for_selector("text=Entra para organizar")
 
+async def set_league_plan(pg, league_id, plan="league-pro"):
+    # Suscripción de la liga en modo demo (como set_plan en test_team.py, pero subject_type league).
+    # Sin ella la liga cae en el plan por defecto (Liga Gratis) y las funciones de pago quedan cerradas.
+    await pg.evaluate("""(a) => { const d = JSON.parse(localStorage.getItem('demo-db')); d.subs = d.subs.filter(s => !(s.subject_type === 'league' && s.subject_id === a[0]));
+      if (a[1]) d.subs.push({ subject_type: 'league', subject_id: a[0], plan_id: a[1], source: 'manual', status: 'active' }); localStorage.setItem('demo-db', JSON.stringify(d)); }""", [league_id, plan])
+
 async def toast(pg, text):
     await pg.wait_for_selector(f".toast.show:has-text('{text}')", timeout=5000)
 

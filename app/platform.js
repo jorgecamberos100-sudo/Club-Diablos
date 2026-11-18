@@ -7,7 +7,7 @@ import { applyTheme } from "./theme.js";
 import { on, init, api, friendly, mode } from "./cloud.js";
 import { openAuth, googleBtn } from "./cloudui.js";
 import { loadClubs } from "./data.js";
-import { FEATURES, can } from "./plans.js";
+import { FEATURES, can, priceLine, limitsLine } from "./plans.js";
 import { card, chip, toast, dshort } from "./ui.js";
 import { consentFields, consentFrom } from "./consent.js";
 import * as equipos from "./league/equipos.js";
@@ -79,6 +79,7 @@ async function hub(app, user) {
   const parts = [];
   if (roles.includes("team")) parts.push(await teamsCard());
   if (roles.includes("league")) parts.push(await leaguesCard());
+  parts.push(await plansCard());
   parts.push(card("¿Te invitaron a administrar una liga?", `<form data-pf="adminjoin" class="fld"><label>Código de administrador<input name="code" placeholder="XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" required></label>
     <button class="btn ghost" type="submit">Entrar a la liga</button><p class="msg" role="alert" hidden></p><p class="hint">La liga te da el código y define qué puedes hacer. Cada código sirve una sola vez.</p></form>`));
   const missing = Object.keys(ROLES).filter((r) => !roles.includes(r));
@@ -121,6 +122,24 @@ async function leaguesCard() {
   return card("Mis ligas", `${rows}<form data-pf="league" class="fld"><label>${mine.length ? "Crear otra liga" : "Crea tu liga"}<input name="nm" placeholder="Nombre de la liga" maxlength="80" required></label><button class="btn" type="submit">Crear liga</button><p class="msg" role="alert" hidden></p></form>`);
 }
 
+// ---------- Planes y precios ----------
+function planRow(p, currentId) {
+  const feats = (p.features || []).map((f) => FEATURES[f] || f).join(" · ");
+  const lim = limitsLine(p);
+  return `<div class="cl-row static"><span><b>${esc(p.name)}</b><small>${esc(priceLine(p))}</small>${lim ? `<small>${esc(lim)}</small>` : ""}<small>${esc(feats)}</small></span>${currentId === p.id ? `<span class="chip ok">Tu plan</span>` : ""}</div>`;
+}
+
+async function plansCard(current = {}) {
+  let plans = [];
+  try { plans = await api.plans(); } catch { return ""; }
+  if (!Array.isArray(plans) || !plans.length) return "";
+  const byAud = (aud, label) => {
+    const rows = plans.filter((p) => p.audience === aud).sort((a, b) => (a.tier || 0) - (b.tier || 0)).map((p) => planRow(p, current[aud])).join("");
+    return rows ? `<h3>${label}</h3>${rows}` : "";
+  };
+  return card("Planes y precios", `${byAud("team", "Equipos")}${byAud("league", "Ligas")}<p class="hint">Precios en MXN. Los planes Pro se contratan por anualidad; el pago en línea (Stripe/PayPal) aún no está activo: las suscripciones las crea la plataforma.</p>`);
+}
+
 // ---------- Registro por enlace (sin cuenta) ----------
 async function registro(app, code) {
   const info = await api.regLinkInfo(code || "").catch(() => ({ error: "invalid" }));
@@ -154,7 +173,8 @@ async function league(app, user, id, sec) {
   if (MODULES[sec]) {
     try { body = await MODULES[sec].render(curLeague); } catch (e) { console.error(e); body = card(S.label, `<p class="hint">${esc(friendly(e))}</p>`); }
   } else if (sec === "inicio") {
-    body = card("Tu liga", `<div class="cl-who"><b>${esc(l.name)}</b><span>${esc(ROLE_NAME[l.me?.role] || "")}</span></div><p class="hint">Plan: ${esc(ent ? ent.name : "—")}</p>`)
+    body = card("Tu liga", `<div class="cl-who"><b>${esc(l.name)}</b><span>${esc(ROLE_NAME[l.me?.role] || "")}</span></div><p class="hint">Plan: ${esc(ent ? ent.name : "—")}${ent ? ` · ${esc(priceLine(ent))}` : ""}</p>`)
+      + (await plansCard({ league: ent ? ent.id : null }))
       + card("Cómo se arma", `<ol class="steps">${Object.entries(SECTIONS).filter(([k]) => k !== "inicio").map(([k, s]) => `<li><a href="#/liga/${esc(id)}/${k}"><b>${esc(s.label)}</b></a><small>${esc(s.txt)}</small></li>`).join("")}</ol>`);
   } else {
     body = card(S.label, `<p>${esc(S.txt)}</p><p class="hint">Esta sección se construye en las siguientes etapas.</p>

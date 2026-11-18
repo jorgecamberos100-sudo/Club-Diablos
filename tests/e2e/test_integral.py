@@ -28,6 +28,7 @@ async def main():
     await pg.fill("input[name=nm]", "Liga Reforma"); await pg.click("text=Crear liga"); await pg.wait_for_selector(".tabbar")
     lid = pg.url.split("#/liga/")[1].split("/")[0]
     check("1. se crea la cuenta y la liga", lid == "liga-reforma", lid)
+    await set_league_plan(pg, lid); await pg.reload(); await pg.wait_for_selector(".tabbar")   # la liga demo necesita Liga Pro (contrato, registro, sanciones, pública, actas)
 
     # 2. invitación y vínculo
     await tab(pg, "Equipos"); await pg.fill("input[name=slots]", "1"); await pg.click("text=Activar contrato de prueba"); await pg.wait_for_selector("text=0 de 1 equipos con Pro")

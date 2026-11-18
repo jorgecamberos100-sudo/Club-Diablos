@@ -42,9 +42,16 @@ union all
 select 7, 'Secreto interno generado (huellas de IP)',
        case when exists (select 1 from public.app_secret where id = 1 and length(salt) >= 64) then 'OK' else 'REVISAR: vuelve a correr schema.sql' end
 union all
-select 8, 'Planes cargados (sin precios definidos)',
-       case when (select count(*) from public.plans where id in ('team-free', 'team-pro', 'league-base')) = 3 and not exists (select 1 from public.plans where price_monthly is not null or price_annual is not null) then 'OK'
-            else 'REVISAR: faltan planes o ya tienen precio (la app no cobra)' end
+select 8, 'Planes con los precios decididos (nov 2026)',
+       case when (select count(*) from public.plans where id in ('team-free', 'team-pro', 'league-free', 'league-pro', 'league-plus', 'league-enterprise')) = 6
+            and (select price_monthly from public.plans where id = 'team-free') = 0
+            and (select price_monthly from public.plans where id = 'team-pro') = 49
+            and (select price_monthly from public.plans where id = 'league-free') = 0
+            and (select price_monthly from public.plans where id = 'league-pro') = 999
+            and (select price_monthly from public.plans where id = 'league-plus') = 1499
+            and (select price_monthly from public.plans where id = 'league-enterprise') = 4999
+            and not exists (select 1 from public.plans where price_annual is distinct from price_monthly * 12)
+            then 'OK' else 'REVISAR: faltan planes o los precios no son los decididos' end
 union all
 select 9, 'La tabla de equipos no se lee directo (finanzas privadas)',
        case when not has_table_privilege('anon', 'public.team_docs', 'select') and not has_table_privilege('authenticated', 'public.team_docs', 'select') then 'OK' else 'REVISAR: team_docs abierta' end

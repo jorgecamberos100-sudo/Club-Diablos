@@ -21,6 +21,7 @@ async def main():
     await signup(pg, "ana@liga.com", ["league"])
     await pg.fill("input[name=nm]", "Liga Reforma"); await pg.click("text=Crear liga"); await pg.wait_for_selector(".tabbar")
     lid = pg.url.split("#/liga/")[1].split("/")[0]
+    await set_league_plan(pg, lid); await pg.reload(); await pg.wait_for_selector(".tabbar")   # la liga demo necesita Liga Pro (más de 1 torneo)
     # eliminación directa con 3 equipos: mensaje claro
     await tab(pg, "Torneos"); await pg.click("text=Nuevo torneo"); await pg.fill("#sheet input[name=name]", "Copa Rápida"); await pg.select_option("#sheet select[name=format]", "knockout"); await pg.click("#sheet button[type=submit]"); await pg.wait_for_selector("text=Inscribir equipo")
     for n in ["Uno", "Dos", "Tres"]:
