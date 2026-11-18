@@ -186,7 +186,7 @@ function act(ctx, a, el) {
 // Entrar o crear cuenta desde pantallas sin equipo (Mi cuenta, panel de liga).
 export const openAuth = (up) => authSheet(up);
 function authSheet(up) {
-  open(up ? "Crear cuenta con correo" : "Entrar", up ? "Usa un correo que revises y una contraseña de 6 o más caracteres." : "Lo más fácil es con Google.", `${googleBtn()}<span class="or">o con correo</span><form data-form="auth" data-up="${up ? 1 : 0}" class="fld">
+  open(up ? "Crear cuenta" : "Entrar", up ? "Usa un correo que revises y una contraseña de 6 o más caracteres." : "Lo más fácil es con Google.", `${googleBtn()}<span class="or">o con correo</span><form data-form="auth" data-up="${up ? 1 : 0}" class="fld">
     <label>Correo<input name="email" type="email" inputmode="email" autocomplete="email" required></label>
     <label>Contraseña<input name="pw" type="password" minlength="6" autocomplete="${up ? "new-password" : "current-password"}" required></label>
     <button class="btn" type="submit">${up ? "Crear cuenta" : "Entrar"}</button>
