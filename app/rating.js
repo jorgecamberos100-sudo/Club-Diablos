@@ -15,38 +15,43 @@ export const DEFAULT_CFG = { weights: { atributos: 0.5, forma: 0.4, compromiso: 
 export const ATTR_KEYS = ["vel", "tir", "pas", "reg", "def", "fis"];
 
 const to99 = (x) => Math.round(40 + ((x - 1) * 59) / 9); // 1..10 -> 40..99
-const mean = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+const mean = (a) => (a && a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0);
 
 function robust(votes, cfg) {
-  const v = votes.filter((x) => typeof x === "number").sort((a, b) => a - b);
-  if (v.length < cfg.minVotes) return null;
-  return mean(v.length >= cfg.trimFrom ? v.slice(1, -1) : v);
+  if (!Array.isArray(votes)) return null;
+  const v = votes.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
+  if (v.length < (cfg?.minVotes ?? DEFAULT_CFG.minVotes)) return null;
+  const trim = (cfg?.trimFrom ?? DEFAULT_CFG.trimFrom);
+  return mean(v.length > 2 && v.length >= trim ? v.slice(1, -1) : v);
 }
 
 export function computeRatings(team, players, cfgIn) {
+  if (!team || !Array.isArray(players)) return {};
   const cfg = { ...DEFAULT_CFG, ...(cfgIn || {}), weights: { ...DEFAULT_CFG.weights, ...((cfgIn || {}).weights || {}) } };
   const out = {};
-  const evals = team.evaluations || [];
-  const matches = (team.matches || []).filter((m) => m.score).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const evals = Array.isArray(team.evaluations) ? team.evaluations : [];
+  const matches = (Array.isArray(team.matches) ? team.matches : []).filter((m) => m && m.score).sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
 
   players.forEach((p) => {
+    if (!p || !p.id) return;
     // 1. atributos
     let attrs = null;
-    const mine = evals.filter((e) => e.target === p.id && e.voter !== p.id);
+    const mine = evals.filter((e) => e && e.target === p.id && e.voter && e.voter !== p.id);
     if (mine.length) {
       const a = {};
       ATTR_KEYS.forEach((k) => { const r = robust(mine.map((e) => e[k]), cfg); if (r != null) a[k] = to99(r); });
       if (Object.keys(a).length === ATTR_KEYS.length) attrs = a;
     }
-    if (!attrs && p.attrs && ATTR_KEYS.every((k) => typeof p.attrs[k] === "number")) attrs = p.attrs; // valores fijados a mano
+    if (!attrs && p.attrs && ATTR_KEYS.every((k) => typeof p.attrs[k] === "number" && Number.isFinite(p.attrs[k]))) attrs = p.attrs; // valores fijados a mano
 
     // 2. forma
     const perMatch = [];
     let played = 0, mvps = 0, goals = 0, assists = 0;
     matches.forEach((m) => {
-      if (!(m.played || []).includes(p.id)) return;
+      if (!Array.isArray(m.played) || !m.played.includes(p.id)) return;
       played++;
-      const r = robust((m.ratings || []).filter((x) => x.target === p.id && x.voter !== p.id).map((x) => x.score), cfg);
+      const ratings = Array.isArray(m.ratings) ? m.ratings : [];
+      const r = robust(ratings.filter((x) => x && x.target === p.id && x.voter && x.voter !== p.id).map((x) => x.score), cfg);
       if (r != null) perMatch.push({ id: m.id, r });
       if (mvpOf(m) === p.id) mvps++;
       const st = (m.stats || {})[p.id];
@@ -64,7 +69,7 @@ export function computeRatings(team, players, cfgIn) {
     if (forma != null) parts.push([forma, cfg.weights.forma]);
     if (parts.length && compromiso != null) parts.push([compromiso, cfg.weights.compromiso]);
     const wsum = parts.reduce((s, [, w]) => s + w, 0);
-    const media = parts.length ? Math.round(parts.reduce((s, [v, w]) => s + v * w, 0) / wsum) : null;
+    const media = parts.length && wsum > 0 ? Math.round(parts.reduce((s, [v, w]) => s + v * w, 0) / wsum) : null;
 
     const last = perMatch.length ? to99(perMatch[perMatch.length - 1].r) : null;
     const trend = media != null && last != null ? (last >= media + 3 ? 1 : last <= media - 3 ? -1 : 0) : 0;
@@ -75,7 +80,8 @@ export function computeRatings(team, players, cfgIn) {
 }
 
 export function mvpOf(m) {
-  const votes = (m.mvp || []).filter((v) => v.voter !== v.target);
+  if (!m || !Array.isArray(m.mvp)) return null;
+  const votes = m.mvp.filter((v) => v && v.voter && v.target && v.voter !== v.target);
   if (votes.length < DEFAULT_CFG.minVotes) return null;
   const c = {};
   votes.forEach((v) => { c[v.target] = (c[v.target] || 0) + 1; });
@@ -83,4 +89,4 @@ export function mvpOf(m) {
   return best.length && (best.length === 1 || best[0][1] > best[1][1]) ? best[0][0] : null;
 }
 
-export const tierOf = (o) => (o == null ? "t-club" : o >= 75 ? "t-oro" : o >= 65 ? "t-plata" : "t-bronce");
+export const tierOf = (o) => (typeof o !== "number" || !Number.isFinite(o) ? "t-club" : o >= 75 ? "t-oro" : o >= 65 ? "t-plata" : "t-bronce");

@@ -764,7 +764,7 @@ create or replace function public.set_crest(c text, url text) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   if not is_admin(c, t_of(c)) then raise exception 'Sin permiso'; end if;
-  if url is null or url !~ ('^https://[^ ]+/storage/v1/object/public/photos/' || auth.uid()::text || '/[^ ]+$') then raise exception 'Datos no válidos'; end if;
+  if url is null or url !~ ('^https?://[^ ]+/storage/v1/object/public/photos/' || auth.uid()::text || '/[^ ]+$') then raise exception 'Datos no válidos'; end if;
   update club_docs set club = club || jsonb_build_object('crest', url) where id = c;
 end $$;
 create or replace function public.t_of(c text) returns text language sql stable security definer set search_path = public as $$

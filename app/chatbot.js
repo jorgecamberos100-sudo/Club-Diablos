@@ -17,23 +17,28 @@ const NO = "No tengo ese dato. Puedo contestar sobre la tabla de posiciones, los
 
 // Datos mínimos y ordenados que ve cualquier motor.
 export function view(d) {
-  const t = d.tournament, name = new Map(d.teams.map((x) => [x.id, x.name]));
+  const t = (d && d.tournament) || {};
+  const teams = (d && Array.isArray(d.teams)) ? d.teams : [];
+  const matches = (d && Array.isArray(d.matches)) ? d.matches : [];
+  const events = (d && Array.isArray(d.events)) ? d.events : [];
+  const adjust = (d && Array.isArray(d.adjust)) ? d.adjust : [];
+  const name = new Map(teams.map((x) => [x.id, x.name]));
   // En grupos, la posición es dentro de su grupo; en eliminación directa no hay tabla.
-  const rows = hasGroups(t) ? groupTables(t, d.teams, d.matches, d.events, d.adjust || []).flatMap((g) => g.rows.map((r) => ({ ...r, name: r.name, grp: g.group })))
-    : t.format === "knockout" ? [] : standings(t, d.teams, d.matches, d.events, d.adjust || []);
-  const played = d.matches.filter((m) => m.status === "played").sort((a, b) => (b.starts_at || "").localeCompare(a.starts_at || ""));
-  const next = d.matches.filter((m) => m.status === "scheduled").sort((a, b) => (a.starts_at || "9999").localeCompare(b.starts_at || "9999"));
-  return { t, name, rows, played, next, sc: d.scorers ? scorers(d.teams, d.matches, d.events) : null };
+  const rows = hasGroups(t) ? groupTables(t, teams, matches, events, adjust).flatMap((g) => g.rows.map((r) => ({ ...r, name: r.name, grp: g.group })))
+    : t.format === "knockout" ? [] : standings(t, teams, matches, events, adjust);
+  const played = matches.filter((m) => m.status === "played").sort((a, b) => (b.starts_at || "").localeCompare(a.starts_at || ""));
+  const next = matches.filter((m) => m.status === "scheduled").sort((a, b) => (a.starts_at || "9999").localeCompare(b.starts_at || "9999"));
+  return { t, name, rows, played, next, sc: d && d.scorers ? scorers(teams, matches, events) : null };
 }
 
-const line = (v, m) => `${v.name.get(m.home_id)} ${m.status === "played" ? m.home_goals + " - " + m.away_goals : "vs"} ${v.name.get(m.away_id)}${m.round ? " (" + m.round + ")" : ""}${m.status !== "played" && m.starts_at ? ", " + dtime(m.starts_at) : ""}${m.venue ? ", " + m.venue : ""}`;
+const line = (v, m) => `${v.name.get(m.home_id) || "Por definir"} ${m.status === "played" ? m.home_goals + " - " + m.away_goals : "vs"} ${v.name.get(m.away_id) || "Por definir"}${m.round ? " (" + m.round + ")" : ""}${m.status !== "played" && m.starts_at ? ", " + dtime(m.starts_at) : ""}${m.venue ? ", " + m.venue : ""}`;
 
 export function localAnswer(q, d) {
   const n = norm(q).slice(0, LIMITS.question);
   if (!n) return "Escribe tu pregunta.";
   const v = view(d), t = v.t;
   const team = [...v.name.values()].map((x) => [x, norm(x)]).filter(([, k]) => k && n.includes(k)).sort((a, b) => b[1].length - a[1].length)[0];
-  const id = team && [...v.name].find(([, nm]) => nm === team[0])[0];
+  const id = team ? ([...v.name].find(([, nm]) => nm === team[0]) || [])[0] : null;
   const row = id && v.rows.find((r) => r.id === id);
   const mine = (ms) => ms.filter((m) => m.home_id === id || m.away_id === id);
 
@@ -55,7 +60,11 @@ export function localAnswer(q, d) {
   if (row && has(n, "punto", "lugar", "posicion", "va ", "como va", "tabla", "clasific", "esta")) {
     return `${row.name} va en el lugar ${row.pos}${row.grp ? " del grupo " + row.grp : ""} con ${row.pts} punto${row.pts === 1 ? "" : "s"} (${row.pj} jugado${row.pj === 1 ? "" : "s"}, ${row.g} ganado${row.g === 1 ? "" : "s"}, ${row.e} empatado${row.e === 1 ? "" : "s"}, ${row.p} perdido${row.p === 1 ? "" : "s"}; goles ${row.gf} a favor y ${row.gc} en contra).`;
   }
-  if (has(n, "campeon", "gano el torneo", "ganador del torneo")) { const c = champion(d.matches); return c ? `El campeón es ${v.name.get(c)}.` : "Todavía no hay campeón."; }
+  if (has(n, "campeon", "gano el torneo", "ganador del torneo")) {
+    const c = champion(d && d.matches);
+    const cName = c ? v.name.get(c) : null;
+    return cName ? `El campeón es ${cName}.` : "Todavía no hay campeón.";
+  }
   if (has(n, "lider", "primero", "primer lugar", "quien va", "tabla", "posicion", "clasific", "punta")) {
     if (!v.rows.length) return t.format === "knockout" ? "Este torneo es de eliminación directa: no hay tabla. Pregúntame por los próximos partidos o el campeón." : "Todavía no hay equipos en la tabla.";
     if (v.rows.some((r) => r.grp)) return "Líderes de grupo: " + v.rows.filter((r) => r.pos === 1).map((r) => `grupo ${r.grp}: ${r.name} (${r.pts} pts)`).join("; ") + ".";
@@ -67,8 +76,8 @@ export function localAnswer(q, d) {
 
 // Contexto recortado para un motor externo: solo datos públicos, con tope de tamaño.
 export function compactContext(d) {
-  const v = view(d), m = (x) => ({ local: v.name.get(x.home_id), visitante: v.name.get(x.away_id), jornada: x.round, fecha: x.starts_at, cancha: x.venue, goles: x.status === "played" ? [x.home_goals, x.away_goals] : null });
-  const ctx = { torneo: v.t.name, puntos: { victoria: v.t.pts_win, empate: v.t.pts_draw, derrota: v.t.pts_loss },
+  const v = view(d), m = (x) => ({ local: v.name.get(x.home_id) || "Por definir", visitante: v.name.get(x.away_id) || "Por definir", jornada: x.round, fecha: x.starts_at, cancha: x.venue, goles: x.status === "played" ? [x.home_goals, x.away_goals] : null });
+  const ctx = { torneo: v.t.name || "", puntos: { victoria: v.t.pts_win, empate: v.t.pts_draw, derrota: v.t.pts_loss },
     tabla: v.rows.map((r) => ({ pos: r.pos, equipo: r.name, pj: r.pj, pts: r.pts, dg: r.dg })), proximos: v.next.slice(0, 10).map(m), resultados: v.played.slice(0, 10).map(m), goleo: v.sc ? v.sc.slice(0, 5).map((s) => ({ jugador: s.player, equipo: s.team, goles: s.goals })) : "no publicado" };
   let s = JSON.stringify(ctx);
   while (s.length > LIMITS.context && (ctx.tabla.length > 5 || ctx.proximos.length || ctx.resultados.length)) {

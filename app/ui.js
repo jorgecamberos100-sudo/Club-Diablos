@@ -7,8 +7,8 @@ export const row = (title, sub, right = "") => `<div class="cl-row static"><span
 export const btn = (label, attrs = "", cls = "") => `<button type="button" class="btn sm ${cls}" ${attrs}>${esc(label)}</button>`;
 export const empty = (t) => `<p class="hint">${esc(t)}</p>`;
 
-export const dshort = (d) => { try { return new Date(d).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return ""; } };
-export const dtime = (d) => { try { return new Date(d).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } };
+export const dshort = (d) => { if (!d) return ""; try { const x = new Date(d); return isNaN(x.getTime()) ? "" : x.toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return ""; } };
+export const dtime = (d) => { if (!d) return ""; try { const x = new Date(d); return isNaN(x.getTime()) ? "" : x.toLocaleString("es-MX", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } };
 
 let timer;
 export function toast(msg, bad = false) {

@@ -33,12 +33,12 @@ const ROLE = { owner: "Superadministrador", admin: "Administrador" };
 let S = null, auditN = 30;
 
 export async function render(ctx) {
-  const mine = ctx.can("admins") || ctx.l.me.role === "owner";
+  const mine = ctx.can("admins") || ctx.l?.me?.role === "owner";
   let admins = [], invites = [], log = null;
   if (mine) [admins, invites] = await Promise.all([api.leagueAdmins(ctx.id), api.adminInvites(ctx.id)]);
   if (ctx.can("audit")) log = await api.auditView(ctx.id, auditN);
   S = { ctx, admins };
-  const info = card("Tu liga", `<div class="cl-who"><b>${esc(ctx.l.name)}</b><span>${esc(ROLE[ctx.l.me.role] || "")}</span></div><p class="hint">Plan: ${esc(ctx.ent ? ctx.ent.name : "—")}</p>
+  const info = card("Tu liga", `<div class="cl-who"><b>${esc(ctx.l.name)}</b><span>${esc(ROLE[ctx.l?.me?.role] || "")}</span></div><p class="hint">Plan: ${esc(ctx.ent ? ctx.ent.name : "—")}</p>
     <ul class="feat">${["public_page"].map((f) => `<li><span>${esc(FEATURES[f])}</span><span class="chip ${hasFeature(ctx.ent, f) ? "ok" : "due"}">${hasFeature(ctx.ent, f) ? "En tu plan" : "No incluido"}</span></li>`).join("")}</ul>
     <p class="hint">Reglamento y precios llegan en una etapa posterior.</p>`);
   let brandCard = "";
@@ -79,14 +79,14 @@ export async function render(ctx) {
   let adm = "";
   if (mine) {
     const live = invites.filter((i) => i.active && !i.used_by && new Date(i.expires_at) > new Date());
-    adm = card("Administradores", admins.map((a) => row(a.email || a.user_id, a.role === "owner" ? "Todos los permisos" : a.status === "revoked" ? "Acceso retirado" : a.perms.map((p) => PERMS[p] || p).join(", "),
+    adm = card("Administradores", admins.map((a) => row(a.email || a.user_id, a.role === "owner" ? "Todos los permisos" : a.status === "revoked" ? "Acceso retirado" : (a.perms || []).map((p) => PERMS[p] || p).join(", "),
       chip(a.status === "revoked" ? "Retirado" : ROLE[a.role], a.status === "active" ? "ok" : "na") + (a.role !== "owner" && a.status === "active" ? btn("Permisos", `data-la="perms" data-id="${esc(a.user_id)}"`, "ghost") + btn("Quitar", `data-la="revoke" data-id="${esc(a.user_id)}"`, "ghost") : ""))).join("")
       + `<h3>Invitar a un administrador</h3><form data-lf="adminvite" class="fld"><label>Nombre (opcional)<input name="label" maxlength="60" placeholder="Ej. Secretario"></label>
       <fieldset class="perms"><legend>Qué podrá hacer</legend>${Object.entries(PERMS).map(([k, v]) => `<label class="opt"><input type="checkbox" name="perm" value="${k}"><span>${esc(v)}</span></label>`).join("")}</fieldset>
       <label>Vigencia en días<input name="days" type="number" min="1" max="60" value="7"></label><button class="btn" type="submit">Crear código</button></form>`
       + live.map((i) => {
         const msg = `Te invito a administrar ${ctx.l.name}. Código: ${i.code}. Entra a ${appURL()}#/cuenta y escríbelo en «¿Te invitaron a administrar una liga?».`;
-        return `<div class="cl-row static inv"><span><b class="code">${esc(i.code)}</b><small>${esc(i.label || "Sin nombre")} · ${esc(i.perms.map((p) => PERMS[p]).join(", "))} · vence ${esc(dtime(i.expires_at))}</small></span><span class="acts">${btn("Copiar", `data-la="copy" data-v="${esc(i.code)}"`, "ghost")}<a class="btn sm ghost" href="${esc(waLink(msg))}" target="_blank" rel="noopener">WhatsApp</a>${btn("Revocar", `data-la="rinv" data-v="${esc(i.code)}"`, "ghost")}</span></div>`;
+        return `<div class="cl-row static inv"><span><b class="code">${esc(i.code)}</b><small>${esc(i.label || "Sin nombre")} · ${esc((i.perms || []).map((p) => PERMS[p]).join(", "))} · vence ${esc(dtime(i.expires_at))}</small></span><span class="acts">${btn("Copiar", `data-la="copy" data-v="${esc(i.code)}"`, "ghost")}<a class="btn sm ghost" href="${esc(waLink(msg))}" target="_blank" rel="noopener">WhatsApp</a>${btn("Revocar", `data-la="rinv" data-v="${esc(i.code)}"`, "ghost")}</span></div>`;
       }).join("")
       + `<p class="hint">Cada código sirve una sola vez. Quien lo use solo podrá hacer lo que marques; puedes cambiarlo o quitarle el acceso cuando quieras.</p>`);
   }
@@ -108,7 +108,7 @@ export const actions = {
   },
   async perms(ctx, el) {
     const a = S.admins.find((x) => x.user_id === el.dataset.id);
-    sheet.open("Permisos", a.email, `<form data-aform="perms" class="fld"><input type="hidden" name="id" value="${esc(a.user_id)}"><fieldset class="perms">${Object.entries(PERMS).map(([k, v]) => `<label class="opt"><input type="checkbox" name="perm" value="${k}"${a.perms.includes(k) ? " checked" : ""}><span>${esc(v)}</span></label>`).join("")}</fieldset><button class="btn" type="submit">Guardar</button></form>`);
+    sheet.open("Permisos", a.email, `<form data-aform="perms" class="fld"><input type="hidden" name="id" value="${esc(a.user_id)}"><fieldset class="perms">${Object.entries(PERMS).map(([k, v]) => `<label class="opt"><input type="checkbox" name="perm" value="${k}"${(a.perms || []).includes(k) ? " checked" : ""}><span>${esc(v)}</span></label>`).join("")}</fieldset><button class="btn" type="submit">Guardar</button></form>`);
   },
 };
 export const forms = {

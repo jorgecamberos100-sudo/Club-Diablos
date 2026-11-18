@@ -8,6 +8,7 @@ check("sorteo en serpiente: 4 y 4, equilibrado", eq(Object.values(g).sort(), ["A
 check("bracketOrder 8", eq(bracketOrder(8), [1, 8, 4, 5, 2, 7, 3, 6]));
 check("bracketOrder 4", eq(bracketOrder(4), [1, 4, 2, 3]));
 check("potencias de 2", isPow2(2) && isPow2(16) && !isPow2(6) && !isPow2(1));
+check("entradas vacias en qualifiers y koRounds no revientan", eq(qualifiers(null, 2), []) && eq(koRounds(null), []));
 
 const teams = ["a", "b", "c", "d", "e", "f"].map((id, i) => ({ id, name: id.toUpperCase(), group_label: i < 3 ? "A" : "B", status: "active" }));
 const fx = groupFixtures(teams);

@@ -40,9 +40,9 @@ export async function render(ctx) {
     ${privacy ? "" : `<p class="msg" role="alert">Antes de registrar jugadores publica el aviso de privacidad de tu liga en Ajustes${canSet ? "" : " (lo hace quien tiene permiso de ajustes)"}.</p>`}
     <p class="hint">Un jugador existe una sola vez en el padrón de la liga (mismo documento, o mismo nombre y fecha de nacimiento) y solo puede estar en un equipo por torneo.</p>`);
 
-  const list = reg.players.map((p) => { const r = cur(p.id), a = age(p.birth_date), ph = photos.get(p.id);
+  const list = reg.players.map((p) => { const r = cur(p.id), a = age(p.birth_date), ph = photos.get(p.id), st = ST[p.status] || ["na", p.status || "—"];
     return `<div class="cl-row static pl" data-n="${esc(p.norm)}"><span class="pl-ph">${ph ? `<img src="${esc(ph)}" alt="">` : "·"}</span><span><b>${esc(p.name)}</b><small>${esc([a != null && a + " años", r && tname(r.team_id) + (r.number != null ? " #" + r.number : ""), r && r.status === "pending" && "Pendiente"].filter(Boolean).join(" · "))}</small></span>
-      <span class="acts">${a != null && a < 18 ? chip("Menor", "due") : ""}${chip(ST[p.status][1], ST[p.status][0])}${btn("Editar", `data-la="edit" data-id="${esc(p.id)}"`, "ghost")}
+      <span class="acts">${a != null && a < 18 ? chip("Menor", "due") : ""}${chip(st[1], st[0])}${btn("Editar", `data-la="edit" data-id="${esc(p.id)}"`, "ghost")}
       ${r && r.status === "active" ? btn("Credencial", `data-la="cred1" data-id="${esc(r.id)}"`, "ghost") : ""}${r ? btn("Baja", `data-la="rm" data-id="${esc(r.id)}"`, "ghost") : ""}</span></div>`; }).join("");
   const padron = card("Padrón de la liga", reg.players.length ? `<label class="fld-inline">Buscar<input type="search" data-search placeholder="Nombre del jugador" value="${esc(find)}"></label><div id="pl-list">${list}</div>` : empty("Todavía no hay jugadores."));
 

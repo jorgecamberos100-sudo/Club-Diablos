@@ -131,7 +131,7 @@ async function supa() {
   const pubPhoto = (path) => (path ? sb.storage.from("photos").getPublicUrl(path).data.publicUrl : null);
   const sb = createClient(CLOUD.url, CLOUD.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "pkce" } });
   const back = restoreRoute();
-  if (back) { await sb.auth.getSession(); back.clean(); }
+  if (back) { await sb.auth.getSession(); if (back.back && (!location.hash || location.hash === "#")) { location.hash = back.back; } back.clean(); }
   const ok = ({ data, error }) => { if (error) throw error; return data; };
   const uid = async () => { const { data } = await sb.auth.getSession(); return data.session ? data.session.user.id : null; };
   const me = async (c, t) => {
