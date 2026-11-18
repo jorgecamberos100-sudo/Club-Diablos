@@ -25,7 +25,7 @@ select 1 as n, 'Todas las tablas tienen RLS (permisos por fila)' as revision,
        case when (select t from sin_rls) is null then 'OK' else 'REVISAR: sin RLS -> ' || (select t from sin_rls) end as resultado
 union all
 select 2, 'Sin cuenta solo se ejecutan las funciones públicas',
-       case when (select f from anon_fn) = 'chat_take,claimed,public_league,public_tournament,reg_link_info,register_by_link,team_doc,team_paid' then 'OK' else 'REVISAR: ' || coalesce((select f from anon_fn), '(ninguna)') end
+       case when (select f from anon_fn) = 'chat_take,claimed,public_league,public_tournament,reg_link_info,register_by_link,team_doc,team_paid,training_identify,training_save_self' then 'OK' else 'REVISAR: ' || coalesce((select f from anon_fn), '(ninguna)') end
 union all
 select 3, 'Almacenes privados siguen privados',
        case when (select count(*) from bk where id in ('receipts', 'player-photos', 'actas') and not public) = 3 then 'OK' else 'REVISAR: algún almacén privado es público o no existe' end
