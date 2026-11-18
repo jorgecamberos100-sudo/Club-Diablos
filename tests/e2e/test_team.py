@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from lib import *
 from PIL import Image, ImageDraw
 
-CREST = "/tmp/claude-0/crest.png"
+CREST = "/tmp/crest.png"
 im = Image.new("RGBA", (200, 200), (0, 0, 0, 0)); ImageDraw.Draw(im).ellipse((20, 20, 180, 180), fill=(200, 30, 120, 255)); im.save(CREST)   # círculo magenta
 
 async def sheet_btn(pg, text): await pg.click(f"#sheet >> text={text}")

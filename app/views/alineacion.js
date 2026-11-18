@@ -45,15 +45,16 @@ const tag = (A, id) => (!A ? "" : A.va.has(id) ? '<span class="chip ok">Va</span
 
 function token(ctx, pid, slot, i) {
   const style = `left:${slot.x}%;top:${slot.y}%`;
-  if (!pid) return `<button type="button" class="tk empty" data-slot="${i}" style="${style}" aria-label="Elegir ${esc(slot.c)}"><span class="tk-sh"></span><span class="tk-plus">+</span><span class="tk-pos">${esc(slot.c)}</span></button>`;
-  const p = ctx.playersById[pid], r = ctx.team.roster.find((x) => x.player === pid) || {};
+  const p = pid ? ctx.playersById[pid] : null;
+  if (!pid || !p) return `<button type="button" class="tk empty" data-slot="${i}" style="${style}" aria-label="Elegir ${esc(slot.c)}"><span class="tk-sh"></span><span class="tk-plus">+</span><span class="tk-pos">${esc(slot.c)}</span></button>`;
+  const r = ctx.team.roster.find((x) => x.player === pid) || {};
   return `<button type="button" class="tk" data-slot="${i}" style="${style}" aria-label="${esc(slot.c)}: ${esc(p.name)}"><span class="tk-sh"></span>
     <span class="tk-no">${esc(r.number || "–")}</span><span class="tk-pos">${esc(slot.c)}</span><span class="tk-nm">${esc(p.name)}</span></button>`;
 }
 
 function benchHtml(ctx, bench) {
   const A = att(ctx);
-  const chip = (r) => `<span class="bch${conf(A, r.player) ? "" : " out"}">${r.number ? `<i>${esc(r.number)}</i>` : ""}${esc(ctx.playersById[r.player].name)}</span>`;
+  const chip = (r) => `<span class="bch${conf(A, r.player) ? "" : " out"}">${r.number ? `<i>${esc(r.number)}</i>` : ""}${esc((ctx.playersById[r.player] || {}).name || r.player)}</span>`;
   if (!A) return `<div class="bench"><span class="lbl">Banca (${bench.length})</span><div class="bench-row">${bench.map(chip).join("") || '<span class="hint">Todos están en la cancha.</span>'}</div></div>`;
   const yes = bench.filter((r) => A.va.has(r.player)), nope = bench.filter((r) => A.no.has(r.player)), pend = bench.filter((r) => !A.va.has(r.player) && !A.no.has(r.player));
   return `<div class="bench"><span class="lbl">Confirmados en banca (${yes.length})</span><div class="bench-row">${yes.map(chip).join("") || '<span class="hint">Todos los confirmados están en la cancha.</span>'}</div>

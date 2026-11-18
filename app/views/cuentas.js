@@ -48,7 +48,10 @@ function faqHtml(ctx, C, q) {
   q = norm(q).trim();
   if (!q) return "";
   const vars = textVars(ctx.team.finance, C, ctx.club.contact);
-  const list = (ctx.team.finance.faq || []).map((f) => ({ q: tpl(f.q, vars), k: f.k || "", a: f.a.map((p) => `<p>${tpl(p, vars)}</p>`).join("") }));
+  const list = (ctx.team.finance.faq || []).map((f) => {
+    const ans = Array.isArray(f.a) ? f.a : f.a ? [f.a] : [];
+    return { q: tpl(f.q, vars), k: f.k || "", a: ans.map((p) => `<p>${tpl(p, vars)}</p>`).join("") };
+  });
   const toks = q.split(/[^a-z0-9$]+/).filter((t) => t.length > 2 && !STOP.includes(t));
   let out = [];
   if (toks.length) {

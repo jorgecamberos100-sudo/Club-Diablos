@@ -10,7 +10,7 @@ export function money(n) {
   return (r < 0 ? "−$" : "$") + s;
 }
 
-export const sum = (a, f) => a.reduce((t, x) => t + (+f(x) || 0), 0);
+export const sum = (a, f) => (Array.isArray(a) ? a : []).reduce((t, x) => t + (+f(x) || 0), 0);
 
 export const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -23,8 +23,9 @@ export function fecha(iso) {
 }
 
 // Plantillas de texto: "{cuota}" se reemplaza por vars.cuota y **x** se vuelve negrita.
-export function tpl(str, vars) {
-  return esc(str).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? esc(vars[k]) : m)).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+export function tpl(str, vars = {}) {
+  const v = vars || {};
+  return esc(str).replace(/\{(\w+)\}/g, (m, k) => (k in v ? esc(v[k]) : m)).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
 }
 
 export function store(key, val) {

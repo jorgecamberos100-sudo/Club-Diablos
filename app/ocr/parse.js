@@ -13,10 +13,12 @@ const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toL
 const KINDS = [[/\bautogol(es)?\b/, "own_goal"], [/\b(amarilla|amonestacion|amonestado)\b/, "yellow"], [/\b(roja|expulsion|expulsado)\b/, "red"], [/\bgol(es)?\b/, "goal"]];
 
 export function parseActa(text, home, away) {
+  const hTeam = home || { id: "home", name: "Local" };
+  const aTeam = away || { id: "away", name: "Visitante" };
   const out = { hg: null, ag: null, events: [], note: "", warnings: [] };
   const lines = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 200);
-  const nh = norm(home.name), na = norm(away.name);
-  const teamIn = (n) => (nh && n.includes(nh) ? home : na && n.includes(na) ? away : null);
+  const nh = norm(hTeam.name), na = norm(aTeam.name);
+  const teamIn = (n) => (nh && n.includes(nh) ? hTeam : na && n.includes(na) ? aTeam : null);
   let section = null;
 
   for (const raw of lines) {
@@ -37,7 +39,7 @@ export function parseActa(text, home, away) {
     }
     // 2) línea que solo nombra a un equipo = sección
     const bare = n.replace(/\b(equipo|local|visitante)\b/g, "").trim();
-    if (bare === nh || bare === na) { section = bare === nh ? home : away; continue; }
+    if (bare === nh || bare === na) { section = bare === nh ? hTeam : aTeam; continue; }
     // 3) evento
     const kind = (KINDS.find(([re]) => re.test(n)) || [])[1];
     if (!kind) continue;
@@ -56,7 +58,7 @@ export function parseActa(text, home, away) {
     if (player.length < 2) { out.warnings.push(`Línea sin nombre de jugador: «${raw.slice(0, 40)}»`); continue; }
     if (!team) {
       team = section;
-      if (!team) { team = home; out.warnings.push(`No se supo de qué equipo es ${player}; se puso ${home.name}. Revísalo.`); }
+      if (!team) { team = hTeam; out.warnings.push(`No se supo de qué equipo es ${player}; se puso ${hTeam.name}. Revísalo.`); }
     }
     const rows = kind === "goal" || kind === "own_goal" ? count : 1;
     for (let i = 0; i < rows && out.events.length < 100; i++) out.events.push({ team: team.id, player, kind });
@@ -64,9 +66,9 @@ export function parseActa(text, home, away) {
 
   if (out.hg === null) out.warnings.push("No se encontró el marcador: escríbelo a mano.");
   else {
-    const g = { [home.id]: 0, [away.id]: 0 };
-    out.events.forEach((e) => { if (e.kind === "goal") g[e.team]++; else if (e.kind === "own_goal") g[e.team === home.id ? away.id : home.id]++; });
-    if (g[home.id] > out.hg || g[away.id] > out.ag) out.warnings.push("Los goles de los jugadores superan el marcador. Corrige uno de los dos.");
+    const g = { [hTeam.id]: 0, [aTeam.id]: 0 };
+    out.events.forEach((e) => { if (e.kind === "goal") g[e.team]++; else if (e.kind === "own_goal") g[e.team === hTeam.id ? aTeam.id : hTeam.id]++; });
+    if (g[hTeam.id] > out.hg || g[aTeam.id] > out.ag) out.warnings.push("Los goles de los jugadores superan el marcador. Corrige uno de los dos.");
   }
   return out;
 }

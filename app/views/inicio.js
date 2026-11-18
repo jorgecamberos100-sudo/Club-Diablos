@@ -57,11 +57,12 @@ export function render(ctx) {
 
   if (lp) {
     const R = result(lp), mvp = mvpOf(lp);
+    const mvpName = mvp && ctx.playersById[mvp] ? ctx.playersById[mvp].name : mvp;
     h += `<section class="s"><h2>Último partido</h2><a class="last" href="${link(ctx, "partidos")}"><span class="res ${R.kind}">${esc(R.text)}</span>
-      <span class="last-t"><b>${esc(versus(lp, ctx.club.name))}</b><span>${esc(R.label)}${mvp ? " · ★ " + esc(ctx.playersById[mvp].name) : ""}</span></span></a></section>`;
+      <span class="last-t"><b>${esc(versus(lp, ctx.club.name))}</b><span>${esc(R.label)}${mvpName ? " · ★ " + esc(mvpName) : ""}</span></span></a></section>`;
   }
 
-  const top = Object.entries(ctx.ratings).filter(([id, r]) => r.media != null && ctx.team.roster.some((x) => x.player === id)).sort((a, b) => b[1].media - a[1].media).slice(0, 3);
+  const top = Object.entries(ctx.ratings).filter(([id, r]) => r.media != null && ctx.playersById[id] && ctx.team.roster.some((x) => x.player === id)).sort((a, b) => b[1].media - a[1].media).slice(0, 3);
   if (top.length) {
     h += `<section class="s"><h2>Los mejores del equipo</h2><div class="podium">${top.map(([id]) => `<div>${card(ctx.playersById[id], ctx.team.roster.find((x) => x.player === id), ctx)}</div>`).join("")}</div></section>`;
   }
