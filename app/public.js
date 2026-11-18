@@ -9,6 +9,7 @@ import { hasGroups, hasKO, groupTables } from "./league/bracket.js";
 import { tableHTML, bracketHTML, score } from "./league/views.js";
 import { dtime } from "./ui.js";
 import { noticeHTML } from "./consent.js";
+import { chipHTML, load as loadMascota, celebrationHTML } from "./mascota.js";
 
 export const TABS = { tabla: "Tabla", calendario: "Calendario", goleo: "Goleo", llaves: "Llaves" };
 const STATUS = { published: "En curso", paused: "En pausa", finished: "Terminado" };
@@ -63,7 +64,7 @@ export async function renderPublic(app, [kind, l, tid, tab], { chatMount } = {})
   const T = lg.tournaments;
   if (!tid && T.length && !embed) { location.replace(`#/p/${l}/${T[0].id}/tabla`); return; }
   const t0 = T.find((x) => x.id === tid);
-  const head = embed ? "" : `<header class="top">${lg.league.brand.logo ? `<img class="top-cr" src="${esc(lg.league.brand.logo)}" alt="Logo de ${esc(lg.league.name)}">` : ""}<div class="top-t"><h1>${esc(lg.league.name)}</h1><p>${t0 ? esc(t0.name) + (t0.season ? " · " + esc(t0.season) : "") + (t0.category ? " · " + esc(t0.category) : "") : "Página pública"}</p></div></header>`;
+  const head = embed ? "" : `<header class="top">${lg.league.brand.logo ? `<img class="top-cr" src="${esc(lg.league.brand.logo)}" alt="Logo de ${esc(lg.league.name)}">` : ""}<div class="top-t"><h1>${esc(lg.league.name)}</h1><p>${t0 ? esc(t0.name) + (t0.season ? " · " + esc(t0.season) : "") + (t0.category ? " · " + esc(t0.category) : "") : "Página pública"}</p></div>${chipHTML(loadMascota(l), l)}</header>`;
   if (!t0) { app.innerHTML = head + `<div class="view"><section class="s cl-card"><h2>Torneos</h2>${T.length ? T.map((x) => `<a class="cl-row" href="#/p/${l}/${x.id}/tabla"><span><b>${esc(x.name)}</b><small>${esc([x.season, x.category, STATUS[x.status]].filter(Boolean).join(" · "))}</small></span></a>`).join("") : `<p class="hint">Todavía no hay torneos publicados.</p>`}</section></div>`; return; }
   const d = await api.publicTournament(l, tid);
   if (!d || d.error) { app.innerHTML = head + `<div class="view">${ERRBOX("Torneo no disponible", "Este torneo no está publicado.")}</div>`; return; }
@@ -75,6 +76,9 @@ export async function renderPublic(app, [kind, l, tid, tab], { chatMount } = {})
   const switcher = T.length > 1 && !embed ? `<label class="fld-inline">Torneo<select class="pub-t" aria-label="Torneo">${T.map((x) => `<option value="${esc(x.id)}"${x.id === tid ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>` : "";
   app.innerHTML = head + `<div class="view pub">${switcher}<div class="seg-tabs" role="tablist">${tabs.map(([k, v]) => `<button type="button" role="tab" aria-selected="${k === cur}" data-pt="${k}">${v}</button>`).join("")}</div>
     <section class="s cl-card" aria-live="polite">${body}</section>${trainLink}${embed ? `<p class="hint pub-foot">${esc(lg.league.name)} · ${esc(d.tournament.name)}</p>` : ""}<div id="pub-chat"></div>${!embed && lg.privacy ? `<div class="pub-priv">${noticeHTML(lg.privacy)}</div>` : ""}</div>`;
+  // Campeón: Baloncho baila de la emoción junto al anuncio.
+  const champ = app.querySelector(".champ");
+  if (champ) champ.insertAdjacentHTML("beforebegin", celebrationHTML(loadMascota(l), "campeon"));
   app.querySelectorAll("[data-pt]").forEach((b) => (b.onclick = () => { location.hash = `${pre}/${l}/${tid}/${b.dataset.pt}`; }));
   const sel = app.querySelector(".pub-t"); if (sel) sel.onchange = () => { location.hash = `#/p/${l}/${sel.value}/${cur}`; };
   if (!embed && lg.chat && chatMount) chatMount(document.getElementById("pub-chat"), l, d);

@@ -750,3 +750,27 @@ details.danger summary { cursor: pointer; color: var(--muted); min-height: 30px;
 .acct li.sub { padding-left: 12px; font-size: 13px; color: var(--muted); }
 .acct li.sub span:first-child { color: var(--muted); }
 .acct li.sub span:last-child { font-variant-numeric: tabular-nums; }
+
+/* ===== Baloncho, la mascota de FutSfera ===== */
+/* Paleta de su ficha: Verde FC #00FF66, Verde Oscuro #0A2E1F, Negro, Blanco, Gris, Acento #FFCC00. */
+.mascota-chip { margin-left: auto; flex: none; display: flex; align-items: center; gap: 8px; background: none; border: 1px solid var(--line); border-radius: 99px; padding: 3px 12px 3px 3px; cursor: pointer; color: var(--fg); font: 700 15px var(--cond); letter-spacing: 0.02em; }
+.mascota-chip:hover { border-color: #00ff66; }
+.mascota-av { border-radius: 50%; object-fit: contain; background: #0a2e1f; flex: none; display: block; }
+.mascota-nombre { white-space: nowrap; }
+.mascota-panel { display: grid; gap: 12px; }
+.mascota-hero { display: flex; gap: 14px; align-items: center; }
+.mascota-hero b { display: block; font-family: var(--display); font-weight: 800; font-size: 28px; line-height: 1; }
+.mascota-hero span { display: block; margin-top: 4px; color: var(--muted); font-size: 14.5px; }
+.mascota-aspectos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.mascota-aspectos button { display: grid; justify-items: center; gap: 4px; padding: 8px 4px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--raise); color: var(--fg); font: 600 13.5px var(--cond); cursor: pointer; }
+.mascota-aspectos button[aria-pressed="true"] { border-color: #00ff66; box-shadow: inset 0 0 0 1px #00ff66; }
+.mascota-aspectos img { width: 56px; height: 56px; border-radius: 50%; object-fit: contain; background: #0a2e1f; }
+.chat-row { display: flex; gap: 8px; align-items: flex-start; }
+.chat-row .chat-bot { flex: 1; min-width: 0; }
+.chat-row .mascota-av { width: 32px; height: 32px; }
+.mascota-celeb { display: flex; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid #00ff66; border-radius: 6px; padding: 12px 14px; margin-top: 10px; }
+.mascota-celeb p { margin: 0; }
+@keyframes mascota-baila { 0%, 100% { transform: translateY(0) rotate(0deg); } 25% { transform: translateY(-16%) rotate(-9deg); } 50% { transform: translateY(0) rotate(0deg); } 75% { transform: translateY(-16%) rotate(9deg); } }
+.mascota-av.bailando { animation: mascota-baila 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .mascota-av.bailando { animation: none; } }
+@media (max-width: 380px) { .mascota-chip { padding-right: 8px; } .mascota-nombre { max-width: 92px; overflow: hidden; text-overflow: ellipsis; } }
