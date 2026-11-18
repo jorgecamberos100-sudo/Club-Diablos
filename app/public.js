@@ -12,7 +12,7 @@ import { noticeHTML } from "./consent.js";
 
 export const TABS = { tabla: "Tabla", calendario: "Calendario", goleo: "Goleo", llaves: "Llaves" };
 const STATUS = { published: "En curso", paused: "En pausa", finished: "Terminado" };
-const ERRBOX = (t, p) => `<div class="error"><h1>${esc(t)}</h1><p>${esc(p)}</p></div>`;
+const ERRBOX = (t, p) => `<div class="error"><h1>${esc(t)}</h1><p>${esc(p)}</p><a class="btn" href="#/">Volver a la app</a></div>`;
 
 export function tablaHTML(t, d) {
   if (!d.teams.length) return `<p class="hint">Todavía no hay equipos inscritos.</p>`;
