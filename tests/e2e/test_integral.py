@@ -106,11 +106,6 @@ async def main():
     await open_tournament(pg); await pg.click("text=Publicar"); await pg.wait_for_selector(".cl-who:has-text('Publicado')")
     tid = await pg.evaluate("JSON.parse(localStorage.getItem('demo-db')).tourn[0].id")
     await pg.goto(B + f"#/p/{lid}/{tid}/goleo"); await pg.reload(); await pg.wait_for_selector("table.tbl"); html = await pg.content()
-    # La mascota es imagen pública de marca (data URI): se quita del HTML antes de buscar fugas;
-    # una foto de jugador filtrada seguiría apareciendo, porque no es una de estas.
-    for f in os.listdir("app/baloncho-img"):
-        m = re.search(r'"(data:image[^"]+)"', open("app/baloncho-img/" + f).read())
-        if m: html = html.replace(m.group(1), "")
     PRIV = ["2000-05-01", "2002-02-02", "1996-06-06", "beto@eq.com", "ana@liga.com", "No se presentó", "Cancha en mal estado", "Pago a árbitros", "Pérez", "data:image"]
     check("8. página pública: goleo con iniciales y sin datos privados", "Juan P." in html and not [x for x in PRIV if x in html], [x for x in PRIV if x in html])
     await pg.goto(B + f"#/embed/{lid}/{tid}/tabla"); await pg.reload(); await pg.wait_for_selector("table.tbl"); html = await pg.content()

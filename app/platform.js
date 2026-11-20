@@ -9,7 +9,6 @@ import { openAuth, googleBtn } from "./cloudui.js";
 import { loadClubs } from "./data.js";
 import { FEATURES, can, priceLine, limitsLine } from "./plans.js";
 import { card, chip, toast, dshort } from "./ui.js";
-import { chipHTML, load as loadMascota } from "./mascota.js";
 import { consentFields, consentFrom } from "./consent.js";
 import * as equipos from "./league/equipos.js";
 import * as torneos from "./league/torneos.js";
@@ -86,7 +85,7 @@ async function hub(app, user) {
   const missing = Object.keys(ROLES).filter((r) => !roles.includes(r));
   parts.push(card("Lo que organizas", `<p>${roles.map((r) => ROLES[r][0]).join(" y ")}.</p>
     ${missing.length ? `<div class="row-acts">${missing.map((r) => `<button type="button" class="btn ghost" data-cl="add-role" data-r="${r}">Agregar: ${esc(ROLES[r][0].toLowerCase())}</button>`).join("")}</div>` : ""}`));
-  app.innerHTML = shell("Mi cuenta", user.email, parts.join("") + demoNote + out, chipHTML(loadMascota("app"), "app"));
+  app.innerHTML = shell("Mi cuenta", user.email, parts.join("") + demoNote + out);
 }
 
 function roleChoices(sel) {
@@ -161,7 +160,7 @@ async function registro(app, code) {
 let curLeague = null;
 async function league(app, user, id, sec) {
   const [l, ent] = await Promise.all([api.league(id), api.entitlement("league", id).catch(() => null)]);
-  const acc = `<a class="top-acc" href="#/cuenta" aria-label="Mi cuenta">${icon.cuenta}</a>${chipHTML(loadMascota(id), id)}`;
+  const acc = `<a class="top-acc" href="#/cuenta" aria-label="Mi cuenta">${icon.cuenta}</a>`;
   if (!l) {
     app.innerHTML = shell("Liga", "", card("Sin acceso", `<p>Esta liga no existe o tu cuenta no es administradora.</p><div class="row-acts"><a class="btn" href="#/cuenta">Ir a Mi cuenta</a></div>`), acc);
     return;
