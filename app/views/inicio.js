@@ -5,7 +5,6 @@ import { calc } from "../finance.js";
 import { nextMatch, lastPlayed, whenText, daysLeft, versus, result, attendanceOf } from "../matches.js";
 import { mvpOf } from "../rating.js";
 import { card, openSheet } from "./plantel.js";
-import { load as loadMascota, celebrationHTML } from "../mascota.js";
 
 const link = (ctx, v) => `#/${ctx.clubId}/${ctx.team.id}/${v}`;
 
@@ -60,7 +59,7 @@ export function render(ctx) {
     const R = result(lp), mvp = mvpOf(lp);
     const mvpName = mvp && ctx.playersById[mvp] ? ctx.playersById[mvp].name : mvp;
     h += `<section class="s"><h2>Último partido</h2><a class="last" href="${link(ctx, "partidos")}"><span class="res ${R.kind}">${esc(R.text)}</span>
-      <span class="last-t"><b>${esc(versus(lp, ctx.club.name))}</b><span>${esc(R.label)}${mvpName ? " · ★ " + esc(mvpName) : ""}</span></span></a>${R.kind === "win" ? celebrationHTML(loadMascota(ctx.clubId), "victoria", 56) : ""}</section>`;
+      <span class="last-t"><b>${esc(versus(lp, ctx.club.name))}</b><span>${esc(R.label)}${mvpName ? " · ★ " + esc(mvpName) : ""}</span></span></a></section>`;
   }
 
   const top = Object.entries(ctx.ratings).filter(([id, r]) => r.media != null && ctx.playersById[id] && ctx.team.roster.some((x) => x.player === id)).sort((a, b) => b[1].media - a[1].media).slice(0, 3);

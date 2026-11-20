@@ -15,7 +15,6 @@ import { renderPlatform } from "./platform.js";
 import { renderPublic } from "./public.js";
 import { renderEntrenamiento } from "./views/entrenamiento.js";
 import { mountChat } from "./chatbot.js";
-import { chipHTML, load as loadMascota, initMascota } from "./mascota.js";
 
 // Orden de la barra inferior. Finanzas va al final: lo primero es el juego.
 const VIEWS = {
@@ -112,7 +111,6 @@ async function route() {
         <div class="top-t"><h1>${esc(ctx.club.name)}</h1>
         <p>${esc(ctx.team.name)} · ${esc(ctx.team.competition || "")}</p></div>
         ${on ? `<a class="top-acc" href="#/cuenta" aria-label="Mi cuenta">${icon.cuenta}</a>` : ""}
-        ${chipHTML(loadMascota(club), club)}
       </header>
       ${view === "inicio" ? installHint() : ""}
       <div id="view" class="view">${V.render(ctx)}</div>
@@ -136,7 +134,6 @@ window.addEventListener("hashchange", () => { document.getElementById("sheet").h
 // Al volver de entrar con Google, regresa a la sección donde estaba.
 const back = restoreRoute();
 if (back && back.back && !location.hash) history.replaceState(null, "", location.pathname + location.search + back.back);
-initMascota(); // tocar a Baloncho en el encabezado abre su panel
 route();
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});

@@ -9,7 +9,6 @@ import { CHAT } from "./config.js";
 import { standings, scorers } from "./league/standings.js";
 import { hasGroups, groupTables, champion } from "./league/bracket.js";
 import { dtime } from "./ui.js";
-import { load as loadMascota, img as mascotaImg, chatHello } from "./mascota.js";
 
 export const LIMITS = { question: 300, context: 6000, perSession: 30, gapMs: 1500 };
 const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -106,19 +105,13 @@ export async function answer(q, league, d, fetchFn) {
 // ---------- Interfaz ----------
 export function mountChat(el, league, d) {
   let n = 0, last = 0;
-  const st = loadMascota(league);
   const ideas = ["¿Quién va primero?", "¿Cuándo es el próximo partido?", "¿Cómo quedaron los últimos partidos?", ...(d.scorers ? ["¿Quién es el goleador?"] : [])];
-  el.innerHTML = `<section class="s cl-card chat"><h2>Pregúntale a ${esc(st.name)}</h2><div class="chat-log" role="log" aria-live="polite"></div>
+  el.innerHTML = `<section class="s cl-card chat"><h2>Pregúntale a la liga</h2><div class="chat-log" role="log" aria-live="polite"></div>
     <div class="chat-ideas">${ideas.map((i) => `<button type="button" class="btn sm ghost" data-q="${esc(i)}">${esc(i)}</button>`).join("")}</div>
     <form class="chat-form"><input name="q" maxlength="${LIMITS.question}" placeholder="Escribe tu pregunta" aria-label="Tu pregunta" autocomplete="off"><button class="btn" type="submit">Preguntar</button></form>
     <p class="hint">Solo responde con lo que ya está publicado en esta página. Puede equivocarse: confirma con tu liga.</p></section>`;
   const log = el.querySelector(".chat-log"), form = el.querySelector("form");
-  const say = (who, text) => {
-    if (who === "bot") log.insertAdjacentHTML("beforeend", `<div class="chat-row"><img class="mascota-av" src="${mascotaImg(st)}" alt="${esc(st.name)}" width="32" height="32" data-mascota-av><p class="chat-bot">${esc(text)}</p></div>`);
-    else log.insertAdjacentHTML("beforeend", `<p class="chat-me">${esc(text)}</p>`);
-    log.scrollTop = log.scrollHeight;
-  };
-  say("bot", chatHello(st));
+  const say = (who, text) => { log.insertAdjacentHTML("beforeend", `<p class="chat-${who}">${esc(text)}</p>`); log.scrollTop = log.scrollHeight; };
   async function ask(q) {
     q = q.trim(); if (!q) return;
     if (n >= LIMITS.perSession) return say("bot", "Llegaste al máximo de preguntas de esta visita. Vuelve a abrir la página para seguir.");
